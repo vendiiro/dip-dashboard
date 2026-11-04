@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 
 from .config import Settings, Stock
+from .exchanges import EXCHANGES, exchange_for
 from .fsio import atomic_write_text
 from .screen import is_stale
 
@@ -21,8 +22,7 @@ SPIKE_LOW_VOLUME = 0.6      # a bad tick trades on thin volume; a real market-wi
 MAX_GAP_WEEKDAYS = 5     # a longer hole between bars means missing data (holiday gaps are at most 4)
 MAX_MISSING_SHARE = 0.05
 
-SUFFIX_CURRENCY = {".LS": "EUR", ".MI": "EUR", ".MC": "EUR", ".BR": "EUR", ".AS": "EUR", ".DE": "EUR", ".PA": "EUR", ".HE": "EUR", ".SW": "CHF",
-                   ".ST": "SEK", ".CO": "DKK", ".OL": "NOK"}
+SUFFIX_CURRENCY = {s: e.currency for s, e in EXCHANGES.items() if s and e.currency}   # derived view of the exchange registry
 
 LOG_COLUMNS = ["run_at", "ticker", "check", "severity", "detail"]
 
@@ -37,9 +37,8 @@ class Issue:
 
 def expected_currency(ticker: str) -> str | None:
     """Trading currency implied by the exchange suffix (no suffix = US/USD); None if the suffix is unknown."""
-    if "." not in ticker:
-        return "USD"
-    return SUFFIX_CURRENCY.get("." + ticker.rsplit(".", 1)[1])
+    ex = exchange_for(ticker)
+    return ex.currency if ex else None
 
 
 def validate_prices(ticker: str, close: pd.Series, today: date, max_stale_trading_days: int, volume: pd.Series | None = None) -> list[Issue]:

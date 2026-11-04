@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Callable
 
 from .config import EarningsSettings
+from .exchanges import EXCHANGES, exchange_for
 from .fsio import atomic_write_text
 from .screen import trading_days_old
 
@@ -22,9 +23,13 @@ MAX_NEXT_AHEAD_DAYS = 200    # calendar days; a "next report" further away than 
 ROWS_PER_TICKER = 12
 PASSED_DAYS = 14             # a scheduled date this recent with no reported result yet is treated as 'probably just happened'
 
-EXCHANGE_TZ = {".HE": "Europe/Helsinki", ".AS": "Europe/Amsterdam", ".OL": "Europe/Oslo", ".CO": "Europe/Copenhagen",
-               ".ST": "Europe/Stockholm", ".SW": "Europe/Zurich", ".DE": "Europe/Berlin", ".PA": "Europe/Paris",
-               ".MI": "Europe/Rome", ".MC": "Europe/Madrid", ".BR": "Europe/Brussels", ".L": "Europe/London"}
+EXCHANGE_TZ = {s: e.tz for s, e in EXCHANGES.items() if s}   # derived view of the exchange registry
+
+
+def exchange_tz(ticker: str) -> str:
+    """Time zone of the ticker's exchange; New York (Yahoo's own zone) when the suffix is unknown."""
+    ex = exchange_for(ticker)
+    return ex.tz if ex else "America/New_York"
 
 
 # ---- pure logic -----------------------------------------------------------------------------------------------
@@ -129,8 +134,7 @@ def fetch_yfinance(ticker: str) -> dict:
     import yfinance as yf
 
     tk = yf.Ticker(ticker)
-    suffix = "." + ticker.rsplit(".", 1)[1] if "." in ticker else ""
-    tzname = EXCHANGE_TZ.get(suffix, "America/New_York")
+    tzname = exchange_tz(ticker)
     rows, cal, errors = [], [], []
     try:
         with warnings.catch_warnings():

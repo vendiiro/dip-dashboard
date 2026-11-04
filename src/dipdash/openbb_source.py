@@ -7,14 +7,15 @@ from __future__ import annotations
 
 import pandas as pd
 
-NORDIC_SUFFIXES = (".HE", ".ST", ".CO")
+from .exchanges import EXCHANGES, exchange_for
+
+NORDIC_SUFFIXES = tuple(s for s, e in EXCHANGES.items() if e.openbb == "nasdaq_nordic")   # derived: (".ST", ".HE", ".CO")
 
 
 def source_for(ticker: str) -> str | None:
     """Which OpenBB provider can serve this Yahoo-style ticker, or None."""
-    if "." not in ticker:   # US lines, including share classes written like BRK-B
-        return "nasdaq"
-    return "nasdaq_nordic" if ticker.upper().endswith(NORDIC_SUFFIXES) else None
+    ex = exchange_for(ticker)   # no dot = US line, including share classes written like BRK-B
+    return ex.openbb if ex else None
 
 
 def nordic_symbol(ticker: str) -> str:
