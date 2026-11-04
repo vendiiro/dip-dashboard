@@ -99,6 +99,7 @@ def test_clicking_a_row_opens_and_closes_its_detail(browser, demo_html):
 def test_single_window_mode_enables_the_slider_and_changes_the_dips(browser, demo_html):
     page, _ = open_page(browser, demo_html)
     before = page.inner_text("#tabletitle")
+    page.click("#morefilters")                                    # the window and drop limit sit behind "More filters"
     page.select_option("#win", "r1")
     assert page.is_enabled("#drop") and page.input_value("#drop") == "4"
     page.fill("#drop", "12")
@@ -412,3 +413,98 @@ def test_filters_live_in_the_table_toolbar(browser, demo_html):
     assert page.locator("#body tr.row").count() == 1
     assert "Default rules" in page.inner_text("#tablehint")        # the rules sentence sits in the caption line on desktop
     page.close()
+
+
+def test_region_lives_in_focus_and_narrows_the_whole_page(browser, demo_html):
+    page, errors = open_page(browser, demo_html)
+    assert page.evaluate("document.getElementById('focus').contains(document.getElementById('region'))")
+    assert not page.evaluate("document.getElementById('controls').contains(document.getElementById('region'))")
+    page.click('#show button[data-v="all"]')
+    total = _count_rows(page)
+    page.click("#region button[data-v=Nordic]")
+    nordic = _count_rows(page)
+    assert nordic == page.evaluate("DATA.rows.filter(r => r.region === 'Nordic').length") < total
+    tickers = page.eval_on_selector_all("#body tr.row", "rs => rs.map(r => r.dataset.t)")
+    assert "NOKIA.HE" in tickers and "AAPL" not in tickers
+    assert "region=Nordic" in page.evaluate("location.hash")
+    # the theme cards follow the region too: "All stocks" counts only Nordic stocks
+    all_card = page.get_attribute('.th[data-id=""]', "aria-label")
+    assert all_card.startswith(f"All stocks: {nordic} stocks")
+    page.click("#clearth")
+    assert _count_rows(page) == total and page.get_attribute("#region button[data-v='']", "aria-pressed") == "true"
+    assert errors == []
+
+
+def test_theme_cards_list_their_top_fallers_from_the_data(browser, demo_html):
+    page, errors = open_page(browser, demo_html)
+    for tid in ("pharma", "semis"):
+        shown = page.eval_on_selector(f'.th[data-id="{tid}"] .fl', "e => [...e.children].map(c => c.title.match(/\\(([^)]*)\\)$/)[1])")
+        want = page.evaluate("""id => { const m = DATA.rows.filter(r => r.themes.includes(id) && r.r5 != null);
+            const dips = m.filter(r => r.dip); const pool = dips.length ? dips : m;
+            return pool.sort((a, b) => a.r5 - b.r5).slice(0, 3).map(r => r.t); }""", tid)
+        assert shown and shown == want[:len(shown)], (tid, shown, want)
+        label = page.get_attribute(f'.th[data-id="{tid}"]', "aria-label")
+        assert want[0] in label and "5-day" in label
+    # chips never wrap onto a second line (the row is one line high)
+    assert page.eval_on_selector('.th[data-id="pharma"] .fl', "e => e.getBoundingClientRect().height") <= 18
+    assert errors == []
+
+
+def test_theme_cards_are_sorted_by_dips_and_stay_put_while_toggling(browser, demo_html):
+    page, errors = open_page(browser, demo_html)
+    def order():
+        return page.eval_on_selector_all("#themes .th", "cs => cs.map(c => c.dataset.id)")
+    first = order()
+    assert first[0] == ""                                         # "All stocks" always leads
+    counts = page.eval_on_selector_all("#themes .th", "cs => cs.slice(1).map(c => +c.getAttribute('aria-label').match(/stocks, (\\d+) quality/)[1])")
+    assert counts == sorted(counts, reverse=True)                  # most quality dips first
+    page.click('.th[data-id="pharma"]')                            # toggling a theme must not reshuffle the cards
+    assert order() == first and page.evaluate("document.activeElement.dataset.id") == "pharma"
+    page.click('.th[data-id="pharma"]')
+    assert order() == first
+    page.click('#size button[data-v="5e11"]')                      # a scope change may re-sort
+    assert order()[0] == ""
+    assert errors == []
+
+
+def test_size_filter_says_how_many_stocks_it_hid(browser, demo_html):
+    page, errors = open_page(browser, demo_html)
+    assert page.is_hidden("#sizenote")                             # no size chosen: nothing is hidden
+    nocap = page.evaluate("DATA.rows.filter(r => { const c = r.qchecks.find(c => c.key === 'marketCap'); return !c || c.value == null; }).length")
+    assert nocap == 3
+    page.click('#size button[data-v="1e11"]')
+    assert page.is_visible("#sizenote") and page.inner_text("#sizenote") == "3 stocks hidden: no market-cap data"
+    page.click("#region button[data-v=US]")                         # the count follows the region (only US stocks without a cap)
+    us = page.evaluate("DATA.rows.filter(r => r.region === 'US' && !r.qchecks.find(c => c.key === 'marketCap').value).length")
+    assert (page.inner_text("#sizenote") == f"{us} stocks hidden: no market-cap data") if us != 1 else ("1 stock hidden" in page.inner_text("#sizenote"))
+    page.click('#size button[data-v="0"]')
+    assert page.is_hidden("#sizenote")
+    assert errors == []
+
+
+def test_advanced_filters_sit_behind_more_filters_with_a_visible_summary(browser, demo_html):
+    page, errors = open_page(browser, demo_html)
+    assert page.is_visible("#show") and page.is_visible("#q")      # Show and Search are always there
+    for sel in ("#win", "#qmin", "#hideknife"):
+        assert page.is_hidden(sel)
+    assert page.get_attribute("#morefilters", "aria-expanded") == "false"
+    assert "quality ≥ 60" in page.inner_text("#morefilters")
+    page.click("#morefilters")
+    assert page.get_attribute("#morefilters", "aria-expanded") == "true"
+    assert page.is_visible("#win") and page.is_visible("#qmin") and page.is_visible("#hideknife")
+    page.fill("#qmin", "80"); page.dispatch_event("#qmin", "input")
+    page.check("#hideknife")
+    page.click("#morefilters")                                     # closed again: the summary still shows what is active
+    summary = page.inner_text("#morefilters")
+    assert "quality ≥ 80" in summary and "no falling knives" in summary
+    assert errors == []
+
+
+def test_phone_filters_toggle_still_holds_every_toolbar_filter(browser, demo_html):
+    page, errors = open_page(browser, demo_html, 390, 844)
+    assert page.is_hidden("#controls") and page.is_visible("#region") and page.is_visible("#size")   # region and size are in Focus now
+    page.click("#ctltoggle")
+    for sel in ("#show", "#q", "#win", "#qmin", "#hideknife", "#sortsel"):
+        assert page.is_visible(sel), sel
+    assert page.is_hidden("#morefilters")                          # no nested disclosure on phone
+    assert errors == []

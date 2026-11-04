@@ -18,7 +18,7 @@ The dashboard is a listing and monitoring tool.
 ## Focus: themes and company size
 The **Focus** panel at the top of the dashboard narrows the whole page (tiles, table and charts) to one or more themes,
 such as *AI & cloud*, *Semiconductors* or *Pharma & biotech* (Eli Lilly, Novo Nordisk ...), and optionally to large companies only
-(market cap ≥ $100B or ≥ $500B). Each theme card shows how many quality dips it has today and its median 5-day move.
+(market cap ≥ $100B or ≥ $500B) and to one region (US, Europe or Nordic). Stocks with no market-cap figure are left out while a size is chosen, and the panel says how many. Each theme card shows how many quality dips it has today and its median 5-day move.
 Several themes can be on at once. The choice is remembered in the browser and kept in the link (`#focus=ai,pharma&size=100000000000`),
 so a view can be bookmarked.
 

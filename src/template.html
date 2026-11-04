@@ -101,6 +101,13 @@ header.top{display:flex;flex-direction:column;gap:4px}
 .sumpanel .foot{font-size:12.5px;color:var(--ink-3)}
 .qn{font-size:10.5px;color:var(--ink-3);margin-left:4px;font-weight:400}
 .controls .sortctl{display:none}
+.morefilters{font:inherit;font-size:13px;color:var(--ink-2);background:none;border:1px solid var(--line-strong);border-radius:7px;padding:4px 10px;min-height:34px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;align-self:flex-end}
+.morefilters::before{content:'▸';color:var(--ink-3);font-size:11px;transition:transform .12s}
+.morefilters[aria-expanded="true"]::before{transform:rotate(90deg)}
+.morefilters:hover{background:var(--sunken)}
+.morefilters .advsum{color:var(--ink-3);font-size:12.5px}
+.adv{display:none;flex:1 1 100%;flex-wrap:wrap;gap:8px 16px;align-items:flex-end;padding-top:8px;border-top:1px dashed var(--line)}
+.adv.open{display:flex}
 .alerts.unavail{border-color:var(--warn)}
 .alerts.unavail h2{color:var(--warn)}
 .chipmore{font:inherit;font-size:11.5px;background:none;border:1px dashed var(--line-strong);border-radius:4px;padding:1px 8px;color:var(--ink-2);cursor:pointer;min-height:24px}
@@ -205,13 +212,17 @@ footer dt{font-weight:600;color:var(--ink)}
 footer dd{margin:0}
 
 /* Focus: theme picker. Cards are toggles (aria-pressed); several can be on at once. */
-.focus{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
-.focushead{display:flex;justify-content:space-between;align-items:baseline;gap:8px 16px;flex-wrap:wrap}
+.focus{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.focushead{display:flex;align-items:center;gap:6px 16px;flex-wrap:wrap}
+.focushead h2{flex:none}
+.focushead .focusnote{flex:1 1 260px;min-width:0}
+.focushead .focusbar{margin-left:auto}
 .focushead p{margin:0;font-size:12.5px;color:var(--ink-3);max-width:70ch}
 .focusbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .linkbtn{font:inherit;font-size:12.5px;background:none;border:0;padding:4px 0;color:var(--accent);cursor:pointer;text-decoration:underline;min-height:32px}
 .themes{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:8px}
-.th{position:relative;display:flex;flex-direction:column;gap:5px;text-align:left;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:9px 11px 10px;cursor:pointer;min-height:76px;min-width:0;transition:border-color .12s,background .12s}
+.focus .seg button{min-height:32px;padding:4px 10px}
+.th{position:relative;display:flex;flex-direction:column;gap:3px;text-align:left;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:8px 11px 9px;cursor:pointer;min-width:0;transition:border-color .12s,background .12s}
 .th:hover{border-color:var(--line-strong)}
 .th[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
 .th .nm1{font-weight:600;font-size:13.5px;color:var(--ink);padding-right:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -220,6 +231,11 @@ footer dd{margin:0}
 .th .st{font-size:12px;color:var(--ink-2);display:flex;gap:4px 10px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
 .th .st b{font-family:var(--f-data);font-weight:500;color:var(--ink)}
 .th .st .hot{color:var(--good);font-weight:600}
+.th .fl{display:flex;flex-wrap:wrap;gap:0 9px;height:17px;overflow:hidden;font-size:11.5px;line-height:17px;color:var(--ink-2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.th .fl .none{color:var(--ink-3)}
+.th .fl .down{color:var(--crit)}   /* the plain red is 4.4:1 on the card background; the darker red passes */
+.th .fl b{font-family:var(--f-data);font-weight:500;color:var(--ink)}
+.th .fl .weak b{color:var(--ink-2)}
 .mix{display:flex;height:5px;border-radius:3px;overflow:hidden;background:var(--sunken);gap:1px}
 .mix i{display:block;height:100%}
 .mix .q{background:var(--good)} .mix .d{background:var(--warn)} .mix .k{background:var(--crit)}
@@ -238,6 +254,7 @@ main{display:flex;flex-direction:column;gap:16px;min-width:0;max-width:100%;outl
 tbody tr.row:focus-within td{background:var(--sunken)}
 .tablecard:focus{outline:0}
 .focusfoot{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:2px 16px}
+.sizenote{margin:0;font-size:12.5px;color:var(--warn);background:var(--warn-bg);border-radius:6px;padding:1px 8px}
 .mixlegend{margin:0;font-size:12.5px;color:var(--ink-2);display:flex;flex-wrap:wrap;gap:2px 14px;align-items:center}
 .mixlegend span{display:inline-flex;align-items:center;gap:5px}
 .mixlegend i{display:inline-block;width:14px;height:6px;border-radius:2px}
@@ -271,6 +288,13 @@ details.badgehelp dt{margin:0} details.badgehelp dd{margin:0}
   .ctltoggle{width:auto;margin:0 14px 10px}
   .controls{padding:10px 14px}
   .controls .seg button{min-height:40px}
+  .focus .seg button{min-height:40px;padding:6px 12px}
+  .focushead .focusbar{margin-left:0;flex:1 1 100%}
+  .focusbar .seg{flex:1 1 auto}
+  .focusbar .seg button{flex:1 1 auto}
+  .morefilters{display:none}
+  .focusnote .hint{display:none}
+  .adv{display:flex;flex:1 1 100%;border-top:0;padding-top:0}
   .sumrow{gap:6px 14px;padding:8px 12px}
   .mkline{flex:1 1 100%;border-left:0;padding-left:0}
   .mkline .mkh{flex:1 1 100%}
@@ -311,7 +335,9 @@ details.badgehelp dt{margin:0} details.badgehelp dd{margin:0}
   <section class="focus" id="focus" aria-labelledby="focus-h">
     <div class="focushead">
       <h2 id="focus-h">Focus</h2>
+      <p class="focusnote" id="focusnote"></p>
       <div class="focusbar">
+        <div class="seg" id="region" role="group" aria-label="Region"></div>
         <div class="seg" id="size" role="group" aria-label="Company size">
           <button data-v="0" aria-pressed="true">Any size</button>
           <button data-v="1e11" aria-pressed="false" title="Market cap at least 100 billion USD">≥ $100B</button>
@@ -319,9 +345,9 @@ details.badgehelp dt{margin:0} details.badgehelp dd{margin:0}
         </div>
       </div>
     </div>
-    <p class="focusnote" id="focusnote"></p>
     <div class="themes" id="themes" role="group" aria-label="Themes"></div>
     <div class="focusfoot">
+    <p class="sizenote" id="sizenote" role="note" hidden></p>
     <p class="mixlegend" id="mixlegend">Bar under each theme: <span><i class="q"></i>quality dips</span><span><i class="d"></i>other dips</span><span><i class="k"></i>falling knives</span></p>
     <div class="focusbar"><button type="button" class="linkbtn moreth" id="moreth" hidden></button><button type="button" class="linkbtn" id="clearth" hidden>Clear focus</button></div>
     </div>
@@ -344,19 +370,19 @@ details.badgehelp dt{margin:0} details.badgehelp dd{margin:0}
           <button data-v="all" aria-pressed="false">All stocks</button>
         </div>
       </div>
-      <label class="ctl" for="win">Drop measured over
-        <select id="win"></select></label>
-      <label class="ctl" for="drop" id="droplab">Minimum drop <span class="v" id="dropv"></span>
-        <input type="range" id="drop" min="1" max="30" step="1" value="7"></label>
-      <label class="ctl" for="qmin">Minimum quality <span class="v" id="qv"></span>
-        <input type="range" id="qmin" min="0" max="100" step="10" value="60"></label>
-      <div class="ctl">Region
-        <div class="seg" id="region"></div>
-      </div>
-      <label class="ctl check" for="hideknife"><input type="checkbox" id="hideknife"> Hide falling knives</label>
       <label class="ctl" for="q">Search<input type="search" id="q" placeholder="Ticker or name"></label>
       <label class="ctl sortctl" for="sortsel">Sort by <select id="sortsel"></select></label>
-      <div class="dropnote" id="dropnote" hidden></div>
+      <button type="button" class="morefilters" id="morefilters" aria-expanded="false" aria-controls="advfilters"><span>More filters</span><span class="advsum" id="advsum"></span></button>
+      <div class="adv" id="advfilters" role="group" aria-label="More filters">
+        <label class="ctl" for="win">Drop measured over
+          <select id="win"></select></label>
+        <label class="ctl" for="drop" id="droplab">Minimum drop <span class="v" id="dropv"></span>
+          <input type="range" id="drop" min="1" max="30" step="1" value="7"></label>
+        <div class="dropnote" id="dropnote" hidden></div>
+        <label class="ctl" for="qmin">Minimum quality <span class="v" id="qv"></span>
+          <input type="range" id="qmin" min="0" max="100" step="10" value="60"></label>
+        <label class="ctl check" for="hideknife"><input type="checkbox" id="hideknife"> Hide falling knives</label>
+      </div>
     </div>
     <details class="badgehelp" id="badgehelp"><summary>What do the badges mean?</summary><dl id="badgedl"></dl><p class="sparknote">Sparkline: the last 90 days, each stock scaled to its own minimum and maximum, so heights cannot be compared between stocks.</p></details>
     <div class="cards" id="cards"></div>
@@ -465,21 +491,45 @@ const SIZES = new Map([[0, 'any size'], [1e11, 'market cap ≥ $100B'], [5e11, '
   ids.filter(id => THEME[id]).forEach(id => S.themes.add(id));
   const sz = h.has('size') ? h.get('size') : saved.size;
   if (sz != null && SIZES.has(+sz)) S.size = +sz;
+  const rg = h.has('region') ? h.get('region') : saved.region;
+  if (rg && regions.includes(rg)) { S.region = rg; document.querySelectorAll('#region button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === rg))); }
 })();
 function saveFocus() {
-  try { localStorage.setItem('dipdash.focus', JSON.stringify({themes: [...S.themes], size: S.size})); } catch (e) { /* storage blocked: fine */ }
-  const h = new URLSearchParams(); if (S.themes.size) h.set('focus', [...S.themes].join(',')); if (S.size) h.set('size', String(S.size));
+  try { localStorage.setItem('dipdash.focus', JSON.stringify({themes: [...S.themes], size: S.size, region: S.region})); } catch (e) { /* storage blocked: fine */ }
+  const h = new URLSearchParams(); if (S.themes.size) h.set('focus', [...S.themes].join(',')); if (S.size) h.set('size', String(S.size)); if (S.region) h.set('region', S.region);
   try { history.replaceState(null, '', h.toString() ? '#' + h.toString() : location.pathname + location.search); } catch (e) { /* file:// in some browsers */ }
 }
 const inSize = r => !S.size || (mcap(r) != null && mcap(r) >= S.size);
 const inThemes = r => !S.themes.size || (r.themes || []).some(id => S.themes.has(id));
+const inRegion = r => !S.region || r.region === S.region;
+const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
+// Theme cards are ordered by how many quality dips they hold, then dips, then the order in themes.toml. The order is
+// recomputed only when the scope or the dip definition changes (size, region, window, drop, quality), so cards do not
+// jump around while the user toggles themes or moves with the arrow keys.
+let orderSig = '', orderIds = [];
+function themeOrder(scope) {
+  const sig = [S.size, S.region, $('win').value, $('drop').value, $('qmin').value].join('|');
+  if (sig !== orderSig) {
+    orderSig = sig;
+    orderIds = THEMES.map((t, i) => { const m = scope.filter(r => (r.themes || []).includes(t.id)); return {id: t.id, i, q: m.filter(r => r.setup.rank === 4).length, d: m.filter(r => r.setup.rank > 0).length}; })
+      .sort((a, b) => b.q - a.q || b.d - a.d || a.i - b.i).map(x => x.id);
+  }
+  return orderIds;
+}
+// The weakest 5-day movers in a card's scope: actual dips if there are any, otherwise the weakest names.
+function fallers(members) {
+  const moved = members.filter(r => r.r5 != null), dips = moved.filter(r => r.setup.rank > 0), pool = dips.length ? dips : moved;
+  return {list: [...pool].sort((a, b) => a.r5 - b.r5).slice(0, 3), weak: !dips.length && moved.length > 0};
+}
 function focusPanel(all) {
   const box = $('themes'); box.replaceChildren();
   const rove = S.rove === '' || THEME[S.rove] ? S.rove : '';   // which theme card is the group's single tab stop
   S.rove = rove;
-  const sized = all.filter(inSize);
-  const SHOW = 9, order = THEMES.filter((t, i) => S.allThemes || i < SHOW || S.themes.has(t.id) || mq.matches);
-  if (mq.matches) order.sort((a, b) => S.themes.has(b.id) - S.themes.has(a.id));   // phone: picked themes lead the scroll strip
+  const inScope = all.filter(inRegion), sized = inScope.filter(inSize);
+  const noCap = S.size ? inScope.filter(r => mcap(r) == null).length : 0;    // stocks the size filter cannot judge: say so instead of dropping them silently
+  S.noCap = noCap;
+  const SHOW = 9, order = themeOrder(sized).filter((id, i) => S.allThemes || i < SHOW || S.themes.has(id) || mq.matches).map(id => THEME[id]);
+  if (mq.matches) order.sort((a, b) => S.themes.has(b.id) - S.themes.has(a.id));   // phone: picked themes lead the scroll strip (stable sort keeps the dip order)
   const card = (id, name, members, desc) => {
     const b = el('button', 'th'); b.type = 'button'; b.dataset.id = id;
     const on = id === '' ? !S.themes.size : S.themes.has(id); b.setAttribute('aria-pressed', String(on));
@@ -492,11 +542,17 @@ function focusPanel(all) {
     const a1 = el('span'); a1.append(el('b', q ? 'hot' : null, String(q)), ' quality dip' + (q === 1 ? '' : 's')); st.append(a1);
     const a2 = el('span'); a2.append('5d ', el('b', sgnCls(med), pct(med))); a2.title = 'Median 5-day move of the stocks in this group'; st.append(a2);
     b.append(st);
+    const fl = fallers(members), fe = el('span', 'fl' + (fl.weak ? ' weak' : ''));
+    if (fl.list.length) fl.list.forEach(r => { const c = el('span'); c.append(el('b', null, r.t.split('.')[0]), ' ', el('span', sgnCls(r.r5), pct(r.r5))); c.title = r.name + ' (' + r.t + ')'; fe.append(c); });
+    else fe.append(el('span', 'none', n ? 'no 5-day data' : 'no stocks in this focus'));
+    b.append(fe);
     const mix = el('span', 'mix'); mix.setAttribute('aria-hidden', 'true');
     [['q', q], ['d', d], ['k', kn]].forEach(([c, k]) => { if (k) { const i = el('i', c); i.style.width = (100 * k / Math.max(1, n)) + '%'; mix.append(i); } });
     b.append(mix);
-    b.title = (desc ? desc + '\n' : '') + `${n} stocks: ${q} quality dips, ${d} other dips, ${kn} falling knives. Bar: green quality dips, amber other dips, red falling knives.`;
-    b.setAttribute('aria-label', `${name}: ${n} stocks, ${q} quality dips, median 5-day move ${pct(med)}`);
+    b.title = (desc ? desc + '\n' : '') + `${n} stocks: ${q} quality dips, ${d} other dips, ${kn} falling knives. Bar: green quality dips, amber other dips, red falling knives.` +
+      (fl.list.length ? `\n${fl.weak ? 'No dips here; weakest 5-day moves' : 'Top fallers (5-day)'}: ` + fl.list.map(r => r.t + ' ' + pct(r.r5)).join(', ') : '');
+    b.setAttribute('aria-label', `${name}: ${n} stocks, ${q} quality dips, median 5-day move ${pct(med)}` +
+      (fl.list.length ? `. ${fl.weak ? 'No dips; weakest 5-day moves' : 'Top fallers'}: ` + fl.list.map(r => r.t + ' ' + pct(r.r5)).join(', ') : ''));
     b.onclick = () => {
       if (id === '') S.themes.clear(); else if (S.themes.has(id)) S.themes.delete(id); else S.themes.add(id);
       S.rove = id; S.sortKey = null; S.open = null; saveFocus(); S.focus = '.th[data-id="' + id + '"]'; render();
@@ -509,15 +565,20 @@ function focusPanel(all) {
   more.hidden = mq.matches || (THEMES.length <= SHOW);
   more.textContent = S.allThemes ? 'Show fewer themes' : `Show all ${THEMES.length} themes (${hiddenN} more)`;
   more.setAttribute('aria-expanded', String(S.allThemes));
-  $('clearth').hidden = !S.themes.size && !S.size;
+  $('clearth').hidden = !S.themes.size && !S.size && !S.region;
+  const scopeTxt = (S.size ? ', ' + SIZES.get(S.size) : '') + (S.region ? ', ' + S.region : '');
   const note = $('focusnote'); note.replaceChildren();
-  if (!S.themes.size) note.append('Showing ', el('b', null, 'all ' + sized.length + ' stocks'), S.size ? ' with ' + SIZES.get(S.size) + '.' : '.', ' Pick one or more themes to narrow the list; the counts and charts below follow your choice.');
+  if (!S.themes.size) note.append('Showing ', el('b', null, 'all ' + sized.length + ' stocks'), scopeTxt + '.', el('span', 'hint', ' Pick themes to narrow the whole page.'));
   else {
     const picked = [...S.themes].map(id => THEME[id]);
-    note.append('Showing ', el('b', null, picked.map(t => t.name).join(' + ')), ` · ${sized.filter(inThemes).length} stocks` + (S.size ? ', ' + SIZES.get(S.size) : '') + '. ');
+    note.append('Showing ', el('b', null, picked.map(t => t.name).join(' + ')), ` · ${sized.filter(inThemes).length} stocks` + scopeTxt + '. ');
     if (picked.length === 1 && picked[0].desc) note.append(picked[0].desc);
   }
+  const sn = $('sizenote'); sn.hidden = !noCap;
+  sn.textContent = noCap ? `${plural(noCap, 'stock')} hidden: no market-cap data` : '';
+  sn.title = noCap ? 'The size filter needs a market cap. These stocks have none in the free data source, so they are left out while a size is chosen. Choose “Any size” to see them.' : '';
   document.querySelectorAll('#size button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.v === S.size)));
+  document.querySelectorAll('#region button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === S.region)));
 }
 $('themes').addEventListener('keydown', e => {
   const keys = {ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1};
@@ -530,7 +591,8 @@ $('themes').addEventListener('keydown', e => {
 });
 $('themes').addEventListener('focusin', e => { const c = e.target.closest && e.target.closest('.th'); if (!c) return; S.rove = c.dataset.id; document.querySelectorAll('#themes .th').forEach(x => { x.tabIndex = x === c ? 0 : -1; }); });
 $('moreth').onclick = () => { S.allThemes = !S.allThemes; render(); $('moreth').focus(); };
-$('clearth').onclick = () => { S.themes.clear(); S.size = 0; S.open = null; saveFocus(); render(); };
+$('clearth').onclick = () => { S.themes.clear(); S.size = 0; S.region = ''; S.open = null; saveFocus(); render(); };
+document.querySelectorAll('#region button').forEach(b => b.onclick = () => { S.region = b.dataset.v; S.open = null; S.sortKey = null; saveFocus(); render(); });
 document.querySelectorAll('#size button').forEach(b => b.onclick = () => { S.size = +b.dataset.v; S.open = null; S.sortKey = null; saveFocus(); render(); });
 if (!THEMES.length) $('themes').hidden = true;
 
@@ -650,8 +712,16 @@ function alertsPanel() {
 // ---------- filters toggle (phone) ----------
 function ctlSummary() {
   const pressed = id => { const b = document.querySelector('#' + id + ' [aria-pressed="true"]'); return b ? b.textContent.trim() : ''; };
-  $('ctlsum').textContent = [pressed('show'), pressed('region'), 'quality ≥ ' + $('qmin').value].filter(Boolean).join(' · ');
+  const parts = [];
+  if ($('win').value !== 'any') parts.push(`${WIN[$('win').value].label} ≤ ${MINUS}${$('drop').value}%`);
+  parts.push('quality ≥ ' + $('qmin').value);
+  if ($('hideknife').checked) parts.push('no falling knives');
+  $('advsum').textContent = '· ' + parts.join(' · ');          // the active advanced filters stay visible while the panel is closed
+  $('ctlsum').textContent = [pressed('show'), S.region, ...parts].filter(Boolean).join(' · ');
 }
+$('morefilters').addEventListener('click', () => {
+  const open = $('advfilters').classList.toggle('open'); $('morefilters').setAttribute('aria-expanded', String(open));
+});
 $('ctltoggle').addEventListener('click', () => {
   const open = $('controls').classList.toggle('open'); $('ctltoggle').setAttribute('aria-expanded', String(open));
 });
@@ -768,12 +838,11 @@ function render() {
   $('drop').setAttribute('aria-valuetext', 'minimum drop ' + MINUS + $('drop').value + ' percent on ' + W.noun);
   const everything = rows.map(r => Object.assign(r, {setup: setupOf(r, r)}));
   focusPanel(everything);
-  const all = everything.filter(r => inSize(r) && inThemes(r));
+  const all = everything.filter(r => inRegion(r) && inSize(r) && inThemes(r));
   summaryBar(all); ctlSummary();
   if (!alertsPanel.done) { alertsPanel(); alertsPanel.done = true; }
   const qs = $('q').value.trim().toLowerCase();
   const list = all.filter(r => {
-    if (S.region && r.region !== S.region) return false;
     if (qs && !(r.t.toLowerCase().includes(qs) || r.name.toLowerCase().includes(qs))) return false;
     if ($('hideknife').checked && r.knife) return false;
     if (S.show === 'quality') return r.setup.rank === 4;
@@ -788,7 +857,7 @@ function render() {
     if (x == null) return 1; if (y == null) return -1; return d * (x - y);
   });
   $('tabletitle').textContent = {quality: 'Quality dips', dips: 'All dips', all: 'All stocks'}[S.show] + ` · ${list.length}` + (S.themes.size === 1 ? ' in ' + THEME[[...S.themes][0]].name : S.themes.size ? ' in ' + S.themes.size + ' themes' : '');
-  $('empty').textContent = S.themes.size || S.size ? 'No stocks in this focus match. Switch “Show” to All stocks, lower the minimum drop, or clear the focus.' : 'No stocks match. Lower the minimum drop, lower the minimum quality, or switch “Show” to All dips.';
+  $('empty').textContent = S.themes.size || S.size || S.region ? 'No stocks in this focus match. Switch “Show” to All stocks, lower the minimum drop, or clear the focus.' : 'No stocks match. Lower the minimum drop, lower the minimum quality, or switch “Show” to All dips.';
   S.list = list;
 
   const head = $('head'); head.replaceChildren();
@@ -831,9 +900,10 @@ function render() {
   $('morecols').setAttribute('aria-pressed', String(S.more)); $('tablecard').classList.toggle('wide', S.more);
   $('tablecap').textContent = $('tabletitle').textContent + '. Sortable columns; press a stock name to show or hide its details.';
   {
-    const qd = all.filter(r => r.setup.rank === 4).length, plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
+    const qd = all.filter(r => r.setup.rank === 4).length;
     const where = S.themes.size ? [...S.themes].map(id => THEME[id].name).join(' + ') : 'all stocks';
-    announce(`Showing ${plural(list.length, 'stock')} in ${where}${S.size ? ', ' + SIZES.get(S.size) : ''}: ${plural(qd, 'quality dip')} in this focus.`);
+    announce(`Showing ${plural(list.length, 'stock')} in ${where}${S.size ? ', ' + SIZES.get(S.size) : ''}${S.region ? ', ' + S.region : ''}: ${plural(qd, 'quality dip')} in this focus.` +
+      (S.noCap ? ` ${plural(S.noCap, 'stock')} hidden: no market-cap data.` : ''));
   }
   renderCards(list);
   syncSort();
@@ -982,7 +1052,7 @@ function hist(all) {
   $('histtitle').textContent = 'Where the ' + W_.noun + ' sits';
   if (!vals.length) { $('hist').replaceChildren(el('div', 'empty', 'No data for this window.')); return; }
   const sorted = [...vals].sort((a, b) => a - b), med = sorted[Math.floor(sorted.length / 2)], step = W_.step;
-  $('histcap').textContent = `${W_.noun[0].toUpperCase() + W_.noun.slice(1)} of every stock ${S.themes.size || S.size ? 'in your focus' : 'screened'}. The median stock is at ${pct(med)}. Red bars are at or past the ${any ? '5-day rule' : 'drop limit you set'} (${pct(thr)}).` +
+  $('histcap').textContent = `${W_.noun[0].toUpperCase() + W_.noun.slice(1)} of every stock ${S.themes.size || S.size || S.region ? 'in your focus' : 'screened'}. The median stock is at ${pct(med)}. Red bars are at or past the ${any ? '5-day rule' : 'drop limit you set'} (${pct(thr)}).` +
     (any ? ' Stocks flagged by the 1-day or 20-day-high rule can sit in grey bars.' : '') + ' If the whole distribution has shifted left, the market is selling off broadly.';
   const rawLo = Math.min(...vals, thr), rawHi = Math.max(...vals, 0), every = (rawHi - rawLo) / step > 14 ? 4 : 2, unit = step * every;
   const lo = Math.floor(rawLo / unit + 1e-9) * unit, hi = Math.ceil(rawHi / unit - 1e-9) * unit, bins = [];
@@ -1029,7 +1099,7 @@ function sectors(all) {
 
 // ---------- controls ----------
 const segs = (id, key) => document.querySelectorAll('#' + id + ' button').forEach(b => b.onclick = () => { document.querySelectorAll('#' + id + ' button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); S[key] = b.dataset.v; S.sortKey = null; render(); });
-segs('show', 'show'); segs('region', 'region');
+segs('show', 'show');
 ['drop', 'qmin', 'hideknife', 'q'].forEach(id => $(id).addEventListener('input', () => { S.sortKey = null; render(); }));
 $('win').addEventListener('change', () => { $('drop').value = Math.round(WIN[$('win').value].def * 100); S.sortKey = null; render(); });
 render();
