@@ -55,8 +55,8 @@ def quoted_mismatch(spec_hash: str, primary_ex_own: float | None, primary_n: int
     if not q:
         return ""
     if primary_ex_own is None or primary_n is None:
-        return "The recorded notes quote a primary-cell result, but this run has no primary-cell result to compare with."
+        return "The recorded notes quote a result for the main question, but this run has no result for it to compare with."
     if abs(q["primary_ex_own"] - primary_ex_own) > 5e-7 or q["primary_n"] != primary_n:
-        return (f"The recorded notes quote a primary result of {q['primary_ex_own']:+.4%} (n = {q['primary_n']:,}); this run gives "
+        return (f"The recorded notes quote a result for the main question of {q['primary_ex_own']:+.4%} (n = {q['primary_n']:,}); this run gives "
                 f"{primary_ex_own:+.4%} (n = {primary_n:,}). Read the notes with that difference in mind.")
     return ""

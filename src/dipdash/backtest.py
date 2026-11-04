@@ -254,7 +254,7 @@ def date_shift_placebo(rows: np.ndarray, fwd: np.ndarray, tstart: np.ndarray, te
     o, p = obs_m[keep], pla_m[keep]
     out = {"shift_p": float((1 + (p >= o).sum()) / (keep.sum() + 1)), "shift_excess": float((o - p).mean()),
            "shift_draws": int(keep.sum()), "shift_mean": float(p.mean()),
-           "shift_lags": int(len(np.unique(delta[keep])))}                              # distinct lags actually used: the placebo's resolution
+           "shift_lags": int(len(np.unique(delta[keep])))}                              # distinct lags actually used (neighbouring lags overlap, so this overstates the independent shifts)
     if with_draws:
         out["placebo_minus_events"] = p - o
     return out

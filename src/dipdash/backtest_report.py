@@ -104,6 +104,17 @@ def chart_forest(res: pd.DataFrame, s: Settings, path: Path) -> None:
 
 
 # ---------------------------------------------------------------- text
+def earlier_specs_line(hist: list[dict], shash: str) -> str:
+    """One line, derived from trials.csv, saying that runs under other spec hashes exist. Empty if there are none.
+    Printed whether or not notes exist for the current hash, so the first-look history cannot silently vanish."""
+    others = list(dict.fromkeys(h_["spec_hash"] for h_ in hist if h_["spec_hash"] != shash))
+    if not others:
+        return ""
+    names = ", ".join(f"`{o}`" for o in others[:5]) + (f" and {len(others) - 5} more" if len(others) > 5 else "")
+    return (f"`trials.csv` also holds runs under {len(others)} earlier spec hash{'es' if len(others) != 1 else ''} ({names}), so the analysis was revised at least "
+            f"{len(others)} time{'s' if len(others) != 1 else ''} after an earlier run. Changes between specs are described below only where they were written into `backtest_notes.py`.")
+
+
 def render_report(run: dict, s: Settings, charts: dict[str, str]) -> str:
     spec, res, days, cutoff, val = run["spec"], run["results"], run["days"], run["cutoff"], run["validation"]
     bt = s.backtest
@@ -138,8 +149,11 @@ def render_report(run: dict, s: Settings, charts: dict[str, str]) -> str:
           f"non-dip days at {H} days ({ci} interval {interval(prim['ex_own_lo'], prim['ex_own_hi'])}); {excludes_zero(prim)}. "
           + ("In sample the same figure was " + f"{pct(prim_is['ex_own'])} ({interval(prim_is['ex_own_lo'], prim_is['ex_own_hi'])}). " if prim_is is not None else "")
           + f"Versus the regional index the figure was {pct(prim['ex_index'])} ({interval(prim['ex_index_lo'], prim['ex_index_hi'])}); versus the other stocks the same day {pct(prim['ex_peers'])} "
-          f"({interval(prim['ex_peers_lo'], prim['ex_peers_hi'])}). Share of date-shifted placebos (all events moved together by a random lag) at or above the events' mean: {prim.get('shift_p', float('nan')):.2f}"
-          + (f" ({int(prim['shift_lags']):,} distinct lags were drawn, so read it to two decimals)." if "shift_lags" in prim.index and pd.notna(prim["shift_lags"]) else ".") + "\n")
+          f"({interval(prim['ex_peers_lo'], prim['ex_peers_hi'])}). Share of date-shifted comparisons that did as well as the real events: {prim.get('shift_p', float('nan')):.2f}. "
+          "In each comparison all events are moved by the same random number of trading days. A high share means the result is easy to get by chance. "
+          + (f"At most {int(prim['shift_lags']):,} distinct shifts were drawn, and neighbouring shifts overlap, so the effective number of independent shifts is much smaller; read the figure to two decimals."
+             if "shift_lags" in prim.index and pd.notna(prim["shift_lags"]) else
+             "Neighbouring shifts overlap, so the effective number of independent shifts is much smaller; read the figure to two decimals.") + "\n")
         lo, hi = prim["ex_own_lo"], prim["ex_own_hi"]
         if np.isfinite(lo) and lo > 0:
             w("The pre-registered condition is met in this sample. That is a statement about these dates and these stocks; the sections below list why it may not carry over.\n")
@@ -152,7 +166,7 @@ def render_report(run: dict, s: Settings, charts: dict[str, str]) -> str:
         d = res[(res["period"] == per) & (res["n"] > 0) & res["ex_own_lo"].notna()]
         tally[per] = (int(((d["ex_own_lo"] > 0) | (d["ex_own_hi"] < 0)).sum()), len(d))
     if prim is not None:
-        w(f"**In sample versus out of sample.** Across the {tally['IS'][1]} cells ({n_variants} variants × {len(bt.horizons)} horizons × {n_groups} region groups), {tally['IS'][0]} in-sample intervals for the excess over each stock's own non-dip days "
+        w(f"**In sample versus out of sample.** Across {tally['IS'][1]} non-empty cells (at most {n_variants} variants × {len(bt.horizons)} horizons × {n_groups} region groups; empty cells are left out), {tally['IS'][0]} in-sample intervals for the excess over each stock's own non-dip days "
           f"exclude zero, against {tally['OOS'][0]} of {tally['OOS'][1]} out of sample ({tally['OOS_exstress'][0]} of {tally['OOS_exstress'][1]} with market-stress days removed). The cells overlap, so this is a tally, not "
           f"{tally['IS'][1]} independent tests. It does not show that the in-sample and out-of-sample results differ from each other: the out-of-sample intervals are about ±{(prim['ex_own_hi'] - prim['ex_own_lo']) / 2 * 100:.1f} points wide at {H} days, "
           "so this sample has little power to detect an edge of the size seen in sample.\n")
@@ -246,6 +260,9 @@ def render_report(run: dict, s: Settings, charts: dict[str, str]) -> str:
       + (f" ({run['trial_runs']} runs so far; several only reformatted the report)" if run.get("trial_runs") else "") + ". With this many looks, the best-looking cell is a candidate, not a finding.\n")
     w("## Changes after the first look\n")
     revs = spec.get("revisions_after_first_look", [])
+    earlier = earlier_specs_line(run.get("primary_history", []), shash)
+    if earlier:
+        w(earlier + "\n")
     if not revs:
         w(f"No changes after the first look are recorded for spec `{shash}`. That is not a statement that none were made: only changes written into `backtest_notes.py` for this spec hash appear here.\n")
     else:
@@ -268,9 +285,9 @@ def render_report(run: dict, s: Settings, charts: dict[str, str]) -> str:
         w(notes["review"] + "\n")
         warn = quoted_mismatch(shash, float(prim["ex_own"]) if prim is not None else None, int(prim["n"]) if prim is not None else None)
         if warn:
-            w(f"**Check:** {warn}\n")
+            w(f"**Note: figures differ.** {warn}\n")
     else:
-        w(f"No review is recorded for spec {shash}. Treat the numbers as unreviewed by the notes file; a separate review step (stats-reviewer) is still needed before they are relied on.\n")
+        w(f"No review is recorded for spec {shash}. These numbers have not been checked by a second person or tool; treat them as unreviewed.\n")
     # ---- trust
     w("## How much to trust this\n")
     n_uni = spec["universe"]["n"]

@@ -208,7 +208,10 @@ def test_report_has_no_literals_from_the_published_run_and_shows_this_runs_numbe
     prim = run["results"].query("variant == 'V1_price_only' and horizon == 21 and group == 'All' and period == 'OOS'").iloc[0]
     assert f"{int(prim['n']):,} events" in text
     assert f"{len(prices)} of {len(uni)}" not in text and f"All {len(uni)} stocks have price data" in text    # synthetic: nothing missing
-    assert f"{int(prim['shift_lags']):,} distinct lags were drawn" in text
+    assert f"At most {int(prim['shift_lags']):,} distinct shifts were drawn" in text
+    assert "Share of date-shifted comparisons that did as well as the real events" in text and "effective number of independent shifts is much smaller" in text
+    assert "non-empty cells" in text
+    assert "stats-reviewer" not in text and "These numbers have not been checked by a second person or tool; treat them as unreviewed." in text
     assert f"{s.backtest.cooldown_days}-bar cooldown" in text and f"{s.backtest.ci_level:.0%} bootstrap intervals" in text
     assert "No review is recorded for spec " + run["spec"]["spec_hash"] in text
     assert "No changes after the first look are recorded" in text
@@ -253,11 +256,26 @@ def test_notes_for_a_known_hash_are_printed_with_the_not_acted_on_disclosure_and
     text = render_report(run, s, CH)
     assert "Test review text." in text and "Test revision two NOT acted on." in text and "left uncorrected" in text
     assert "identical in every logged run" in text and f"{float(prim['ex_own']):+.4%}" in text
-    assert "**Check:**" not in text                                                     # quoted figure agrees with the run
+    assert "**Note: figures differ.**" not in text                                      # quoted figure agrees with the run
     notes[h]["quoted"] = {"primary_ex_own": float(prim["ex_own"]) + 0.01, "primary_n": int(prim["n"])}
-    assert "**Check:** The recorded notes quote a primary result" in render_report(run, s, CH)
+    mism = render_report(run, s, CH)
+    assert "**Note: figures differ.** The recorded notes quote a result for the main question" in mism and "**Check:**" not in mism
     run["primary_history"][1] = {**run["primary_history"][0], "n": int(prim["n"]) + 1}
     assert "identical in every logged run" not in render_report(run, s, CH)
+
+
+def test_earlier_spec_hashes_in_the_trial_log_are_always_mentioned(tmp_path):
+    from dipdash.backtest_report import earlier_specs_line
+    assert earlier_specs_line([], "h1") == "" and earlier_specs_line([{"spec_hash": "h1"}], "h1") == ""
+    line = earlier_specs_line([{"spec_hash": "old1"}, {"spec_hash": "old1"}, {"spec_hash": "old2"}, {"spec_hash": "h1"}], "h1")
+    assert "2 earlier spec hashes" in line and "old1" in line and "old2" in line
+    prices, ix, uni, q, s = synthetic()
+    run = run_backtest(prices, ix, uni, q, s, tmp_path / "r", META)
+    assert run["spec"]["revisions_after_first_look"] == []                              # no notes for this hash
+    run["primary_history"] = [{"run_at": "x", "spec_hash": "oldhash", "n": 3, "ex_own": 0.01}]
+    text = render_report(run, s, CH)
+    assert "earlier spec hash" in text and "oldhash" in text                            # shown even without notes for the current hash
+    assert "No changes after the first look are recorded" in text
 
 
 def test_editing_a_note_does_not_change_the_spec_hash(monkeypatch):
