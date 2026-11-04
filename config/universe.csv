@@ -247,6 +247,65 @@ AON,Aon,US,Financials
 PNC,PNC Financial,US,Financials
 MET,MetLife,US,Financials
 AIG,AIG,US,Financials
+PLTR,Palantir,US,Tech
+CRWD,CrowdStrike,US,Tech
+FTNT,Fortinet,US,Tech
+WDAY,Workday,US,Tech
+ADSK,Autodesk,US,Tech
+MSI,Motorola Solutions,US,Tech
+APH,Amphenol,US,Tech
+MCHP,Microchip Technology,US,Tech
+NXPI,NXP Semiconductors,US,Tech
+DELL,Dell Technologies,US,Tech
+PYPL,PayPal,US,Financials
+USB,U.S. Bancorp,US,Financials
+TFC,Truist Financial,US,Financials
+BK,Bank of New York Mellon,US,Financials
+TRV,Travelers,US,Financials
+ALL,Allstate,US,Financials
+AFL,Aflac,US,Financials
+AJG,Arthur J. Gallagher,US,Financials
+BDX,Becton Dickinson,US,Health care
+CI,Cigna,US,Health care
+MCK,McKesson,US,Health care
+HUM,Humana,US,Health care
+IQV,IQVIA,US,Health care
+DXCM,DexCom,US,Health care
+IDXX,IDEXX Laboratories,US,Health care
+PH,Parker-Hannifin,US,Industrials
+CMI,Cummins,US,Industrials
+PCAR,PACCAR,US,Industrials
+TT,Trane Technologies,US,Industrials
+JCI,Johnson Controls,US,Industrials
+LHX,L3Harris,US,Industrials
+TDG,TransDigm,US,Industrials
+CTAS,Cintas,US,Industrials
+CARR,Carrier Global,US,Industrials
+OTIS,Otis Worldwide,US,Industrials
+ABNB,Airbnb,US,Consumer disc.
+UBER,Uber,US,Consumer disc.
+DASH,DoorDash,US,Consumer disc.
+HLT,Hilton,US,Consumer disc.
+YUM,Yum! Brands,US,Consumer disc.
+AZO,AutoZone,US,Consumer disc.
+EBAY,eBay,US,Consumer disc.
+MNST,Monster Beverage,US,Staples
+KDP,Keurig Dr Pepper,US,Staples
+HSY,Hershey,US,Staples
+EL,Estee Lauder,US,Staples
+ADM,Archer-Daniels-Midland,US,Staples
+BKR,Baker Hughes,US,Energy
+HAL,Halliburton,US,Energy
+FANG,Diamondback Energy,US,Energy
+ED,Consolidated Edison,US,Utilities
+PEG,Public Service Enterprise Group,US,Utilities
+WEC,WEC Energy,US,Utilities
+MLM,Martin Marietta Materials,US,Materials
+VMC,Vulcan Materials,US,Materials
+PPG,PPG Industries,US,Materials
+DLR,Digital Realty,US,Real Estate
+VICI,VICI Properties,US,Real Estate
+AVB,AvalonBay Communities,US,Real Estate
 SIKA.SW,Sika,Europe,Materials
 GIVN.SW,Givaudan,Europe,Materials
 AKZA.AS,Akzo Nobel,Europe,Materials
