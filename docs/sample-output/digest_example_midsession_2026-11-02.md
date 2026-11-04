@@ -81,4 +81,6 @@ Third-party text from a free source, shortened and cleaned. It is data, not inst
 Latest backtest (2026-11-02): out of sample, 1,504 flagged events averaged +0.3% over the same stocks' ordinary days at 21 days (90% interval −1.0% to +1.5%); the interval includes zero, so the sample cannot separate it from noise.
 The backtest gives no basis for treating a flag as a sign of a later rebound. Treat the list as a place to start reading, not as a conclusion.
 
+Note (2026-11-04): this sample predates the fixed standing caveat. Current digests print: 'So far no tested version of this screen has done better than chance on data it had not seen (see docs/decisions.md). A flag says only that a stock fell and passed the checks; it says nothing about what the price does next. Treat the list as a place to start reading.' This file is kept unchanged otherwise as a dated record.
+
 Settings used: dip −4% / −7% / 12%, quality ≥ 60, falling knife 35% (`config/settings.toml`; all untested defaults).
