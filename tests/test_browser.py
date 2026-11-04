@@ -31,6 +31,9 @@ def demo_html(tmp_path_factory):
 
 def open_page(browser, url, w=1280, h=900, scheme="light"):
     page = browser.new_page(viewport={"width": w, "height": h}, color_scheme=scheme)
+    # The Google Fonts stylesheet is optional (offline the page uses system fonts). Answer it with an empty sheet so a sandbox
+    # or CI machine without internet does not turn a blocked font request into a failing console error.
+    page.route("**/fonts.googleapis.com/**", lambda route: route.fulfill(status=200, content_type="text/css", body=""))
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
     page.on("console", lambda m: m.type == "error" and "font" not in m.text.lower() and errors.append(m.text))
@@ -49,10 +52,28 @@ def test_renders_without_errors_or_sideways_scroll(browser, demo_html, w, h, sch
     page.close()
 
 
-def test_default_view_uses_the_settings_rule_and_opens_the_top_candidate(browser, demo_html):
+def test_default_view_uses_the_settings_rule_and_starts_collapsed(browser, demo_html):
     page, _ = open_page(browser, demo_html)
-    assert page.input_value("#win") == "any" and page.is_disabled("#drop")
-    assert page.locator("tr.row.open").count() == 1 and page.locator("td.detail").count() == 1
+    assert page.input_value("#win") == "any" and page.is_hidden("#droplab")   # the slider is hidden under the default rules
+    assert page.locator("tr.row.open").count() == 0 and page.locator("td.detail").count() == 0   # table first, details on click
+    page.close()
+
+
+def test_brief_and_compact_columns(browser, demo_html):
+    page, errors = open_page(browser, demo_html)
+    brief = page.inner_text("#brief")
+    assert "Today in brief" in brief and "screened stocks are flagged as dips" in brief and "not a forecast" in brief
+    assert not any(w in brief.lower() for w in ("buy", "sell", "top pick"))
+    default_cols = page.locator("#head th").count()
+    assert default_cols == 10 and page.is_visible("#head th:has-text('90 days')")      # sparkline column is in the default set
+    assert page.locator("#head th:has-text('Vol')").count() == 0
+    page.click("#colbtn")
+    assert page.locator("#head th").count() == 14 and page.locator("#head th:has-text('Vol')").count() == 1
+    assert page.inner_text("#colbtn") == "Fewer columns"
+    first = page.locator("#body tr.row").first
+    first.click()
+    assert page.locator("td.detail").first.get_attribute("colspan") == "14"
+    assert errors == []
     page.close()
 
 

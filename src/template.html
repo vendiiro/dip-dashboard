@@ -112,8 +112,20 @@ input[type=range]{width:150px;accent-color:var(--accent);min-height:30px}
 .tablecard{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .tablehead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;padding:12px 14px 8px}
 .tablehead .muted{font-size:12.5px}
-.scroll{overflow-x:auto}
-table{border-collapse:collapse;width:100%;min-width:1060px}
+/* Right-edge shadow while more columns are hidden off-screen (CSS only: it vanishes once scrolled to the end). */
+.scroll{overflow-x:auto;background:
+  linear-gradient(to left,var(--surface),var(--surface)) 100% 0/24px 100% no-repeat local,
+  linear-gradient(to left,rgba(20,24,33,.16),rgba(20,24,33,0)) 100% 0/18px 100% no-repeat scroll}
+table{border-collapse:collapse;width:100%;min-width:900px}
+table.wide{min-width:1120px}
+.brief{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px;display:flex;flex-direction:column;gap:2px}
+.brief h2{font-size:14px;font-weight:600}
+.brief p{margin:0;font-size:14px;line-height:1.5;color:var(--ink)}
+.brief .sub{font-size:12.5px;font-weight:400;color:var(--ink-3);font-family:var(--f-body)}
+.brief .num{font-family:var(--f-data);font-variant-numeric:tabular-nums;white-space:nowrap}
+.colbtn{align-self:center;border:1px solid var(--line-strong);background:var(--surface);border-radius:6px;padding:4px 12px;min-height:40px;cursor:pointer;font-size:13px;color:var(--accent)}
+.colbtn:hover{background:var(--sunken)}
+.tablehead .tools{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 th,td{padding:8px 7px;border-bottom:1px solid var(--line);white-space:nowrap;text-align:right;vertical-align:middle}
 td.n{font-family:var(--f-data);font-variant-numeric:tabular-nums}
 th{font-size:11.5px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;background:var(--surface);user-select:none}
@@ -186,8 +198,9 @@ footer dd{margin:0}
   .ctx,.dgrid{grid-template-columns:minmax(0,1fr)}
 }
 @media (max-width:600px){
-  .scroll{display:none}
+  .scroll,.colbtn{display:none}
   .cards{display:flex}
+  .brief p{font-size:13.5px}
   .seg button{min-height:40px;padding:6px 12px}
   .ctl select,.ctl input{min-height:40px}
   .ctl{flex:1 1 100%}
@@ -229,9 +242,9 @@ footer dd{margin:0}
   </header>
   <div class="dqpanel" id="dqpanel" hidden></div>
 
-  <div class="tiles" id="tiles"></div>
+  <section class="brief" id="brief" aria-labelledby="brief-h"></section>
 
-  <section class="alerts" id="alerts" aria-labelledby="alerts-h"></section>
+  <div class="tiles" id="tiles"></div>
 
   <button type="button" class="ctltoggle" id="ctltoggle" aria-expanded="false" aria-controls="controls"><span>Filters</span><span class="sum" id="ctlsum"></span></button>
   <div class="controls" id="controls">
@@ -258,7 +271,7 @@ footer dd{margin:0}
   </div>
 
   <div class="tablecard">
-    <div class="tablehead"><h2 id="tabletitle">Candidates</h2><span class="muted" id="tablehint">Click a row for details. Click a column to sort. Sparkline: 90 days, each row scaled to its own min–max.</span></div>
+    <div class="tablehead"><h2 id="tabletitle">Candidates</h2><div class="tools"><span class="muted" id="tablehint">Click a row for details. Click a column to sort. Sparkline: 90 days, each row scaled to its own min–max.</span><button type="button" class="colbtn" id="colbtn" aria-pressed="false">More columns</button></div></div>
     <div class="cards" id="cards"></div>
     <div class="scroll"><table>
       <thead><tr id="head"></tr></thead>
@@ -266,6 +279,8 @@ footer dd{margin:0}
     </table></div>
     <div class="empty" id="empty" hidden>No stocks match. Lower the minimum drop, lower the minimum quality, or switch “Show” to All dips.</div>
   </div>
+
+  <section class="alerts" id="alerts" aria-labelledby="alerts-h"></section>
 
   <div class="ctx">
     <div class="card">
@@ -336,7 +351,7 @@ const REGION_ORDER = ['US', 'Europe', 'Nordic'];
 regions.sort((a, b) => (REGION_ORDER.indexOf(a) + 1 || 99) - (REGION_ORDER.indexOf(b) + 1 || 99) || a.localeCompare(b));
 [['', 'All'], ...regions.map(r => [r, r])].forEach(([v, l], i) => { const b = el('button', null, l); b.dataset.v = v; b.setAttribute('aria-pressed', String(i === 0)); $('region').append(b); });
 
-const S = {show: 'dips', region: '', sortKey: null, sortDir: 1, open: null};
+const S = {show: 'dips', region: '', sortKey: null, sortDir: 1, open: null, more: false};
 
 // ---------- header, data quality ----------
 const latest = a => a.length ? a.map(r => r.asof).sort().at(-1) : null;
@@ -351,10 +366,19 @@ $('demo').hidden = !DATA.demo;
   const skipped = DATA.data_quality || [];
   const checks = iss.filter(i => i.check === 'crosscheck_ok' || i.check === 'crosscheck_diff');
   const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
-  const state = errs.length ? 'crit' : warns.length ? 'warn' : 'ok';
+  // A ticker the source simply did not return is shown as "left out" (a warning), not as a red error: the run itself is fine.
+  const hardErrs = errs.filter(i => i.check !== 'no_data');
+  const state = hardErrs.length ? 'crit' : (errs.length || warns.length) ? 'warn' : 'ok';
   $('dqbtn').className = 'dq s-' + state;
   $('dqic').textContent = state === 'ok' ? '✓' : state === 'warn' ? '!' : '✕';
-  $('dqlabel').textContent = state === 'ok' ? 'Data checks passed' : plural(errs.length, 'error') + ' · ' + plural(warns.length, 'warning');
+  const partial = warns.filter(i => i.check === 'partial_bar').length;
+  const otherNotes = hardErrs.length + warns.length - partial;
+  const parts = [rows.length + ' screened'];
+  if (skipped.length) parts.push(skipped.length + ' left out');
+  if (partial) parts.push(partial + ' intraday');
+  if (otherNotes) parts.push(plural(otherNotes, 'other note'));
+  $('dqlabel').textContent = (state === 'ok' ? 'Data checks passed · ' : '') + parts.join(' · ');
+  $('dqbtn').title = 'Left out: the price source returned no usable data for that ticker. Intraday: the latest bar is dated today, so the session may still be open. Click for details.';
   const p = $('dqpanel');
   p.append(el('b', null, 'Data quality for this run'));
   p.append(el('div', null, `${rows.length} of ${rows.length + (DATA.data_quality || []).length} tickers screened. Stocks with an error are left out of the table.`));
@@ -419,6 +443,29 @@ function setupOf(r, m) {
   return {label: 'Dip, low quality', rank: 2, cls: 'b-serious', icon: '✗'};
 }
 const wasQualityDip = r => r.prev ? setupOf(r, r.prev).rank === 4 : null;   // null = no history to say
+
+// ---------- today in brief: a plain-language read of the current screen ----------
+function brief(all) {
+  const box = $('brief'); box.replaceChildren();
+  const dips = all.filter(r => r.setup.rank > 0), qd = dips.filter(r => r.setup.rank === 4);
+  const newQ = qd.filter(r => wasQualityDip(r) === false);
+  const h = el('h2', null, 'Today in brief'); h.id = 'brief-h';
+  h.append(el('span', 'sub', ' · a description of the latest close, not a forecast; it follows the filters below'));
+  const p1 = el('p', null, `${dips.length} of ${all.length} screened stocks are flagged as dips; ${qd.length} of them pass the quality bar${newQ.length ? ' and ' + newQ.length + ' ' + (newQ.length === 1 ? 'is' : 'are') + ' new since the previous close' : ''}.`);
+  const p2 = el('p');
+  const ix = (DATA.indices || []).slice(0, 2).filter(i => i.r1 != null);
+  const r5s = all.map(r => r.r5).filter(v => v != null).sort((a, b) => a - b);
+  if (ix.length) {
+    p2.append('Index moves at the latest close: ');
+    ix.forEach((i, k) => { if (k) p2.append(', '); p2.append(i.name + ' '); p2.append(el('span', 'num ' + sgnCls(i.r1), pct(i.r1))); });
+    p2.append(' (1 day). ');
+  }
+  if (r5s.length) { p2.append('The median screened stock moved '); p2.append(el('span', 'num ' + sgnCls(r5s[Math.floor(r5s.length / 2)]), pct(r5s[Math.floor(r5s.length / 2)]))); p2.append(' over 5 days. '); }
+  const withIdx = dips.filter(r => r.x5 != null), far = withIdx.filter(r => r.x5 <= -0.05).length;
+  if (withIdx.length) p2.append(`${far} of ${withIdx.length} flagged dips fell at least 5 points more than their own index.`);
+  box.append(h, p1);
+  if (p2.childNodes.length) box.append(p2);
+}
 
 // ---------- trigger alerts ----------
 let alertsOpen = false;
@@ -501,14 +548,31 @@ function tiles(all) {
 }
 
 // ---------- table ----------
+// Each column draws its own cell. `more: true` columns are hidden until "More columns" is pressed, so the default
+// table fits a laptop screen without sideways scrolling and the sparkline stays visible.
+const pctCell = k => r => el('td', 'n ' + sgnCls(r[k]), pct(r[k]));
 const COLS = [
-  {k: 't', l: 'Stock', cls: 'l', dir: 1}, {k: 'price', l: 'Price', dir: -1}, {k: 'r1', l: '1d', dir: 1}, {k: 'r5', l: '5d', dir: 1},
-  {k: 'x5', l: '5d vs index', dir: 1, tip: 'The stock’s 5-day move minus its own country’s (or region’s) index move'}, {k: 'res5', l: '5d resid.', dir: 1, tip: 'The 5-day move left over after removing what the stock’s own index and its usual sensitivity to it (beta) would explain. Beta comes from the previous year, excluding the last 5 days.'}, {k: 'r21', l: '1m', dir: 1},
-  {k: 'dd52', l: 'vs 52w high', dir: 1}, {k: 'vs200', l: 'vs 200d avg', dir: 1}, {k: 'rsi', l: 'RSI', dir: 1},
-  {k: 'volx', l: 'Vol ×', dir: -1, tip: 'Latest volume divided by the average of the previous 20 days'},
-  {k: 'q', l: 'Quality', cls: 'l', dir: -1, tip: 'Share of quality checks passed. The bars show each check: filled = passed, hatched = no data.'},
-  {k: 'setup', l: 'Setup', cls: 'l', dir: -1}, {k: 'spark', l: '90 days', nosort: true},
+  {k: 't', l: 'Stock', cls: 'l', dir: 1, cell: r => {
+    const c0 = el('td', 'l'), tk = el('div', 'tk'); tk.append(el('span', 'caret', '›'), document.createTextNode(r.t));
+    if (r.setup.rank === 4 && wasQualityDip(r) === false) tk.append(el('span', 'new', 'NEW'));
+    c0.append(tk, el('div', 'nm', `${r.name} · ${r.region}`));
+    const et = earnTag(r); if (et) c0.append(et); const pt = partialTag(r); if (pt) c0.append(' ', pt);
+    return c0; }},
+  {k: 'price', l: 'Price', dir: -1, cell: r => { const td = el('td', 'n', r.price == null ? '–' : r.price.toFixed(2)); if (r.ccy) td.append(el('span', 'nm', ' ' + r.ccy)); return td; }},
+  {k: 'r1', l: '1d', dir: 1, cell: pctCell('r1')}, {k: 'r5', l: '5d', dir: 1, cell: pctCell('r5')},
+  {k: 'x5', l: '5d vs index', dir: 1, cell: pctCell('x5'), tip: 'The stock’s 5-day move minus its own country’s (or region’s) index move'},
+  {k: 'res5', l: '5d resid.', dir: 1, more: true, cell: pctCell('res5'), tip: 'The 5-day move left over after removing what the stock’s own index and its usual sensitivity to it (beta) would explain. Beta comes from the previous year, excluding the last 5 days.'},
+  {k: 'r21', l: '1m', dir: 1, more: true, cell: pctCell('r21')},
+  {k: 'dd52', l: 'vs 52w high', dir: 1, cell: pctCell('dd52')}, {k: 'vs200', l: 'vs 200d avg', dir: 1, more: true, cell: pctCell('vs200')},
+  {k: 'rsi', l: 'RSI', dir: 1, cell: r => el('td', 'n ' + (r.rsi != null && r.rsi < 30 ? 'down' : ''), r.rsi == null ? '–' : r.rsi.toFixed(0))},
+  {k: 'volx', l: 'Vol ×', dir: -1, more: true, tip: 'Latest volume divided by the average of the previous 20 days', cell: r => el('td', 'n ' + (r.volx != null && r.volx >= 2 ? '' : 'muted'), r.volx == null ? '–' : r.volx.toFixed(1) + '×')},
+  {k: 'q', l: 'Quality', cls: 'l', dir: -1, tip: 'Share of quality checks passed. The bars show each check: filled = passed, hatched = no data.', cell: r => {
+    const tq = el('td', 'l n'); tq.append(document.createTextNode(r.q == null ? '–' : String(r.q)), qnote(r), qmeter(r)); return tq; }},
+  {k: 'setup', l: 'Setup', cls: 'l', dir: -1, cell: r => {
+    const tb = el('td', 'l'), bd = el('span', 'badge ' + r.setup.cls, r.setup.icon + ' ' + r.setup.label); bd.title = SETUP_TIP[r.setup.label]; tb.append(bd); return tb; }},
+  {k: 'spark', l: '90 days', nosort: true, cell: r => { const td = el('td'); td.append(spark(r.spark)); return td; }},
 ];
+const visCols = () => COLS.filter(c => !c.more || S.more);
 function earnText(r, which) {
   const e = r.earn; if (!e) return '–'; if (!e[which]) return 'unknown';
   const d = which === 'last' ? e.days_since_last : e.days_until_next;
@@ -554,7 +618,7 @@ function render() {
   $('dropv').textContent = MINUS + $('drop').value + '%'; $('qv').textContent = $('qmin').value;
   $('drop').setAttribute('aria-valuetext', 'minimum drop ' + MINUS + $('drop').value + ' percent on ' + W.noun);
   const all = rows.map(r => Object.assign(r, {setup: setupOf(r, r)}));
-  tiles(all); ctlSummary();
+  brief(all); tiles(all); ctlSummary();
   if (!alertsPanel.done) { alertsPanel(); alertsPanel.done = true; }
   const qs = $('q').value.trim().toLowerCase();
   const list = all.filter(r => {
@@ -576,7 +640,9 @@ function render() {
   S.list = list;
 
   const head = $('head'); head.replaceChildren();
-  COLS.forEach(c => {
+  $('body').parentElement.classList.toggle('wide', S.more);
+  $('colbtn').setAttribute('aria-pressed', String(S.more)); $('colbtn').textContent = S.more ? 'Fewer columns' : 'More columns';
+  visCols().forEach(c => {
     const th = el('th', (c.cls || '') + (c.nosort ? '' : ' sortable'), c.l);
     if (c.tip) th.title = c.tip;
     if (S.sortKey === c.k) th.append(el('span', 'arr', S.sortDir > 0 ? ' ▲' : ' ▼'));
@@ -591,21 +657,11 @@ function render() {
   const body = $('body'); body.replaceChildren(); $('empty').hidden = list.length > 0;
   list.forEach(r => {
     const tr = el('tr', 'row' + (S.open === r.t ? ' open' : '')); tr.dataset.t = r.t; tr.tabIndex = 0; tr.setAttribute('aria-expanded', String(S.open === r.t));
-    const c0 = el('td', 'l'); const tk = el('div', 'tk'); tk.append(el('span', 'caret', '›'), document.createTextNode(r.t));
-    if (r.setup.rank === 4 && wasQualityDip(r) === false) tk.append(el('span', 'new', 'NEW'));
-    c0.append(tk, el('div', 'nm', `${r.name} · ${r.region}`)); { const et = earnTag(r); if (et) c0.append(et); const pt = partialTag(r); if (pt) c0.append(' ', pt); } tr.append(c0);
-    const n = (txt, cls = '') => tr.append(el('td', 'n ' + cls, txt));
-    { const td = el('td', 'n', r.price == null ? '–' : r.price.toFixed(2)); if (r.ccy) td.append(el('span', 'nm', ' ' + r.ccy)); tr.append(td); }
-    ['r1', 'r5', 'x5', 'res5', 'r21', 'dd52', 'vs200'].forEach(k => n(pct(r[k]), sgnCls(r[k])));
-    n(r.rsi == null ? '–' : r.rsi.toFixed(0), r.rsi != null && r.rsi < 30 ? 'down' : '');
-    n(r.volx == null ? '–' : r.volx.toFixed(1) + '×', r.volx != null && r.volx >= 2 ? '' : 'muted');
-    const tq = el('td', 'l n'); tq.append(document.createTextNode(r.q == null ? '–' : String(r.q)), qnote(r), qmeter(r)); tr.append(tq);
-    const tb = el('td', 'l'); const bd = el('span', 'badge ' + r.setup.cls, r.setup.icon + ' ' + r.setup.label); bd.title = SETUP_TIP[r.setup.label]; tb.append(bd); tr.append(tb);
-    const tsp = el('td'); tsp.append(spark(r.spark)); tr.append(tsp);
+    visCols().forEach(c => tr.append(c.cell(r)));
     tr.onclick = () => { S.open = S.open === r.t ? null : r.t; S.focus = 'tr.row[data-t="' + r.t + '"]'; render(); };
     tr.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tr.onclick(); } };
     body.append(tr);
-    if (S.open === r.t && !mq.matches) { const d = el('tr'); const td = el('td', 'detail'); td.colSpan = COLS.length; td.append(detail(r)); d.append(td); body.append(d); }
+    if (S.open === r.t && !mq.matches) { const d = el('tr'); const td = el('td', 'detail'); td.colSpan = visCols().length; td.append(detail(r)); d.append(td); body.append(d); }
   });
   renderCards(list);
   syncSort();
@@ -796,9 +852,8 @@ const segs = (id, key) => document.querySelectorAll('#' + id + ' button').forEac
 segs('show', 'show'); segs('region', 'region');
 ['drop', 'qmin', 'hideknife', 'q'].forEach(id => $(id).addEventListener('input', () => { S.sortKey = null; render(); }));
 $('win').addEventListener('change', () => { $('drop').value = Math.round(WIN[$('win').value].def * 100); S.sortKey = null; render(); });
-render();
-S.open = mq.matches ? null : (S.list.find(r => r.setup.rank === 4) || S.list[0] || {}).t || null;   // open the top candidate so the page starts in a working state
-render();
+$('colbtn').onclick = () => { S.more = !S.more; render(); $('colbtn').focus(); };
+render();   // every row starts collapsed, so the table and its sparklines are visible without scrolling past an open detail
 })();
 </script>
 </body>
