@@ -130,3 +130,7 @@ tests/browser_util.py,test-engineer
 docs/claims.md,docs-steward
 docs/ROADMAP.md,orchestrator
 docs/plans/*,orchestrator
+tests/test_sources.py,data-engineer
+tests/test_guards.py,test-engineer
+tests/stubs/*,test-engineer
+tests/test_decisions_index.py,docs-steward
