@@ -89,7 +89,7 @@ header.top{display:flex;flex-direction:column;gap:4px}
 .controls .sortctl{display:none}
 .alerts.unavail{border-color:var(--warn)}
 .alerts.unavail h2{color:var(--warn)}
-.chipmore{font:inherit;font-size:11.5px;background:none;border:1px dashed var(--line-strong);border-radius:4px;padding:1px 8px;color:var(--ink-2);cursor:pointer;min-height:24px}
+.chipmore{font:inherit;font-size:11.5px;background:none;border:1px dashed var(--line-strong);border-radius:4px;padding:1px 8px;color:var(--ink-2);cursor:pointer;min-height:32px;display:inline-flex;align-items:center}
 .chipmore:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .mktmore{align-self:flex-start;font:inherit;font-size:12.5px;background:none;border:0;padding:4px 0;color:var(--accent);cursor:pointer;text-decoration:underline;min-height:40px;display:inline-flex;align-items:center}
 .ctltoggle{display:none}
@@ -240,7 +240,7 @@ footer dd{margin:0}
 </style>
 </head>
 <body>
-<div class="wrap">
+<main class="wrap">
   <div class="demo" id="demo" role="note" hidden><b>Demo</b><span>Synthetic prices and fundamentals. The layout and the screening logic are real; none of these numbers are market data.</span></div>
 
   <header class="top">
@@ -327,7 +327,7 @@ footer dd{margin:0}
       <dt>Not investment advice</dt><dd>This is an educational research shortlist. A drop is not a reason to buy. Read the news and filings to judge whether the cause is temporary.</dd>
     </dl>
   </footer>
-</div>
+</main>
 <div class="tip" id="tip" hidden></div>
 
 <script>
