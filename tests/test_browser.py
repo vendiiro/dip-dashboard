@@ -87,10 +87,12 @@ def test_clicking_a_row_opens_and_closes_its_detail(browser, demo_html):
     rows = page.locator("#body tr.row")
     second = rows.nth(1)
     second.click()
-    assert page.locator("tr.row.open").count() == 1 and second.get_attribute("aria-expanded") == "true"
+    btn = second.locator(".rowbtn")
+    assert page.locator("tr.row.open").count() == 1 and btn.get_attribute("aria-expanded") == "true"
+    assert page.locator("td.detail").count() == 1 and btn.get_attribute("aria-controls") == page.locator("td.detail").locator("xpath=..").get_attribute("id")
     assert "quality checks" in page.inner_text("td.detail").lower()      # headings are upper-cased by CSS
-    page.locator("#body tr.row").nth(1).click()
-    assert page.locator("td.detail").count() == 0
+    page.locator("#body tr.row").nth(1).locator(".rowbtn").click()
+    assert page.locator("td.detail").count() == 0 and page.locator("#body tr.row").nth(1).locator(".rowbtn").get_attribute("aria-expanded") == "false"
     page.close()
 
 
@@ -246,3 +248,73 @@ def test_size_filter_only_keeps_big_companies(browser, demo_html):
     assert page.get_attribute('.th[data-id="semis"]', "aria-pressed") == "true"
     assert page.get_attribute('#size button[data-v="1e11"]', "aria-pressed") == "true"
     assert errors == []
+
+
+def test_main_landmark_and_skip_link_come_first(browser, demo_html):
+    page, errors = open_page(browser, demo_html)
+    assert page.locator("main").count() == 1 and page.locator("main footer").count() == 0
+    assert page.locator("main #tablecard").count() == 1 and page.locator("main #focus").count() == 1
+    page.keyboard.press("Tab")
+    assert page.evaluate("document.activeElement.id") == "skip"
+    assert page.evaluate("document.activeElement.getBoundingClientRect().top") >= 0      # visible once focused
+    page.keyboard.press("Enter")
+    assert page.evaluate("document.activeElement.id") == "tablecard"
+    assert "focus=" not in page.evaluate("location.hash") and page.evaluate("location.hash") != "#tablecard"
+    assert errors == []
+    page.close()
+
+
+def test_theme_cards_are_one_tab_stop_with_arrow_keys(browser, demo_html):
+    page, _ = open_page(browser, demo_html)
+    assert page.locator("#themes .th[tabindex='0']").count() == 1
+    page.focus("#themes .th[tabindex='0']")
+    first = page.evaluate("document.activeElement.dataset.id")
+    page.keyboard.press("ArrowRight")
+    second = page.evaluate("document.activeElement.dataset.id")
+    assert second != first and page.locator("#themes .th[tabindex='0']").count() == 1
+    page.keyboard.press("End")
+    last = page.evaluate("document.activeElement.dataset.id")
+    page.keyboard.press("Home")
+    assert page.evaluate("document.activeElement.dataset.id") == first and last != first
+    page.keyboard.press("ArrowRight"); page.keyboard.press("Space")          # Space toggles the focused theme
+    assert page.get_attribute(f'.th[data-id="{second}"]', "aria-pressed") == "true"
+    assert page.evaluate("document.activeElement.dataset.id") == second      # focus survives the re-render
+    page.keyboard.press("Tab")                                                 # leaves the group in one press
+    assert page.evaluate("!document.activeElement.classList.contains('th')")
+    page.close()
+
+
+def test_changing_the_focus_is_announced_politely_but_not_on_load(browser, demo_html):
+    page, _ = open_page(browser, demo_html)
+    live = page.locator("#live")
+    assert live.get_attribute("aria-live") == "polite" and live.get_attribute("aria-atomic") == "true"
+    page.wait_for_timeout(800)
+    assert live.inner_text().strip() == ""                                     # silent on first load
+    page.click('.th[data-id="pharma"]')
+    page.wait_for_function("document.getElementById('live').textContent.includes('Pharma')")
+    msg = live.inner_text()
+    assert "stocks in Pharma & biotech" in msg and "quality dip" in msg
+    page.close()
+
+
+def test_table_has_caption_and_column_scope_and_row_buttons(browser, demo_html):
+    page, _ = open_page(browser, demo_html)
+    assert page.evaluate("document.querySelector('table caption').textContent.length") > 10
+    assert page.evaluate("[...document.querySelectorAll('thead th')].every(t => t.scope === 'col')")
+    assert page.evaluate("[...document.querySelectorAll('#body tr.row')].every(r => !r.hasAttribute('aria-expanded') && r.tabIndex === -1 && r.querySelector('button.rowbtn'))")
+    closed = page.locator("#body tr.row:not(.open) .rowbtn").first      # the top candidate starts open; use a closed row
+    t = closed.inner_text()
+    closed.focus(); page.keyboard.press("Enter")
+    assert page.locator("#body tr.row.open .rowbtn").inner_text() == t
+    assert page.evaluate("document.activeElement.classList.contains('rowbtn') && document.activeElement.textContent") == t   # focus kept
+    page.keyboard.press("Space")
+    assert page.locator("tr.row.open").count() == 0
+    page.close()
+
+
+def test_legend_and_badge_help_are_visible_without_hover(browser, demo_html):
+    page, _ = open_page(browser, demo_html)
+    assert page.is_visible("#mixlegend") and "falling knives" in page.inner_text("#mixlegend")
+    page.click("#badgehelp summary")
+    assert page.is_visible("#badgedl") and "Falling knife" in page.inner_text("#badgedl")
+    page.close()

@@ -205,6 +205,23 @@ footer dd{margin:0}
 .thtag{font-size:10.5px;color:var(--ink-3);border:1px solid var(--line);border-radius:4px;padding:0 5px;white-space:nowrap}
 .tags{display:flex;flex-wrap:wrap;gap:4px}
 
+/* Accessibility helpers: screen-reader-only text, skip link, main landmark, row buttons, help blocks */
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.skip{position:absolute;left:8px;top:-60px;z-index:50;background:var(--accent);color:var(--surface);padding:10px 14px;border-radius:8px;font-weight:600;text-decoration:none;min-height:40px;display:inline-flex;align-items:center}
+.skip:focus{top:8px}
+main{display:flex;flex-direction:column;gap:16px;min-width:0;max-width:100%;outline:0}
+.rowbtn{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer;text-align:left}
+.rowbtn:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
+tbody tr.row:focus-within td{background:var(--sunken)}
+.tablecard:focus{outline:0}
+.mixlegend{margin:0;font-size:12.5px;color:var(--ink-2);display:flex;flex-wrap:wrap;gap:2px 14px;align-items:center}
+.mixlegend span{display:inline-flex;align-items:center;gap:5px}
+.mixlegend i{display:inline-block;width:14px;height:6px;border-radius:2px}
+.mixlegend .q{background:var(--good)} .mixlegend .d{background:var(--warn)} .mixlegend .k{background:var(--crit)}
+details.badgehelp{padding:0 14px 8px;font-size:13px;color:var(--ink-2)}
+details.badgehelp summary{cursor:pointer;color:var(--accent);min-height:40px;display:flex;align-items:center;width:fit-content}
+details.badgehelp dl{margin:2px 0 6px;display:grid;grid-template-columns:auto 1fr;gap:6px 12px;align-items:baseline}
+details.badgehelp dt{margin:0} details.badgehelp dd{margin:0}
 @media (max-width:900px){
   .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
   .ctx,.dgrid{grid-template-columns:minmax(0,1fr)}
@@ -242,6 +259,7 @@ footer dd{margin:0}
 </style>
 </head>
 <body>
+<a class="skip" id="skip" href="#tablecard">Skip to the table</a>
 <div class="wrap">
   <div class="demo" id="demo" role="note" hidden><b>Demo</b><span>Synthetic prices and fundamentals. The layout and the screening logic are real; none of these numbers are market data.</span></div>
 
@@ -257,6 +275,7 @@ footer dd{margin:0}
   </header>
   <div class="dqpanel" id="dqpanel" hidden></div>
 
+  <main id="main">
   <section class="focus" id="focus" aria-labelledby="focus-h">
     <div class="focushead">
       <h2 id="focus-h">Focus</h2>
@@ -270,6 +289,7 @@ footer dd{margin:0}
     </div>
     <p class="focusnote" id="focusnote"></p>
     <div class="themes" id="themes" role="group" aria-label="Themes"></div>
+    <p class="mixlegend" id="mixlegend">Bar under each theme: <span><i class="q"></i>quality dips</span><span><i class="d"></i>other dips</span><span><i class="k"></i>falling knives</span></p>
     <div class="focusbar"><button type="button" class="linkbtn moreth" id="moreth" hidden></button><button type="button" class="linkbtn" id="clearth" hidden>Clear focus</button></div>
   </section>
 
@@ -301,10 +321,12 @@ footer dd{margin:0}
     <label class="ctl sortctl" for="sortsel">Sort by <select id="sortsel"></select></label>
   </div>
 
-  <div class="tablecard">
+  <div class="tablecard" id="tablecard" tabindex="-1">
     <div class="tablehead"><h2 id="tabletitle">Candidates</h2><span class="muted" id="tablehint">Click a row for details. Click a column to sort. Sparkline: 90 days, each row scaled to its own min–max.</span></div>
+    <details class="badgehelp" id="badgehelp"><summary>What do the badges mean?</summary><dl id="badgedl"></dl></details>
     <div class="cards" id="cards"></div>
     <div class="scroll"><table>
+      <caption class="sr-only" id="tablecap"></caption>
       <thead><tr id="head"></tr></thead>
       <tbody id="body"></tbody>
     </table></div>
@@ -323,6 +345,7 @@ footer dd{margin:0}
       <div id="sect"></div>
     </div>
   </div>
+  </main>
 
   <footer>
     <dl>
@@ -345,6 +368,7 @@ footer dd{margin:0}
   </footer>
 </div>
 <div class="tip" id="tip" hidden></div>
+<div class="sr-only" id="live" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <script>
 const DATA = __DATA__;
@@ -380,7 +404,17 @@ const REGION_ORDER = ['US', 'Europe', 'Nordic'];
 regions.sort((a, b) => (REGION_ORDER.indexOf(a) + 1 || 99) - (REGION_ORDER.indexOf(b) + 1 || 99) || a.localeCompare(b));
 [['', 'All'], ...regions.map(r => [r, r])].forEach(([v, l], i) => { const b = el('button', null, l); b.dataset.v = v; b.setAttribute('aria-pressed', String(i === 0)); $('region').append(b); });
 
-const S = {show: 'dips', region: '', sortKey: null, sortDir: 1, open: null, themes: new Set(), size: 0, allThemes: false};
+const S = {ready: false, rove: '', show: 'dips', region: '', sortKey: null, sortDir: 1, open: null, themes: new Set(), size: 0, allThemes: false};
+
+// ---------- screen-reader announcements (one polite live region; silent on first load, debounced, no repeats) ----------
+let lastAnnounced = null, announceTimer = 0;
+function announce(msg) {
+  if (!S.ready) { lastAnnounced = msg; return; }
+  if (msg === lastAnnounced) return;
+  lastAnnounced = msg; clearTimeout(announceTimer);
+  announceTimer = setTimeout(() => { $('live').textContent = msg; }, 500);
+}
+$('skip').addEventListener('click', e => { e.preventDefault(); const t = $('tablecard'); t.focus(); t.scrollIntoView({block: 'start'}); });
 
 // ---------- focus (themes + size) ----------
 // Remembered per browser, and readable from the link (#focus=ai,pharma&size=1e11) so a view can be bookmarked.
@@ -405,6 +439,8 @@ const inSize = r => !S.size || (mcap(r) != null && mcap(r) >= S.size);
 const inThemes = r => !S.themes.size || (r.themes || []).some(id => S.themes.has(id));
 function focusPanel(all) {
   const box = $('themes'); box.replaceChildren();
+  const rove = S.rove === '' || THEME[S.rove] ? S.rove : '';   // which theme card is the group's single tab stop
+  S.rove = rove;
   const sized = all.filter(inSize);
   const SHOW = 9, order = THEMES.filter((t, i) => S.allThemes || i < SHOW || S.themes.has(t.id) || mq.matches);
   if (mq.matches) order.sort((a, b) => S.themes.has(b.id) - S.themes.has(a.id));   // phone: picked themes lead the scroll strip
@@ -414,6 +450,7 @@ function focusPanel(all) {
     const q = members.filter(r => r.setup.rank === 4).length, kn = members.filter(r => r.setup.label === 'Falling knife').length,
           d = members.filter(r => r.setup.rank > 0).length - q - kn, n = members.length;
     const r5 = members.map(r => r.r5).filter(v => v != null).sort((a, b) => a - b), med = r5.length ? r5[Math.floor(r5.length / 2)] : null;
+    b.tabIndex = id === rove ? 0 : -1;    // roving tabindex: the theme group is ONE tab stop, arrow keys move inside it
     b.append(el('span', 'nm1', name), el('span', 'tick', on ? '✓' : ''));
     const st = el('span', 'st');
     const a1 = el('span'); a1.append(el('b', q ? 'hot' : null, String(q)), ' quality dip' + (q === 1 ? '' : 's')); st.append(a1);
@@ -426,7 +463,7 @@ function focusPanel(all) {
     b.setAttribute('aria-label', `${name}: ${n} stocks, ${q} quality dips, median 5-day move ${pct(med)}`);
     b.onclick = () => {
       if (id === '') S.themes.clear(); else if (S.themes.has(id)) S.themes.delete(id); else S.themes.add(id);
-      S.sortKey = null; S.open = null; saveFocus(); S.focus = '.th[data-id="' + id + '"]'; render();
+      S.rove = id; S.sortKey = null; S.open = null; saveFocus(); S.focus = '.th[data-id="' + id + '"]'; render();
     };
     box.append(b);
   };
@@ -446,6 +483,16 @@ function focusPanel(all) {
   }
   document.querySelectorAll('#size button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.v === S.size)));
 }
+$('themes').addEventListener('keydown', e => {
+  const keys = {ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1};
+  const cards = [...document.querySelectorAll('#themes .th')], i = cards.indexOf(document.activeElement);
+  if (i < 0 || !(e.key in keys || e.key === 'Home' || e.key === 'End')) return;
+  e.preventDefault();
+  const j = e.key === 'Home' ? 0 : e.key === 'End' ? cards.length - 1 : (i + keys[e.key] + cards.length) % cards.length;
+  cards.forEach((c, k) => { c.tabIndex = k === j ? 0 : -1; });
+  S.rove = cards[j].dataset.id; cards[j].focus();
+});
+$('themes').addEventListener('focusin', e => { const c = e.target.closest && e.target.closest('.th'); if (!c) return; S.rove = c.dataset.id; document.querySelectorAll('#themes .th').forEach(x => { x.tabIndex = x === c ? 0 : -1; }); });
 $('moreth').onclick = () => { S.allThemes = !S.allThemes; render(); $('moreth').focus(); };
 $('clearth').onclick = () => { S.themes.clear(); S.size = 0; S.open = null; saveFocus(); render(); };
 document.querySelectorAll('#size button').forEach(b => b.onclick = () => { S.size = +b.dataset.v; S.open = null; S.sortKey = null; saveFocus(); render(); });
@@ -522,6 +569,8 @@ const SETUP_TIP = {
   'Dip, no fundamentals': 'Fell past your drop limit, but too few fundamentals came back to score quality.',
   'No dip': 'Has not fallen past your drop limit.',
 };
+const BADGE_HELP = [['Quality dip', 'b-good', '✓'], ['Falling knife', 'b-crit', '⚠'], ['Dip, low quality', 'b-serious', '✗'], ['Dip, no fundamentals', 'b-warn', '?'], ['No dip', 'b-none', '·']];
+BADGE_HELP.forEach(([label, cls, icon]) => { const dt = el('dt'); dt.append(el('span', 'badge ' + cls, icon + ' ' + label)); $('badgedl').append(dt, el('dd', null, SETUP_TIP[label])); });
 function setupOf(r, m) {
   const w = $('win').value, drop = -(+$('drop').value) / 100, v = m[w];
   const isDip = w === 'any' ? !!m.dip : (v != null && v <= drop);    // 'any' = the rules in settings.toml (1d, 5d or 20d high)
@@ -693,7 +742,7 @@ function render() {
 
   const head = $('head'); head.replaceChildren();
   COLS.forEach(c => {
-    const th = el('th', (c.cls || '') + (c.nosort ? '' : ' sortable'), c.l);
+    const th = el('th', (c.cls || '') + (c.nosort ? '' : ' sortable'), c.l); th.scope = 'col';
     if (c.tip) th.title = c.tip;
     if (S.sortKey === c.k) th.append(el('span', 'arr', S.sortDir > 0 ? ' ▲' : ' ▼'));
     if (!c.nosort) {
@@ -705,9 +754,11 @@ function render() {
   });
 
   const body = $('body'); body.replaceChildren(); $('empty').hidden = list.length > 0;
-  list.forEach(r => {
-    const tr = el('tr', 'row' + (S.open === r.t ? ' open' : '')); tr.dataset.t = r.t; tr.tabIndex = 0; tr.setAttribute('aria-expanded', String(S.open === r.t));
-    const c0 = el('td', 'l'); const tk = el('div', 'tk'); tk.append(el('span', 'caret', '›'), document.createTextNode(r.t));
+  list.forEach((r, i) => {
+    const tr = el('tr', 'row' + (S.open === r.t ? ' open' : '')); tr.dataset.t = r.t;
+    const c0 = el('td', 'l'); const tk = el('div', 'tk'); const rb = el('button', 'rowbtn', r.t); rb.type = 'button'; rb.setAttribute('aria-expanded', String(S.open === r.t)); rb.setAttribute('aria-label', r.t + ', ' + r.name + (S.open === r.t ? ': hide details' : ': show details'));
+    if (S.open === r.t) rb.setAttribute('aria-controls', 'dt-' + i);
+    tk.append(el('span', 'caret', '›'), rb);
     if (r.setup.rank === 4 && wasQualityDip(r) === false) tk.append(el('span', 'new', 'NEW'));
     c0.append(tk, el('div', 'nm', `${r.name} · ${r.region}`)); { const et = earnTag(r); if (et) c0.append(et); const pt = partialTag(r); if (pt) c0.append(' ', pt); } tr.append(c0);
     const n = (txt, cls = '') => tr.append(el('td', 'n ' + cls, txt));
@@ -718,11 +769,16 @@ function render() {
     const tq = el('td', 'l n'); tq.append(document.createTextNode(r.q == null ? '–' : String(r.q)), qnote(r), qmeter(r)); tr.append(tq);
     const tb = el('td', 'l'); const bd = el('span', 'badge ' + r.setup.cls, r.setup.icon + ' ' + r.setup.label); bd.title = SETUP_TIP[r.setup.label]; tb.append(bd); tr.append(tb);
     const tsp = el('td'); tsp.append(spark(r.spark)); tr.append(tsp);
-    tr.onclick = () => { S.open = S.open === r.t ? null : r.t; S.focus = 'tr.row[data-t="' + r.t + '"]'; render(); };
-    tr.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tr.onclick(); } };
+    tr.onclick = () => { S.open = S.open === r.t ? null : r.t; S.focus = 'tr.row[data-t="' + r.t + '"] .rowbtn'; render(); };   // a click anywhere on the row, or Enter/Space on its button
     body.append(tr);
-    if (S.open === r.t && !mq.matches) { const d = el('tr'); const td = el('td', 'detail'); td.colSpan = COLS.length; td.append(detail(r)); d.append(td); body.append(d); }
+    if (S.open === r.t && !mq.matches) { const d = el('tr'); d.id = 'dt-' + i; const td = el('td', 'detail'); td.colSpan = COLS.length; td.append(detail(r)); d.append(td); body.append(d); }
   });
+  $('tablecap').textContent = $('tabletitle').textContent + '. Sortable columns; press a stock name to show or hide its details.';
+  {
+    const qd = all.filter(r => r.setup.rank === 4).length, plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
+    const where = S.themes.size ? [...S.themes].map(id => THEME[id].name).join(' + ') : 'all stocks';
+    announce(`Showing ${plural(list.length, 'stock')} in ${where}${S.size ? ', ' + SIZES.get(S.size) : ''}: ${plural(qd, 'quality dip')} in this focus.`);
+  }
   renderCards(list);
   syncSort();
   if (S.focus) { const f = document.querySelector(S.focus); S.focus = null; if (f) f.focus(); }
@@ -747,7 +803,7 @@ function renderCards(list) {
   list.forEach((r, i) => {
     const open = S.open === r.t, id = 'sc-' + i;
     const card = el('div', 'sc' + (open ? ' open' : ''));
-    const b = el('button', 'schead'); b.type = 'button'; b.setAttribute('aria-expanded', String(open)); b.setAttribute('aria-controls', id + '-d');
+    const b = el('button', 'schead'); b.type = 'button'; b.setAttribute('aria-expanded', String(open)); if (open) b.setAttribute('aria-controls', id + '-d');
     const l1 = el('div', 'l1'); const tk = el('div', 'tk'); tk.append(el('span', 'caret', '›'), document.createTextNode(r.t));
     if (r.setup.rank === 4 && wasQualityDip(r) === false) tk.append(el('span', 'new', 'NEW'));
     l1.append(tk, el('div', 'nm', `${r.name} · ${r.region}`));
@@ -916,6 +972,7 @@ $('win').addEventListener('change', () => { $('drop').value = Math.round(WIN[$('
 render();
 S.open = mq.matches ? null : (S.list.find(r => r.setup.rank === 4) || S.list[0] || {}).t || null;   // open the top candidate so the page starts in a working state
 render();
+S.ready = true;
 })();
 </script>
 </body>
