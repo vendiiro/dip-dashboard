@@ -80,10 +80,15 @@ def test_brief_and_compact_columns(browser, demo_html):
 def test_show_filter_changes_the_row_count(browser, demo_html):
     page, _ = open_page(browser, demo_html)
     dips = page.locator("#body tr.row").count()
+    total = page.evaluate("DATA.rows.length")
     page.click("#show button[data-v=all]")
-    assert page.locator("#body tr.row").count() == 60 > dips
+    assert page.locator("#body tr.row").count() == total > dips
+    assert int(page.locator("#show button[data-v=all] .ct").inner_text()) == total
     page.click("#show button[data-v=quality]")
-    assert 0 < page.locator("#body tr.row").count() <= dips
+    n_quality = page.locator("#body tr.row").count()
+    assert 0 < n_quality <= dips
+    assert n_quality == page.evaluate("DATA.rows.filter(r => r.setup.rank === 4).length")
+    assert n_quality == int(page.locator("[data-testid=tile-quality] .big").inner_text())
     page.close()
 
 
@@ -96,7 +101,9 @@ def test_search_and_region_filters(browser, demo_html):
     assert page.is_visible("#empty") and "No stocks match" in page.inner_text("#empty")
     page.fill("#q", "")
     page.click("#region button[data-v=Nordic]")
-    assert page.locator("#body tr.row").count() == 18
+    nordic = page.evaluate("DATA.rows.filter(r => r.region === 'Nordic').length")
+    assert page.locator("#body tr.row").count() == nordic
+    assert 0 < nordic < page.evaluate("DATA.rows.length")
     page.close()
 
 
@@ -127,7 +134,7 @@ def test_sorting_toggles_direction_and_marks_the_header(browser, demo_html):
     page, _ = open_page(browser, demo_html)
     page.click("#show button[data-v=all]")
     page.click("#head th:has-text('Price')")
-    prices = lambda: [float(t.split()[0]) for t in page.locator("#body tr.row td:nth-child(2)").all_inner_texts()]
+    prices = lambda: [float(t.split()[0]) for t in page.locator("#body tr.row td[data-k=price]").all_inner_texts()]
     desc = prices()
     assert desc == sorted(desc, reverse=True)
     page.click("#head th:has-text('Price')")
@@ -161,7 +168,7 @@ def test_untrusted_text_is_not_interpreted_as_html(browser, tmp_path):
     page.close()
 
 
-SHOWN = "[...document.querySelectorAll('#body tr.row .tk')].map(e => [e.querySelector('.tkbtn').childNodes[1].textContent, !!e.querySelector('.new')])"
+SHOWN = "[...document.querySelectorAll('#body tr.row')].map(tr => [tr.dataset.t, !!tr.querySelector('[data-testid=new-badge]')])"
 
 
 def test_default_dip_count_equals_the_python_rule(browser, demo_html):
@@ -175,9 +182,13 @@ def test_default_dip_count_equals_the_python_rule(browser, demo_html):
 
 def test_new_since_yesterday_tile_matches_the_rows_marked_new(browser, demo_html):
     page, _ = open_page(browser, demo_html)
-    chips = sorted(page.locator("#tiles .tile").nth(1).locator(".chip").all_inner_texts())
+    tile = page.locator("[data-testid=tile-new]")
+    more = tile.locator("[data-testid=tile-chip-more]")
+    if more.count():                                    # the tile shows 8 chips; open "+N more" to read them all
+        more.click()
+    chips = sorted(tile.locator("[data-testid=tile-chip]").all_inner_texts())
     marked = sorted(t for t, new in page.evaluate(SHOWN) if new)
-    assert chips == marked and len(chips) > 0
+    assert chips == marked and len(chips) == int(tile.locator(".big").inner_text()) > 0
     page.close()
 
 
