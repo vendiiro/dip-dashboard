@@ -14,5 +14,5 @@ a digest and trigger alerts. **Educational research only: it never gives investm
 - **Tests:** `pytest` runs the full suite offline; the browser tests need Playwright and a Chromium and skip without them. Setup: `TESTING.md`.
 
 State of the findings so far (details in the snapshot README): the dip rule shows no out-of-sample edge that the sample can separate from noise,
-no tested price feature shows detectable signal, and the volatility-range forecast failed its calibration check and is not wired in.
+no tested price feature shows detectable signal, and a forecast of how far prices usually move in a day did not match what actually happened in testing, so it is not used.
 The dashboard is a listing and monitoring tool.

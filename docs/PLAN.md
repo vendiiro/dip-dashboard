@@ -6,11 +6,9 @@ Every milestone ends with a stop: I show the result, you give feedback, then I c
 
 ## 1. The idea in one paragraph
 Every night after the US close (00:15 Helsinki, Tue-Sat), a script pulls daily prices for the US, European and
-Nordic blue chips in `config/universe.csv` (about 60 at M0; 348 on 2026-11-04). It flags stocks that fell sharply (1-day, 5-day or from their 20-day high). It then sorts those
-flags by a simple quality score built from fundamentals (ROE, margin, debt, free cash flow, growth, size). It also
+Nordic blue chips in `config/universe.csv` (about 60 at M0; 348 on 2026-11-04). It flags stocks that fell sharply (1-day, 5-day or from their 20-day high). It then scores each flag with a simple quality score built from fundamentals (ROE, margin, debt, free cash flow, growth, size); flags that pass the quality minimum get the row label "Quality dip". The dashboard lists "Quality dip" rows first and then sorts by the 5-day move, and the digest sorts its candidates by the 5-day move. It also
 warns when a drop looks like a "falling knife" (long downtrend, far below the 52-week high). The result is a single
-self-contained `dashboard.html` plus a short `digest.md`. It answers "what is the situation today, and which names are
-worth researching?" in under 10 seconds. A separate event-study backtest checks how stocks behaved historically after
+self-contained `dashboard.html` plus a short `digest.md`. It answers "what is the situation today, and which names does the screen flag today?" in under 10 seconds. A separate event-study backtest checks how stocks behaved historically after
 the same kind of dip, against baselines and with honest uncertainty, so the thresholds stop being guesses.
 It is a research shortlist, not a signal: no buy/sell wording anywhere.
 

@@ -1,21 +1,21 @@
 # Testing guide
 
-You have the **Quality-Dip Screen**: a daily dashboard that flags sharp price drops in large US, European and Nordic companies,
+You have the **quality-dip screen**: a daily dashboard that flags sharp price drops in large US, European and Nordic companies,
 a backtest of that rule, and the scheduled run that refreshes it. It is an educational research tool. It gives screen results,
 never advice. Please try to break it.
 
 ## What you are testing, in one minute
 | Piece | What it does | Where to look |
 |---|---|---|
-| Screener | Pulls daily prices for every stock in `config/universe.csv`, flags dips (1 day ≤ −4%, 5 days ≤ −7%, or ≥ 12% below the 20-day high), scores quality from six fundamentals checks, marks falling knives | `src/dipdash/` |
+| Screener | Pulls daily prices for every stock in `config/universe.csv`, flags dips (1 day ≤ −4%, 5 days ≤ −7%, or ≥ 12% below the 20-day high), scores quality from six fundamentals checks, marks falling knives (a dip inside a long downtrend) | `src/dipdash/` |
 | Dashboard | One self-contained HTML page: filters, sortable table, row details with a 1-year chart, context charts, data-quality panel | `output/dashboard.html` after a run, or the canonical demo page `docs/sample-output/dashboard-demo.html` (`docs/demo/` is the frozen M0 mock) |
 | Digest | Plain-language daily summary: data quality first, market context, candidates with "flagged because", what changed | `output/digest.md`, example in `docs/sample-output/` |
 | Backtest | Event study of the rule on 2010-2026 history with costs, baselines, an untouched out-of-sample period and clustered confidence intervals | `python scripts/run_backtest.py`, report in `docs/sample-output/backtest/report.md` |
 | Nightly run | `run_daily.bat` + Task Scheduler (Tue-Sat 00:15) | `scripts/`, `START_HERE.md` section 4 |
 
 **The most important result:** the backtest did **not** find that flagged stocks beat their own ordinary days out of sample
-(+0.3% at 21 days, 90% interval −1.0% to +1.5%, which includes zero). Fourteen of 27 in-sample cells looked positive; none did out of sample.
-The report lists why you should also doubt the *positive* readings (survivorship, one sample, low power). Read it critically.
+at 21 days the average difference was about +0.3%, and the 90% interval includes zero (see report.md for current figures; figures as of the 2026-11-02 sample report).
+Some in-sample intervals excluded zero; none did out of sample. The report explains why even the positive readings deserve doubt (survivorship, one sample, low power). Read it critically.
 
 ## Level 1: look only (5 minutes, nothing to install)
 1. Open `docs/sample-output/dashboard-demo.html` in a browser (the canonical demo page, synthetic data). Click rows, change filters, sort columns, resize to phone width, switch your system to dark mode.
@@ -57,9 +57,9 @@ Expected: nearly every stock; a few have no data at the source (for example Roch
 - Prices for Amsterdam, Frankfurt, Paris, Swiss and Oslo lines were not checked against an independent source. US and Helsinki/Stockholm/Copenhagen samples agreed with exchange data.
 - Roche (`ROG.SW`) returns nothing from Yahoo; `RO.SW` exists but may be a different share line, so it was not swapped in.
 - Headlines come from a free search and are often about the wider market; non-US stocks usually have none.
-- The quality score is a plain share of six checks passed. A company with negative return on equity and margin can still score 67 (Intel did).
+- The quality score is a plain share of six checks passed. A company with negative return on equity and margin can still score 67 (Intel did on 2026-11-04).
 - `output/run.log` is never rotated. Market holidays are not modelled.
-- The backtest universe is today's large companies (survivorship bias), costs are one flat figure, and the index baseline mixes dividend-adjusted stocks with price-only indices.
+- The backtest universe is today's large companies (survivorship bias), costs are one flat figure, and the index baseline mixes dividend-adjusted stocks with a price-only index (no dividends) instead of a total-return index (dividends included).
 
 ## How to report what you find
 For each finding: what you did, what you expected, what happened (paste the message or attach a screenshot), and the file. A short list is more useful than a long one.
