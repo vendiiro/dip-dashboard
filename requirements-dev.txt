@@ -1,0 +1,11 @@
+# Exact pins for tests and CI (no openbb). Runtime for the live run is requirements.txt.
+# numpy 2.5 and scipy 1.18 need Python 3.12+, so these are the newest versions that also work on 3.11.
+pandas==3.0.5
+numpy==2.4.6
+yfinance==1.7.0
+scipy==1.17.1
+statsmodels==0.15.0
+arch==8.0.0
+matplotlib==3.11.2
+pytest==9.1.1
+playwright==1.63.0

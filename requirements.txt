@@ -1,9 +1,10 @@
+# Runtime file for the live run on Iiro's PC. Tests and CI use requirements-dev.txt (exact pins, no openbb).
 pandas>=2.0
 numpy>=1.26
-yfinance>=0.2.40
+yfinance>=1.7.0,<2
 openbb==5.0.0   # pinned: V5 provider set is in flux (see docs/m2-data-verification.md)
-pytest>=8.0
-playwright>=1.45   # for dashboard screenshots; then run: playwright install chromium
+statsmodels>=0.14   # used by the backtest statistics (dev-only after OPS-2 moves Holm to numpy)
 matplotlib>=3.8   # OPTIONAL for the nightly run: charts in the backtest report only
 arch>=7.0   # OPTIONAL: only forecast.py (volatility range, not wired in: it failed its calibration check)
 scipy>=1.11   # used by forecast.py and feature_experiment.py (p-values, quantiles)
+# For screenshots and browser tests: pip install -r requirements-dev.txt, then: python -m playwright install chromium
