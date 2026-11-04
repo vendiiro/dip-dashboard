@@ -1,6 +1,6 @@
 # Decisions only Iiro can make
 
-Each one blocks a backlog item. Reply with the letter you pick, or your own wording. Nothing here has been changed yet.
+**Answered by Iiro 2026-11-04: D1 B, D2 B, D3 A, D4 A, D5 A (the suggested option each time).** Each one blocks a backlog item. Reply with the letter you pick, or your own wording. Nothing here has been changed yet.
 Facts quoted come from the 2026-11-04 audits and the 4 Nov snapshot (288 screened stocks then; 348 in the universe now).
 
 ## D1 · Which quality checks must always pass (unblocks RES-2)

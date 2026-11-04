@@ -33,6 +33,13 @@ Use the `backtest-hygiene` project skill for every backtest or any claim that a 
 out-of-sample period, and confidence intervals. State limitations plainly (for example
 survivorship bias from a current-constituent universe).
 
+## Rule 4: working in parallel
+Several agents may work at once. Read `docs/AGENTS.md` first. Edit only files your agent owns
+(`docs/agents/ownership.csv`); ask the owner for anything else in your handoff. Never run two tasks that touch
+`src/template.html`, `src/dipdash/dashboard.py` or `src/dipdash/cli.py` at the same time. Every change goes to a reviewer
+that did not write it (ui-reviewer, stats-reviewer, wording-guard). End with the handoff in your agent file.
+Run the full test suite before handing back.
+
 ## Architecture (target)
 - `config/universe.csv`  tickers (US + Europe), `config/settings.toml` thresholds.
 - `src/` data fetch (OpenBB `obb` first, yfinance fallback), metrics, quality score,
