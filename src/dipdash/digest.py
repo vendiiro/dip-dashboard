@@ -6,6 +6,7 @@ they are cleaned, shortened and placed in their own block marked as untrusted, b
 from __future__ import annotations
 
 import csv
+import json
 import re
 from datetime import date, datetime
 from pathlib import Path
@@ -34,9 +35,24 @@ def day_name(iso: str | None) -> str:
     return datetime.strptime(iso, "%Y-%m-%d").strftime("%a %d %b %Y")
 
 
+STANDING_CAVEAT = ("So far no tested version of this screen has shown an out-of-sample edge that the sample can separate from noise "
+                   "(see docs/decisions.md). A flag is not a sign of a later rebound; treat the list as a place to start reading.")
+
+
+def _is_event_backtest(folder: Path) -> bool:
+    """True only for an event-backtest folder: its spec.json parses and has `primary_cell` and `variants`.
+    Forecast and feature folders (no spec.json, or spec_features.json) and unrelated spec files do not qualify."""
+    try:
+        spec = json.loads((folder / "spec.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(spec, dict) and "primary_cell" in spec and "variants" in spec
+
+
 def latest_backtest_line(root: Path) -> str:
-    """One sentence about the newest backtest on disk, from its results table; a plain note if there is none."""
-    runs = sorted(p for p in (root / "backtests").glob("*/results.csv")) if (root / "backtests").exists() else []
+    """One sentence about the newest event backtest on disk, from its results table; a plain note if there is none."""
+    base = root / "backtests"
+    runs = sorted(p / "results.csv" for p in base.iterdir() if p.is_dir() and (p / "results.csv").is_file() and _is_event_backtest(p)) if base.exists() else []
     if not runs:
         return "No backtest result is on file yet, so nothing is known about how these flags behaved historically."
     try:
@@ -188,7 +204,7 @@ def build_digest(payload: dict, settings: Settings, *, previous_asof: str | None
     # ---- 7. backtest context
     w("## How to read this\n")
     w(backtest_line or "No backtest result is on file yet.")
-    w("The backtest gives no basis for treating a flag as a sign of a later rebound. Treat the list as a place to start reading, not as a conclusion.\n")
+    w(STANDING_CAVEAT + "\n")
     w(f"Settings used: dip {pct(-settings.dip.drop_1d, 0)} / {pct(-settings.dip.drop_5d, 0)} / {settings.dip.drawdown_20d:.0%}, quality ≥ {settings.quality.min_score}, "
       f"falling knife {settings.falling_knife.drawdown_52w:.0%} (`config/settings.toml`; all untested defaults).\n")
     return "\n".join(L)

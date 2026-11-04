@@ -7,7 +7,7 @@ from datetime import date
 import pytest
 
 from dipdash.config import Settings, load_universe
-from dipdash.digest import (MAX_HEADLINE, build_digest, clean_text, day_name, history_dates, latest_backtest_line,
+from dipdash.digest import (MAX_HEADLINE, STANDING_CAVEAT, build_digest, clean_text, day_name, history_dates, latest_backtest_line,
                             previous_data_date)
 from dipdash.screen import FALLING_KNIFE, LOW_QUALITY, NO_DIP, NO_FUNDAMENTALS, QUALITY_DIP, classify_prev
 
@@ -169,9 +169,20 @@ def test_day_name():
 RESULTS_HEAD = "variant,horizon,group,period,n,ex_own,ex_own_lo,ex_own_hi\n"
 
 
+SPEC = '{"primary_cell": {"variant": "V1_price_only"}, "variants": ["V1_price_only"]}'
+
+
+def event_folder(root, name, results=None):
+    d = root / "backtests" / name
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "spec.json").write_text(SPEC, encoding="utf-8")
+    if results is not None:
+        (d / "results.csv").write_text(results, encoding="utf-8")
+    return d
+
+
 def test_backtest_line_quotes_the_primary_cell_and_says_what_the_interval_means(tmp_path):
-    d = tmp_path / "backtests" / "2026-11-02"
-    d.mkdir(parents=True)
+    d = event_folder(tmp_path, "2026-11-02")
     (d / "results.csv").write_text(RESULTS_HEAD + "V1_price_only,21,All,OOS,1504,0.0027,-0.0101,0.0150\nV1_price_only,5,All,OOS,9,0.1,0.0,0.2\n", encoding="utf-8")
     line = latest_backtest_line(tmp_path)
     assert "2026-11-02" in line and "1,504" in line and "+0.3%" in line and "−1.0% to +1.5%" in line and "includes zero" in line
@@ -181,10 +192,40 @@ def test_backtest_line_quotes_the_primary_cell_and_says_what_the_interval_means(
 
 def test_backtest_line_when_missing_or_unreadable(tmp_path):
     assert "No backtest result is on file" in latest_backtest_line(tmp_path)
-    d = tmp_path / "backtests" / "2026-11-02"
-    d.mkdir(parents=True)
+    d = event_folder(tmp_path, "2026-11-02")
     (d / "results.csv").write_text("garbage\n1,2\n", encoding="utf-8")
     assert "could not be read" in latest_backtest_line(tmp_path)
+
+
+GOOD = RESULTS_HEAD + "V1_price_only,21,All,OOS,300,0.02,0.005,0.035\n"
+
+
+def test_backtest_line_ignores_forecast_and_feature_siblings(tmp_path):
+    event_folder(tmp_path, "2026-11-02", GOOD)
+    for suffix in ("_features", "_forecast"):
+        d = tmp_path / "backtests" / f"2026-11-02{suffix}"
+        d.mkdir()
+        (d / "results.csv").write_text("garbage\n1,2\n", encoding="utf-8")
+    (tmp_path / "backtests" / "2026-11-02_features" / "spec_features.json").write_text("{}", encoding="utf-8")
+    line = latest_backtest_line(tmp_path)
+    assert "(2026-11-02)" in line and "excludes zero" in line
+
+
+def test_backtest_line_skips_folder_with_unrelated_spec_json(tmp_path):
+    event_folder(tmp_path, "2026-11-01", GOOD)
+    d = tmp_path / "backtests" / "2026-11-04"
+    d.mkdir()
+    (d / "results.csv").write_text(GOOD, encoding="utf-8")
+    for text in ('{"other": 1}', "not json", "[1]"):
+        (d / "spec.json").write_text(text, encoding="utf-8")
+        assert "(2026-11-01)" in latest_backtest_line(tmp_path)
+
+
+def test_standing_caveat_always_present(tmp_path):
+    for line in (None, "A backtest folder exists (x) but its results could not be read.", "Latest backtest (x): fine."):
+        text = build_digest(payload([row("AAA")]), S, backtest_line=line)
+        assert STANDING_CAVEAT in text
+    assert "out-of-sample edge" in STANDING_CAVEAT
 
 
 def test_history_dates_and_previous_data_date(tmp_path):
