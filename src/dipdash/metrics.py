@@ -36,7 +36,12 @@ def clean(x, nd: int = 4):
 
 
 def compute_metrics(close: pd.Series, volume: pd.Series | None) -> dict | None:
-    """Return the metric dict for one stock, or None if there are fewer than MIN_BARS closes."""
+    """Return the metric dict for one stock, or None if there are fewer than MIN_BARS closes.
+
+    Short history: `dd52` is the drop from the highest close in the last 252 bars, or in all available bars
+    when there are fewer (60 to 251). A shorter window can only make the drawdown shallower or equal, never
+    deeper. `vs200` is None below 200 bars and `s200_falling` is False below 221 bars. The backtest
+    (`backtest.signals`) needs a full 252 bars, so it says nothing about stocks with less than a year of history."""
     c = close.dropna()
     if len(c) < MIN_BARS:
         return None
@@ -46,7 +51,7 @@ def compute_metrics(close: pd.Series, volume: pd.Series | None) -> dict | None:
         return float(last / c.iloc[-1 - n] - 1) if len(c) > n else float("nan")
 
     r1, r5, r21 = ret(1), ret(5), ret(21)
-    dd52 = last / float(c.iloc[-252:].max()) - 1
+    dd52 = last / float(c.iloc[-252:].max()) - 1  # all bars if fewer than 252 (documented in the docstring)
     dd20 = last / float(c.iloc[-20:].max()) - 1
     sma200 = c.rolling(200).mean()
     s_now = sma200.iloc[-1]

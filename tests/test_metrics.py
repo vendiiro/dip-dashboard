@@ -129,3 +129,13 @@ def test_index_move_matches_closed_form():
 
 def test_index_move_needs_six_bars():
     assert index_move(geometric(5, 0.01)) is None and index_move(geometric(6, 0.01)) is not None
+
+
+@pytest.mark.parametrize("n", [60, 61, 150, 199, 200, 220, 221, 251, 252, 253])
+def test_dd52_uses_all_history_when_shorter_than_a_year(n):
+    """Steady -1%/day: the high is the first bar, so dd52 = 0.99**(n-1) - 1 until the window caps at 252 bars."""
+    m = compute_metrics(geometric(n, D), None)
+    bars = min(n, 252)
+    assert m["dd52"] == pytest.approx((1 + D) ** (bars - 1) - 1, abs=1e-4)
+    assert (m["vs200"] is None) == (n < 200)
+    assert m["s200_falling"] == (n >= 221)   # needs the 200-day average now and 20 bars ago

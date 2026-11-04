@@ -1,10 +1,12 @@
 from datetime import date
 
+import itertools
+
 import pytest
 
 from dipdash.config import DipSettings, FallingKnifeSettings, NewsSettings, QualitySettings, Settings
-from dipdash.screen import (FALLING_KNIFE, LOW_QUALITY, NO_DIP, NO_FUNDAMENTALS, QUALITY_DIP, classify,
-                            dip_reasons, is_dip, is_falling_knife, is_stale, needs_news, trading_days_old)
+from dipdash.screen import (FALLING_KNIFE, LOW_QUALITY, NO_DIP, NO_FUNDAMENTALS, QUALITY_DIP, classify, classify_prev,
+                            dip_reasons, is_dip, is_falling_knife, is_stale, needs_news, setup_label, trading_days_old)
 
 DIP, KNIFE, NEWS, S = DipSettings(), FallingKnifeSettings(), NewsSettings(), Settings()
 
@@ -91,6 +93,45 @@ def test_falling_knife_outranks_quality():
 def test_min_score_comes_from_settings():
     strict = Settings(quality=QualitySettings(min_score=90))
     assert classify(DIPPED, 80, strict) == LOW_QUALITY
+
+
+# ---- one setup label, shared by classify and classify_prev ------------------
+QS = [None, 0, 59, 60, 100]
+
+
+def expected_label(dip, knife, q):
+    if not dip:
+        return NO_DIP
+    if knife:
+        return FALLING_KNIFE
+    if q is None:
+        return NO_FUNDAMENTALS
+    return QUALITY_DIP if q >= 60 else LOW_QUALITY
+
+
+@pytest.mark.parametrize("dip, knife, q", list(itertools.product([False, True], [False, True], QS)))
+def test_setup_label_truth_table(dip, knife, q):
+    assert setup_label(dip, knife, q, S) == expected_label(dip, knife, q)   # q = 0 is a score, not "missing"
+
+
+@pytest.mark.parametrize("dip, knife, q", list(itertools.product([False, True], [False, True], QS)))
+def test_classify_and_classify_prev_agree(dip, knife, q):
+    metrics = m(r1=-0.05 if dip else 0.0, vs200=-0.1 if knife else 0.05,
+                dd52=-0.5 if knife else -0.05, s200_falling=knife)
+    want = expected_label(dip, knife, q)
+    assert classify(metrics, q, S) == want
+    assert classify_prev({"dip": dip, "knife": knife}, q, S) == want
+
+
+def test_classify_prev_without_previous_data_is_none():
+    assert classify_prev(None, 80, S) is None
+    assert classify_prev({}, 80, S) is None
+
+
+def test_setup_label_respects_a_custom_min_score():
+    strict = Settings(quality=QualitySettings(min_score=90))
+    assert setup_label(True, False, 80, strict) == LOW_QUALITY
+    assert classify_prev({"dip": True, "knife": False}, 90, strict) == QUALITY_DIP
 
 
 # ---- news selection --------------------------------------------------------

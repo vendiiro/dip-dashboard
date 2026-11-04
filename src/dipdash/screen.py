@@ -40,15 +40,21 @@ def is_falling_knife(m: dict, knife: FallingKnifeSettings) -> bool:
     return dd52 <= -knife.drawdown_52w
 
 
-def classify(m: dict, q_score: int | None, settings: Settings) -> str:
-    """Setup label. A falling knife outranks quality; missing fundamentals never count as quality."""
-    if not is_dip(m, settings.dip):
+def setup_label(dip: bool, knife: bool, q_score: int | None, settings: Settings) -> str:
+    """The one precedence for the setup label. Not a dip -> No dip; a falling knife outranks quality;
+    missing fundamentals (None) never count as quality; a score of 0 is a real score (low quality)."""
+    if not dip:
         return NO_DIP
-    if is_falling_knife(m, settings.falling_knife):
+    if knife:
         return FALLING_KNIFE
     if q_score is None:
         return NO_FUNDAMENTALS
     return QUALITY_DIP if q_score >= settings.quality.min_score else LOW_QUALITY
+
+
+def classify(m: dict, q_score: int | None, settings: Settings) -> str:
+    """Setup label for a metric dict (see `setup_label`)."""
+    return setup_label(is_dip(m, settings.dip), is_falling_knife(m, settings.falling_knife), q_score, settings)
 
 
 def needs_news(m: dict, news: NewsSettings) -> bool:
@@ -71,10 +77,4 @@ def classify_prev(prev: dict | None, q_score: int | None, settings: Settings) ->
     None when there is no previous-close data."""
     if not prev:
         return None
-    if not prev.get("dip"):
-        return NO_DIP
-    if prev.get("knife"):
-        return FALLING_KNIFE
-    if q_score is None:
-        return NO_FUNDAMENTALS
-    return QUALITY_DIP if q_score >= settings.quality.min_score else LOW_QUALITY
+    return setup_label(bool(prev.get("dip")), bool(prev.get("knife")), q_score, settings)
