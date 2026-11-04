@@ -41,7 +41,7 @@
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 body{background:var(--bg);color:var(--ink);font:14px/1.5 var(--f-body);margin:0}
-.wrap{max-width:1240px;margin:0 auto;padding:20px 16px 48px;display:flex;flex-direction:column;gap:16px}
+.wrap{max-width:1240px;margin:0 auto;padding:20px 16px 48px;display:flex;flex-direction:column;gap:12px}
 .wrap>*{min-width:0;max-width:100%}
 h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:.005em}
 h1{font-size:26px;font-weight:600}
@@ -79,12 +79,26 @@ header.top{display:flex;flex-direction:column;gap:4px}
 .alerts .d{grid-column:2;font-size:12.5px;color:var(--ink-3)}
 .alerts .more{margin-top:8px;font:inherit;font-size:12.5px;background:none;border:0;padding:4px 0;color:var(--accent);cursor:pointer;text-decoration:underline;min-height:40px}
 .alerts .more:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
-.tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;min-width:0}
-.tile .lab{font-size:12.5px;color:var(--ink-2)}
-.tile .big{font-size:28px;font-weight:500;line-height:1.1;font-family:var(--f-data);font-variant-numeric:tabular-nums}
-.tile .foot{font-size:12.5px;color:var(--ink-3)}
-.tile .chips{display:flex;flex-wrap:wrap;gap:4px}
+/* Summary bar: one slim row (wraps on a phone) in place of the four tiles and the alerts card. */
+.summary{display:flex;flex-direction:column;gap:8px}
+.sumrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 14px;min-width:0}
+.stat{display:flex;align-items:baseline;gap:6px;white-space:nowrap}
+.stat .sn{font:500 20px/1 var(--f-data);font-variant-numeric:tabular-nums}
+.stat .sl{font-size:12.5px;color:var(--ink-2)}
+.mkline{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 14px;font-size:12.5px;padding-left:18px;border-left:1px solid var(--line);min-width:0}
+.mkline .mkh{color:var(--ink-3);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+.mk{white-space:nowrap;color:var(--ink-2)}
+.mk .num{font-family:var(--f-data);font-variant-numeric:tabular-nums}
+.sumbtns{display:flex;gap:6px;margin-left:auto}
+.sumbtn{font:inherit;font-size:12.5px;background:var(--bg);border:1px solid var(--line-strong);border-radius:7px;padding:4px 10px;min-height:32px;cursor:pointer;color:var(--ink);white-space:nowrap}
+.sumbtn:hover{background:var(--sunken)}
+.sumbtn[aria-expanded="true"],.sumbtn[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent)}
+.sumbtn.warn{border-color:var(--warn);color:var(--warn)}
+.sumpanel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:12px}
+.chipgroup .ghead{font-size:12.5px;color:var(--ink-2);margin-bottom:4px}
+.chipgroup .ghead b{color:var(--ink);font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.sumpanel .foot{font-size:12.5px;color:var(--ink-3)}
 .qn{font-size:10.5px;color:var(--ink-3);margin-left:4px;font-weight:400}
 .controls .sortctl{display:none}
 .alerts.unavail{border-color:var(--warn)}
@@ -98,7 +112,13 @@ header.top{display:flex;flex-direction:column;gap:4px}
 .mkt .h{font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em}
 .mkt .num{text-align:right}
 
-.controls{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.controls{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:flex-end;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:8px 14px}
+.controls .seg button{padding:5px 9px;min-height:32px}
+.controls select,.controls input[type=search]{min-height:34px;padding:5px 8px}
+.controls select{max-width:200px}
+.controls input[type=search]{width:160px}
+.controls input[type=range]{width:120px;min-height:24px;display:block;margin-top:4px}
+.controls label.ctl[for=drop],.controls label.ctl[for=qmin]{display:block}
 .ctl{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--ink-2);min-width:0}
 .ctl .v{color:var(--ink);font-family:var(--f-data)}
 .seg{display:flex;background:var(--sunken);border-radius:7px;padding:2px;gap:2px;flex-wrap:wrap}
@@ -110,10 +130,12 @@ input[type=range]{width:150px;accent-color:var(--accent);min-height:30px}
 .check input{width:18px;height:18px;accent-color:var(--accent)}
 
 .tablecard{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
-.tablehead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;padding:12px 14px 8px}
+.tablehead{display:flex;align-items:center;gap:6px 14px;flex-wrap:wrap;padding:12px 14px 8px}
+.tablehead h2{margin-right:auto}
 .tablehead .muted{font-size:12.5px}
 .scroll{overflow-x:auto}
-table{border-collapse:collapse;width:100%;min-width:1060px}
+table{border-collapse:collapse;width:100%;min-width:640px}
+.tablecard.wide table{min-width:1060px}
 th,td{padding:8px 7px;border-bottom:1px solid var(--line);white-space:nowrap;text-align:right;vertical-align:middle}
 td.n{font-family:var(--f-data);font-variant-numeric:tabular-nums}
 th{font-size:11.5px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;background:var(--surface);user-select:none}
@@ -152,7 +174,8 @@ td.detail{white-space:normal;text-align:left;padding:14px;position:static;backgr
 .more{align-self:flex-start;border:1px solid var(--line-strong);background:var(--surface);border-radius:6px;padding:6px 12px;min-height:40px;cursor:pointer;font-size:13px;color:var(--accent)}
 .more:hover{background:var(--sunken)}
 .dqpanel .t{white-space:normal}
-.dropnote{font-size:12.5px;color:var(--ink-2);max-width:230px;align-self:center;line-height:1.35}
+@media (min-width:601px){.dropnote{display:none!important}}
+.dropnote{font-size:12px;color:var(--ink-2);flex:1 1 240px;max-width:400px;line-height:1.35;align-self:center}
 .cards{display:none;flex-direction:column}
 .sc{border-top:1px solid var(--line)}
 .sc.open{background:var(--sunken)}
@@ -214,16 +237,17 @@ main{display:flex;flex-direction:column;gap:16px;min-width:0;max-width:100%;outl
 .rowbtn:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
 tbody tr.row:focus-within td{background:var(--sunken)}
 .tablecard:focus{outline:0}
+.focusfoot{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:2px 16px}
 .mixlegend{margin:0;font-size:12.5px;color:var(--ink-2);display:flex;flex-wrap:wrap;gap:2px 14px;align-items:center}
 .mixlegend span{display:inline-flex;align-items:center;gap:5px}
 .mixlegend i{display:inline-block;width:14px;height:6px;border-radius:2px}
 .mixlegend .q{background:var(--good)} .mixlegend .d{background:var(--warn)} .mixlegend .k{background:var(--crit)}
 details.badgehelp{padding:0 14px 8px;font-size:13px;color:var(--ink-2)}
-details.badgehelp summary{cursor:pointer;color:var(--accent);min-height:40px;display:flex;align-items:center;width:fit-content}
+details.badgehelp summary{cursor:pointer;color:var(--accent);min-height:32px;display:flex;align-items:center;width:fit-content}
 details.badgehelp dl{margin:2px 0 6px;display:grid;grid-template-columns:auto 1fr;gap:6px 12px;align-items:baseline}
+details.badgehelp .sparknote{margin:0 0 6px;font-size:12.5px;color:var(--ink-3)}
 details.badgehelp dt{margin:0} details.badgehelp dd{margin:0}
 @media (max-width:900px){
-  .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
   .ctx,.dgrid{grid-template-columns:minmax(0,1fr)}
 }
 @media (max-width:600px){
@@ -244,15 +268,23 @@ details.badgehelp dt{margin:0} details.badgehelp dd{margin:0}
   .ctltoggle{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;min-height:44px;text-align:left;font:inherit;font-size:14px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 14px;cursor:pointer}
   .ctltoggle .sum{font-size:12.5px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
   .controls:not(.open){display:none}
+  .ctltoggle{width:auto;margin:0 14px 10px}
+  .controls{padding:10px 14px}
+  .controls .seg button{min-height:40px}
+  .sumrow{gap:6px 14px;padding:8px 12px}
+  .mkline{flex:1 1 100%;border-left:0;padding-left:0}
+  .mkline .mkh{flex:1 1 100%}
+  .sumbtns{margin-left:0;flex:1 1 100%}
+  .sumbtn{min-height:40px;flex:1 1 0}
+  #morecols{display:none}
+  details.badgehelp summary{min-height:40px}
+  .stat{flex:1 1 0;flex-direction:column;align-items:flex-start;gap:2px;white-space:normal}
+  .stat .sl{font-size:12px;line-height:1.25}
+  .dropnote{flex:1 1 100%;max-width:none}
   .chipmore,.mktmore{min-height:40px;display:inline-flex;align-items:center}
 }
 @media (max-width:480px){
   h1{font-size:22px}
-  .tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-  .tiles .tile:nth-child(1),.tiles .tile:nth-child(4){grid-column:1 / -1}
-  .tile{padding:10px 12px}
-  .tile .foot{display:none}
-  .tile .big{font-size:24px}
   input[type=range]{width:100%}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -289,41 +321,44 @@ details.badgehelp dt{margin:0} details.badgehelp dd{margin:0}
     </div>
     <p class="focusnote" id="focusnote"></p>
     <div class="themes" id="themes" role="group" aria-label="Themes"></div>
+    <div class="focusfoot">
     <p class="mixlegend" id="mixlegend">Bar under each theme: <span><i class="q"></i>quality dips</span><span><i class="d"></i>other dips</span><span><i class="k"></i>falling knives</span></p>
     <div class="focusbar"><button type="button" class="linkbtn moreth" id="moreth" hidden></button><button type="button" class="linkbtn" id="clearth" hidden>Clear focus</button></div>
+    </div>
   </section>
 
-  <div class="tiles" id="tiles"></div>
-
-  <section class="alerts" id="alerts" aria-labelledby="alerts-h"></section>
-
-  <button type="button" class="ctltoggle" id="ctltoggle" aria-expanded="false" aria-controls="controls"><span>Filters</span><span class="sum" id="ctlsum"></span></button>
-  <div class="controls" id="controls">
-    <div class="ctl">Show
-      <div class="seg" id="show">
-        <button data-v="quality" aria-pressed="false">Quality dips</button>
-        <button data-v="dips" aria-pressed="true">All dips</button>
-        <button data-v="all" aria-pressed="false">All stocks</button>
-      </div>
-    </div>
-    <label class="ctl" for="win">Drop measured over
-      <select id="win"></select></label>
-    <label class="ctl" for="drop" id="droplab">Minimum drop <span class="v" id="dropv"></span>
-      <input type="range" id="drop" min="1" max="30" step="1" value="7"></label>
-    <div class="dropnote" id="dropnote" hidden></div>
-    <label class="ctl" for="qmin">Minimum quality <span class="v" id="qv"></span>
-      <input type="range" id="qmin" min="0" max="100" step="10" value="60"></label>
-    <div class="ctl">Region
-      <div class="seg" id="region"></div>
-    </div>
-    <label class="ctl check" for="hideknife"><input type="checkbox" id="hideknife"> Hide falling knives</label>
-    <label class="ctl" for="q">Search<input type="search" id="q" placeholder="Ticker or name"></label>
-    <label class="ctl sortctl" for="sortsel">Sort by <select id="sortsel"></select></label>
-  </div>
+  <section class="summary" id="summary" aria-label="Summary of the latest close">
+    <div class="sumrow" id="sumrow"></div>
+    <div class="sumpanel" id="sumnames" hidden></div>
+    <section class="alerts" id="alerts" aria-labelledby="alerts-h" hidden></section>
+  </section>
 
   <div class="tablecard" id="tablecard" tabindex="-1">
-    <div class="tablehead"><h2 id="tabletitle">Candidates</h2><span class="muted" id="tablehint">Click a row for details. Click a column to sort. Sparkline: 90 days, each row scaled to its own min–max.</span></div>
-    <details class="badgehelp" id="badgehelp"><summary>What do the badges mean?</summary><dl id="badgedl"></dl></details>
+    <div class="tablehead"><h2 id="tabletitle">Candidates</h2><span class="muted" id="tablehint">Click a row for details. Click a column to sort. Sparkline: 90 days, each row scaled to its own min–max.</span><button type="button" class="sumbtn" id="morecols" aria-pressed="false" title="Also show 5d vs index, 5d resid., 1m, vs 52w high, vs 200d avg, RSI and Vol ×">More columns</button></div>
+    <button type="button" class="ctltoggle" id="ctltoggle" aria-expanded="false" aria-controls="controls"><span>Filters</span><span class="sum" id="ctlsum"></span></button>
+    <div class="controls" id="controls">
+      <div class="ctl">Show
+        <div class="seg" id="show">
+          <button data-v="quality" aria-pressed="false">Quality dips</button>
+          <button data-v="dips" aria-pressed="true">All dips</button>
+          <button data-v="all" aria-pressed="false">All stocks</button>
+        </div>
+      </div>
+      <label class="ctl" for="win">Drop measured over
+        <select id="win"></select></label>
+      <label class="ctl" for="drop" id="droplab">Minimum drop <span class="v" id="dropv"></span>
+        <input type="range" id="drop" min="1" max="30" step="1" value="7"></label>
+      <label class="ctl" for="qmin">Minimum quality <span class="v" id="qv"></span>
+        <input type="range" id="qmin" min="0" max="100" step="10" value="60"></label>
+      <div class="ctl">Region
+        <div class="seg" id="region"></div>
+      </div>
+      <label class="ctl check" for="hideknife"><input type="checkbox" id="hideknife"> Hide falling knives</label>
+      <label class="ctl" for="q">Search<input type="search" id="q" placeholder="Ticker or name"></label>
+      <label class="ctl sortctl" for="sortsel">Sort by <select id="sortsel"></select></label>
+      <div class="dropnote" id="dropnote" hidden></div>
+    </div>
+    <details class="badgehelp" id="badgehelp"><summary>What do the badges mean?</summary><dl id="badgedl"></dl><p class="sparknote">Sparkline: the last 90 days, each stock scaled to its own minimum and maximum, so heights cannot be compared between stocks.</p></details>
     <div class="cards" id="cards"></div>
     <div class="scroll"><table>
       <caption class="sr-only" id="tablecap"></caption>
@@ -404,7 +439,8 @@ const REGION_ORDER = ['US', 'Europe', 'Nordic'];
 regions.sort((a, b) => (REGION_ORDER.indexOf(a) + 1 || 99) - (REGION_ORDER.indexOf(b) + 1 || 99) || a.localeCompare(b));
 [['', 'All'], ...regions.map(r => [r, r])].forEach(([v, l], i) => { const b = el('button', null, l); b.dataset.v = v; b.setAttribute('aria-pressed', String(i === 0)); $('region').append(b); });
 
-const S = {ready: false, rove: '', show: 'dips', region: '', sortKey: null, sortDir: 1, open: null, themes: new Set(), size: 0, allThemes: false};
+const S = {ready: false, rove: '', show: 'dips', region: '', sortKey: null, sortDir: 1, open: null, themes: new Set(), size: 0, allThemes: false, more: false, alertsShown: false, namesShown: false};
+try { S.more = localStorage.getItem('dipdash.more') === '1'; } catch (e) { /* storage blocked: compact view */ }
 
 // ---------- screen-reader announcements (one polite live region; silent on first load, debounced, no repeats) ----------
 let lastAnnounced = null, announceTimer = 0;
@@ -588,7 +624,7 @@ function alertsPanel() {
   const box = $('alerts'), list = DATA.alerts || [];
   box.replaceChildren(); box.className = 'alerts';
   if (DATA.alerts === undefined) { box.hidden = true; return; }
-  box.hidden = false;
+  box.hidden = !S.alertsShown;
   if (DATA.alerts === null) {          // the alert step failed: say so, never show it as a quiet day
     box.classList.add('empty', 'unavail'); const h0 = el('h2', null, '⚠ Trigger alerts · unavailable'); h0.id = 'alerts-h';
     box.append(h0, el('p', 'sub', 'Alerts could not be evaluated for this run (see output/run.log). This is not the same as no alerts.')); return;
@@ -620,57 +656,72 @@ $('ctltoggle').addEventListener('click', () => {
   const open = $('controls').classList.toggle('open'); $('ctltoggle').setAttribute('aria-expanded', String(open));
 });
 
-// ---------- tiles ----------
-function tiles(all) {
-  const box = $('tiles'); box.replaceChildren();
+// ---------- summary bar ----------
+const shortIx = ix => ix.name.length > 12 ? String(ix.symbol || ix.name).replace(/^\^/, '') : ix.name;
+function chipGroup(key, head, note, chips) {
+  const g = el('div', 'chipgroup'); g.dataset.k = key;
+  const h = el('div', 'ghead'); h.append(el('b', null, head + ' · ' + chips.length), note ? ' — ' + note : ''); g.append(h);
+  if (!chips.length) { g.append(el('div', 'foot', 'None.')); return g; }
+  const c = el('div', 'chips'), CAP = window.matchMedia('(max-width:480px)').matches ? 5 : 8; let open = false;
+  const draw = () => {
+    c.replaceChildren(); (open ? chips : chips.slice(0, CAP)).forEach(x => c.append(el('span', 'chip', x)));
+    if (chips.length > CAP) { const b = el('button', 'chipmore', open ? 'show fewer' : '+' + (chips.length - CAP) + ' more'); b.type = 'button'; b.setAttribute('aria-expanded', String(open)); b.onclick = () => { open = !open; draw(); const nb = c.querySelector('.chipmore'); if (nb) nb.focus(); }; c.append(b); }
+  };
+  draw(); g.append(c); return g;
+}
+function summaryBar(all) {
+  const row = $('sumrow'); row.replaceChildren();
   const qd = all.filter(r => r.setup.rank === 4), kn = all.filter(r => r.setup.label === 'Falling knife');
   const newQ = qd.filter(r => wasQualityDip(r) === false);
-  const mk = (lab, n, foot, chips) => {
-    const t = el('div', 'tile'); t.append(el('div', 'lab', lab), el('div', 'big', String(n)));
-    if (chips && chips.length) {
-      const c = el('div', 'chips'), CAP = window.matchMedia('(max-width:480px)').matches ? 5 : 8; let open = false;
-      const draw = () => {
-        c.replaceChildren(); (open ? chips : chips.slice(0, CAP)).forEach(x => c.append(el('span', 'chip', x)));
-        if (chips.length > CAP) { const b = el('button', 'chipmore', open ? 'show fewer' : '+' + (chips.length - CAP) + ' more'); b.type = 'button'; b.setAttribute('aria-expanded', String(open)); b.onclick = () => { open = !open; draw(); const nb = c.querySelector('.chipmore'); if (nb) nb.focus(); }; c.append(b); }
-      };
-      draw(); t.append(c);
-    }
-    if (foot) t.append(el('div', 'foot', foot)); box.append(t);
+  const qNote = `${$('win').value === 'any' ? 'Dip under the default rules' : 'Dip on the chosen window'} and quality ≥ ${$('qmin').value}`;
+  const stat = (lab, n, tip, key) => { const d = el('div', 'stat'); d.dataset.k = key; d.title = tip; d.append(el('span', 'sn', String(n)), el('span', 'sl', lab)); row.append(d); };
+  stat('Quality dips', qd.length, qNote, 'q');
+  stat('New since yesterday', newQ.length, newQ.length ? 'Became a quality dip with the latest close' : 'Same quality dips as the previous close', 'new');
+  stat('Falling knives', kn.length, 'Dipping inside a long downtrend', 'knife');
+
+  // market context: the first three indices inline; every index and the explanation sit in the "Names" panel
+  const ml = el('div', 'mkline'); ml.setAttribute('role', 'group'); ml.setAttribute('aria-label', 'Market context');
+  if (DATA.indices && DATA.indices.length) {
+    ml.append(el('span', 'mkh', 'Market 1d · 5d'));
+    DATA.indices.slice(0, 3).forEach(ix => {
+      const m = el('span', 'mk'); m.setAttribute('aria-label', `${ix.name}: 1 day ${pct(ix.r1)}, 5 days ${pct(ix.r5)}`);
+      m.append(shortIx(ix) + ' ', el('span', 'num ' + sgnCls(ix.r1), pct(ix.r1)), ' · ', el('span', 'num ' + sgnCls(ix.r5), pct(ix.r5))); ml.append(m);
+    });
+  } else ml.append(el('span', 'mkh', 'Market'), el('span', 'mk', 'no index data this run'));
+  row.append(ml);
+
+  const btns = el('div', 'sumbtns');
+  const tog = (id, label, panel, key, cls) => {
+    const b = el('button', 'sumbtn' + (cls ? ' ' + cls : ''), label); b.type = 'button'; b.id = id; b.setAttribute('aria-controls', panel.id); b.setAttribute('aria-expanded', String(!!S[key]));
+    b.onclick = () => { S[key] = !S[key]; panel.hidden = !S[key]; b.setAttribute('aria-expanded', String(S[key])); };
+    btns.append(b); return b;
   };
-  mk('Quality dips', qd.length, `${$('win').value === 'any' ? 'Dip under the default rules' : 'Dip on the chosen window'} and quality ≥ ${$('qmin').value}`, qd.map(r => r.t));
-  mk('New since yesterday', newQ.length, newQ.length ? 'Became a quality dip with the latest close' : 'Same quality dips as the previous close', newQ.map(r => r.t));
-  mk('Falling-knife flags', kn.length, 'Dipping inside a long downtrend', kn.map(r => r.t));
-  const t = el('div', 'tile'); t.append(el('div', 'lab', 'Market context'));
+  tog('namesbtn', 'Names', $('sumnames'), 'namesShown');
+  if (DATA.alerts === null) tog('alertsbtn', '⚠ Alerts unavailable', $('alerts'), 'alertsShown', 'warn');
+  else if (DATA.alerts !== undefined) tog('alertsbtn', DATA.alerts.length ? 'Alerts ' + DATA.alerts.length : 'Alerts: none', $('alerts'), 'alertsShown');
+  row.append(btns);
+
+  const pn = $('sumnames'); pn.replaceChildren(); pn.hidden = !S.namesShown; pn.setAttribute('aria-label', 'Names behind the counts, and all market indices');
+  pn.append(chipGroup('q', 'Quality dips', qNote, qd.map(r => r.t)),
+            chipGroup('new', 'New since yesterday', newQ.length ? 'became a quality dip with the latest close' : 'same quality dips as the previous close', newQ.map(r => r.t)),
+            chipGroup('knife', 'Falling-knife flags', 'dipping inside a long downtrend', kn.map(r => r.t)));
   if (DATA.indices && DATA.indices.length) {
     const g = el('div', 'mkt'); g.append(el('span', 'h', 'Index'), el('span', 'h num', '1d'), el('span', 'h num', '5d'));
-    const head = DATA.indices.slice(0, 3);   // the payload lists the main regional indices first
-    let open = false;
-    const draw = () => {
-      g.replaceChildren(el('span', 'h', 'Index'), el('span', 'h num', '1d'), el('span', 'h num', '5d'));
-      (open ? DATA.indices : head).forEach(ix => g.append(el('span', null, ix.name), el('span', 'num ' + sgnCls(ix.r1), pct(ix.r1)), el('span', 'num ' + sgnCls(ix.r5), pct(ix.r5))));
-    };
-    draw(); t.append(g);
-    if (DATA.indices.length > head.length) {
-      const b = el('button', 'mktmore'); b.type = 'button';
-      const label = () => open ? 'Show main indices only' : 'Show all ' + DATA.indices.length + ' indices';
-      b.textContent = label(); b.title = 'The country indices are the ones each stock is compared with in “5d vs index”.'; b.setAttribute('aria-expanded', 'false');
-      b.onclick = () => { open = !open; draw(); b.textContent = label(); b.setAttribute('aria-expanded', String(open)); };
-      t.append(b);
-    }
-    t.append(el('div', 'foot', 'A broad selloff lifts every stock’s drop. Compare with “5d vs index”.'));
-  } else t.append(el('div', 'foot', 'Index data was not available for this run, so market-wide moves cannot be separated from stock-specific ones.'));
-  box.append(t);
+    DATA.indices.forEach(ix => g.append(el('span', null, ix.name), el('span', 'num ' + sgnCls(ix.r1), pct(ix.r1)), el('span', 'num ' + sgnCls(ix.r5), pct(ix.r5))));
+    pn.append(g, el('div', 'foot', 'A broad selloff lifts every stock’s drop. Compare with “5d vs index”. The country indices are the ones each stock is compared with in “5d vs index”.'));
+  } else pn.append(el('div', 'foot', 'Index data was not available for this run, so market-wide moves cannot be separated from stock-specific ones.'));
 }
 
 // ---------- table ----------
 const COLS = [
-  {k: 't', l: 'Stock', cls: 'l', dir: 1}, {k: 'price', l: 'Price', dir: -1}, {k: 'r1', l: '1d', dir: 1}, {k: 'r5', l: '5d', dir: 1},
+  {k: 't', l: 'Stock', cls: 'l', dir: 1, core: 1}, {k: 'price', l: 'Price', dir: -1, core: 1}, {k: 'r1', l: '1d', dir: 1, core: 1}, {k: 'r5', l: '5d', dir: 1, core: 1},
   {k: 'x5', l: '5d vs index', dir: 1, tip: 'The stock’s 5-day move minus its own country’s (or region’s) index move'}, {k: 'res5', l: '5d resid.', dir: 1, tip: 'The 5-day move left over after removing what the stock’s own index and its usual sensitivity to it (beta) would explain. Beta comes from the previous year, excluding the last 5 days.'}, {k: 'r21', l: '1m', dir: 1},
   {k: 'dd52', l: 'vs 52w high', dir: 1}, {k: 'vs200', l: 'vs 200d avg', dir: 1}, {k: 'rsi', l: 'RSI', dir: 1},
   {k: 'volx', l: 'Vol ×', dir: -1, tip: 'Latest volume divided by the average of the previous 20 days'},
-  {k: 'q', l: 'Quality', cls: 'l', dir: -1, tip: 'Share of quality checks passed. The bars show each check: filled = passed, hatched = no data.'},
-  {k: 'setup', l: 'Setup', cls: 'l', dir: -1}, {k: 'spark', l: '90 days', nosort: true},
+  {k: 'q', l: 'Quality', cls: 'l', dir: -1, core: 1, tip: 'Share of quality checks passed. The bars show each check: filled = passed, hatched = no data.'},
+  {k: 'setup', l: 'Setup', cls: 'l', dir: -1, core: 1}, {k: 'spark', l: '90 days', nosort: true, core: 1},
 ];
+const visCols = () => COLS.filter(c => c.core || S.more);
 function earnText(r, which) {
   const e = r.earn; if (!e) return '–'; if (!e[which]) return 'unknown';
   const d = which === 'last' ? e.days_since_last : e.days_until_next;
@@ -718,7 +769,7 @@ function render() {
   const everything = rows.map(r => Object.assign(r, {setup: setupOf(r, r)}));
   focusPanel(everything);
   const all = everything.filter(r => inSize(r) && inThemes(r));
-  tiles(all); ctlSummary();
+  summaryBar(all); ctlSummary();
   if (!alertsPanel.done) { alertsPanel(); alertsPanel.done = true; }
   const qs = $('q').value.trim().toLowerCase();
   const list = all.filter(r => {
@@ -741,7 +792,7 @@ function render() {
   S.list = list;
 
   const head = $('head'); head.replaceChildren();
-  COLS.forEach(c => {
+  visCols().forEach(c => {
     const th = el('th', (c.cls || '') + (c.nosort ? '' : ' sortable'), c.l); th.scope = 'col';
     if (c.tip) th.title = c.tip;
     if (S.sortKey === c.k) th.append(el('span', 'arr', S.sortDir > 0 ? ' ▲' : ' ▼'));
@@ -761,18 +812,23 @@ function render() {
     tk.append(el('span', 'caret', '›'), rb);
     if (r.setup.rank === 4 && wasQualityDip(r) === false) tk.append(el('span', 'new', 'NEW'));
     c0.append(tk, el('div', 'nm', `${r.name} · ${r.region}`)); { const et = earnTag(r); if (et) c0.append(et); const pt = partialTag(r); if (pt) c0.append(' ', pt); } tr.append(c0);
-    const n = (txt, cls = '') => tr.append(el('td', 'n ' + cls, txt));
-    { const td = el('td', 'n', r.price == null ? '–' : r.price.toFixed(2)); if (r.ccy) td.append(el('span', 'nm', ' ' + r.ccy)); tr.append(td); }
-    ['r1', 'r5', 'x5', 'res5', 'r21', 'dd52', 'vs200'].forEach(k => n(pct(r[k]), sgnCls(r[k])));
-    n(r.rsi == null ? '–' : r.rsi.toFixed(0), r.rsi != null && r.rsi < 30 ? 'down' : '');
-    n(r.volx == null ? '–' : r.volx.toFixed(1) + '×', r.volx != null && r.volx >= 2 ? '' : 'muted');
-    const tq = el('td', 'l n'); tq.append(document.createTextNode(r.q == null ? '–' : String(r.q)), qnote(r), qmeter(r)); tr.append(tq);
-    const tb = el('td', 'l'); const bd = el('span', 'badge ' + r.setup.cls, r.setup.icon + ' ' + r.setup.label); bd.title = SETUP_TIP[r.setup.label]; tb.append(bd); tr.append(tb);
-    const tsp = el('td'); tsp.append(spark(r.spark)); tr.append(tsp);
+    const num = k => () => el('td', 'n ' + sgnCls(r[k]), pct(r[k]));
+    const cellFor = {
+      t: () => c0,
+      price: () => { const td = el('td', 'n', r.price == null ? '–' : r.price.toFixed(2)); if (r.ccy) td.append(el('span', 'nm', ' ' + r.ccy)); return td; },
+      r1: num('r1'), r5: num('r5'), x5: num('x5'), res5: num('res5'), r21: num('r21'), dd52: num('dd52'), vs200: num('vs200'),
+      rsi: () => el('td', 'n ' + (r.rsi != null && r.rsi < 30 ? 'down' : ''), r.rsi == null ? '–' : r.rsi.toFixed(0)),
+      volx: () => el('td', 'n ' + (r.volx != null && r.volx >= 2 ? '' : 'muted'), r.volx == null ? '–' : r.volx.toFixed(1) + '×'),
+      q: () => { const tq = el('td', 'l n'); tq.append(document.createTextNode(r.q == null ? '–' : String(r.q)), qnote(r), qmeter(r)); return tq; },
+      setup: () => { const tb = el('td', 'l'); const bd = el('span', 'badge ' + r.setup.cls, r.setup.icon + ' ' + r.setup.label); bd.title = SETUP_TIP[r.setup.label]; tb.append(bd); return tb; },
+      spark: () => { const tsp = el('td'); tsp.append(spark(r.spark)); return tsp; },
+    };
+    visCols().forEach(c => tr.append(cellFor[c.k]()));
     tr.onclick = () => { S.open = S.open === r.t ? null : r.t; S.focus = 'tr.row[data-t="' + r.t + '"] .rowbtn'; render(); };   // a click anywhere on the row, or Enter/Space on its button
     body.append(tr);
-    if (S.open === r.t && !mq.matches) { const d = el('tr'); d.id = 'dt-' + i; const td = el('td', 'detail'); td.colSpan = COLS.length; td.append(detail(r)); d.append(td); body.append(d); }
+    if (S.open === r.t && !mq.matches) { const d = el('tr'); d.id = 'dt-' + i; const td = el('td', 'detail'); td.colSpan = visCols().length; td.append(detail(r)); d.append(td); body.append(d); }
   });
+  $('morecols').setAttribute('aria-pressed', String(S.more)); $('tablecard').classList.toggle('wide', S.more);
   $('tablecap').textContent = $('tabletitle').textContent + '. Sortable columns; press a stock name to show or hide its details.';
   {
     const qd = all.filter(r => r.setup.rank === 4).length, plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
@@ -782,10 +838,17 @@ function render() {
   renderCards(list);
   syncSort();
   if (S.focus) { const f = document.querySelector(S.focus); S.focus = null; if (f) f.focus(); }
-  $('tablehint').textContent = mq.matches ? 'Tap a stock for details. Sparkline: 90 days, each stock scaled to its own min–max.' : 'Click a row for details. Click a column to sort. Sparkline: 90 days, each row scaled to its own min–max.';
+  const rules = isAny ? `Default rules: 1 day ${MINUS}${(ST.dip.drop_1d * 100).toFixed(0)}%, 5 days ${MINUS}${(ST.dip.drop_5d * 100).toFixed(0)}%, or ${(ST.dip.drawdown_20d * 100).toFixed(0)}% under the 20-day high. ` : '';
+  $('tablehint').textContent = mq.matches ? 'Tap a stock for details.' : rules + 'Click a row for details, a column to sort.';
   hist(all); sectors(all);
 }
 mq.addEventListener('change', () => render());
+$('morecols').onclick = () => {
+  S.more = !S.more;
+  try { localStorage.setItem('dipdash.more', S.more ? '1' : '0'); } catch (e) { /* storage blocked: fine */ }
+  const sc = COLS.find(c => c.k === S.sortKey); if (!S.more && sc && !sc.core) S.sortKey = null;   // do not stay sorted by a column that just disappeared
+  S.focus = '#morecols'; render();
+};
 
 // ---------- phone layout: one card per stock ----------
 function syncSort() {

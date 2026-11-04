@@ -40,7 +40,7 @@ def main() -> int:
                 page.on("pageerror", lambda e: errors.append(str(e)))
                 page.on("console", lambda m: m.type == "error" and errors.append(m.text))
                 page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                page.wait_for_selector("#tiles .tile", timeout=15000)
+                page.wait_for_selector("#sumrow .stat", timeout=15000)
                 try:
                     page.evaluate("document.fonts.ready", )
                 except Exception:

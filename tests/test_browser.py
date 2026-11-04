@@ -38,7 +38,7 @@ def open_page(browser, url, w=1280, h=900, scheme="light"):
     # The web-font stylesheet is optional; a blocked font host (offline, sandbox proxy) is not a page error.
     page.on("console", lambda m: m.type == "error" and not any(x in m.text for x in NET_IGNORE) and "font" not in m.text.lower() and errors.append(m.text))
     page.goto(url, wait_until="domcontentloaded")
-    page.wait_for_selector("#tiles .tile")
+    page.wait_for_selector("#sumrow .stat")
     return page, errors
 
 
@@ -157,14 +157,17 @@ def test_default_dip_count_equals_the_python_rule(browser, demo_html):
     page.close()
 
 
-def test_new_since_yesterday_tile_matches_the_rows_marked_new(browser, demo_html):
+def test_new_since_yesterday_names_match_the_rows_marked_new(browser, demo_html):
     page, _ = open_page(browser, demo_html)
-    more = page.locator("#tiles .tile").nth(1).locator(".chipmore")
+    page.click("#namesbtn")                                       # the names behind the counts sit in the "Names" panel
+    group = page.locator('#sumnames .chipgroup[data-k="new"]')
+    more = group.locator(".chipmore")
     if more.count():
-        more.click()                                              # the tile shows the first few chips; expand to see them all
-    chips = sorted(page.locator("#tiles .tile").nth(1).locator(".chip").all_inner_texts())
+        more.click()                                              # the panel shows the first few chips; expand to see them all
+    chips = sorted(group.locator(".chip").all_inner_texts())
     marked = sorted(t for t, new in page.evaluate(SHOWN) if new)
     assert chips == marked and len(chips) > 0
+    assert int(page.inner_text('#sumrow .stat[data-k="new"] .sn')) == len(chips)
     page.close()
 
 
@@ -244,7 +247,7 @@ def test_size_filter_only_keeps_big_companies(browser, demo_html):
     big = _count_rows(page)
     assert 0 < big < total
     page.goto(demo_html.split("#")[0] + "#focus=semis&size=100000000000")   # a bookmarked view restores itself
-    page.reload(); page.wait_for_selector("#tiles .tile")
+    page.reload(); page.wait_for_selector("#sumrow .stat")
     assert page.get_attribute('.th[data-id="semis"]', "aria-pressed") == "true"
     assert page.get_attribute('#size button[data-v="1e11"]', "aria-pressed") == "true"
     assert errors == []
@@ -317,4 +320,95 @@ def test_legend_and_badge_help_are_visible_without_hover(browser, demo_html):
     assert page.is_visible("#mixlegend") and "falling knives" in page.inner_text("#mixlegend")
     page.click("#badgehelp summary")
     assert page.is_visible("#badgedl") and "Falling knife" in page.inner_text("#badgedl")
+    page.close()
+
+
+# ---------- Change 2: results first ----------
+def test_first_candidate_is_visible_without_scrolling_on_desktop(browser, demo_html):
+    page, errors = open_page(browser, demo_html, 1280, 900)
+    box = page.locator("#body tr.row").first.bounding_box()
+    assert box and box["y"] + box["height"] <= 900                 # the whole first row fits in the first screen
+    assert page.locator("#head th").count() == 7                  # compact by default
+    assert page.evaluate("(() => { const s = document.querySelector('.scroll'); return s.scrollWidth <= s.clientWidth; })()")   # no sideways scroll
+    assert errors == []
+    page.close()
+
+
+def test_first_candidate_card_is_within_two_screens_on_phone(browser, demo_html):
+    page, errors = open_page(browser, demo_html, 390, 844)
+    top = page.evaluate("document.querySelector('#cards .sc').getBoundingClientRect().top + scrollY")
+    assert top < 2 * 844
+    assert errors == []
+    page.close()
+
+
+def test_summary_bar_replaces_the_tiles_and_the_alerts_card_is_a_disclosure(browser, demo_html):
+    page, _ = open_page(browser, demo_html)
+    assert page.locator("#sumrow .stat").count() == 3
+    assert page.locator("#tiles").count() == 0
+    assert "market" in page.inner_text(".mkline").lower() and "S&P 500" in page.inner_text(".mkline")
+    assert page.is_hidden("#alerts") and page.get_attribute("#alertsbtn", "aria-expanded") == "false"
+    page.click("#alertsbtn")
+    assert page.is_visible("#alerts") and page.get_attribute("#alertsbtn", "aria-expanded") == "true"
+    assert "Informational only, not advice" in page.inner_text("#alerts")
+    page.click("#alertsbtn")
+    assert page.is_hidden("#alerts")
+    assert page.is_hidden("#sumnames")
+    page.click("#namesbtn")
+    assert page.is_visible("#sumnames") and "Falling-knife flags" in page.inner_text("#sumnames")
+    assert "STOXX 600" in page.inner_text("#sumnames")           # every index stays reachable
+    page.close()
+
+
+def test_failed_alerts_are_called_unavailable_not_none(browser, tmp_path):
+    from dipdash.cli import main
+    out = tmp_path / "d.html"
+    assert main(["--demo", "--out", str(out)]) == 0
+    html = out.read_text(encoding="utf-8").replace('"alerts":', '"alerts_x":', 1)
+    html = html.replace('"alerts_x":', '"alerts": null, "alerts_x":', 1)
+    out.write_text(html, encoding="utf-8")
+    page, _ = open_page(browser, out.resolve().as_uri())
+    assert "Alerts unavailable" in page.inner_text("#alertsbtn")
+    page.click("#alertsbtn")
+    assert "not the same as no alerts" in page.inner_text("#alerts")
+    page.close()
+
+
+def test_more_columns_toggle_adds_the_seven_extra_columns_and_is_remembered(browser, demo_html):
+    page, errors = open_page(browser, demo_html)
+    assert page.get_attribute("#morecols", "aria-pressed") == "false"
+    heads = page.eval_on_selector_all("#head th", "t => t.map(x => x.textContent.trim())")
+    assert heads[0] == "Stock" and "RSI" not in heads and "1m" not in heads
+    page.click("#morecols")
+    assert page.get_attribute("#morecols", "aria-pressed") == "true"
+    assert page.locator("#head th").count() == 14
+    detail_span = page.evaluate("document.querySelector('td.detail').colSpan")
+    assert detail_span == 14                                       # the open detail row spans every visible column
+    page.reload(); page.wait_for_selector("#sumrow .stat")         # remembered in this browser
+    assert page.locator("#head th").count() == 14
+    page.click("#morecols")
+    assert page.locator("#head th").count() == 7
+    assert page.evaluate("document.querySelector('td.detail').colSpan") == 7
+    assert errors == []
+    page.close()
+
+
+def test_hiding_columns_drops_a_sort_on_a_hidden_column(browser, demo_html):
+    page, _ = open_page(browser, demo_html)
+    page.click("#morecols")
+    page.click('th[data-k="rsi"]')
+    assert page.get_attribute('th[data-k="rsi"]', "aria-sort") in ("ascending", "descending")
+    page.click("#morecols")
+    assert page.locator('th[aria-sort="ascending"], th[aria-sort="descending"]').count() == 0
+    page.close()
+
+
+def test_filters_live_in_the_table_toolbar(browser, demo_html):
+    page, _ = open_page(browser, demo_html)
+    assert page.evaluate("document.getElementById('tablecard').contains(document.getElementById('controls'))")
+    assert page.is_visible("#controls") and page.is_visible("#q")
+    page.click('#show button[data-v="all"]')
+    page.fill("#q", "nokia")
+    assert page.locator("#body tr.row").count() == 1
+    assert "Default rules" in page.inner_text("#tablehint")        # the rules sentence sits in the caption line on desktop
     page.close()
