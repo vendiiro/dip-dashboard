@@ -105,7 +105,7 @@ def test_clicking_a_row_opens_and_closes_its_detail(browser, demo_html):
     rows = page.locator("#body tr.row")
     second = rows.nth(1)
     second.click()
-    assert page.locator("tr.row.open").count() == 1 and second.get_attribute("aria-expanded") == "true"
+    assert page.locator("tr.row.open").count() == 1 and second.locator(".tkbtn").get_attribute("aria-expanded") == "true"
     assert "quality checks" in page.inner_text("td.detail").lower()      # headings are upper-cased by CSS
     page.locator("#body tr.row").nth(1).click()
     assert page.locator("td.detail").count() == 0
@@ -161,7 +161,7 @@ def test_untrusted_text_is_not_interpreted_as_html(browser, tmp_path):
     page.close()
 
 
-SHOWN = "[...document.querySelectorAll('#body tr.row .tk')].map(e => [e.childNodes[1].textContent, !!e.querySelector('.new')])"
+SHOWN = "[...document.querySelectorAll('#body tr.row .tk')].map(e => [e.querySelector('.tkbtn').childNodes[1].textContent, !!e.querySelector('.new')])"
 
 
 def test_default_dip_count_equals_the_python_rule(browser, demo_html):
@@ -225,4 +225,27 @@ def test_many_identical_warnings_show_as_one_line_in_the_data_quality_panel(brow
     items = page.locator("#dqpanel li").all_inner_texts()
     assert errors == [] and len(items) == 2
     assert "(8 stocks) partial bar" in items[0] and "S0, S1" in items[0]
+    page.close()
+
+
+def test_filter_counts_chips_reset_and_detail_order(browser, demo_html):
+    page, errors = open_page(browser, demo_html)
+    assert page.is_hidden("#activebar")                                              # no chips while everything is at its default
+    n_all = int(page.locator("#show button[data-v=all] .ct").inner_text())
+    n_dips = int(page.locator("#show button[data-v=dips] .ct").inner_text())
+    assert n_all >= n_dips > 0                                                       # live count beside each option
+    page.click("#region button[data-v=US]")
+    assert page.is_visible("#activebar") and "Region: US" in page.inner_text("#activebar")
+    assert int(page.locator("#show button[data-v=dips] .ct").inner_text()) <= n_dips  # counts follow the other filters
+    page.fill("#q", "zzzzqq")                                                        # no match: written empty state with a reset
+    assert page.is_visible("#empty") and page.is_visible("#resetbtn")
+    page.click("#resetbtn")
+    assert page.is_hidden("#activebar") and page.is_hidden("#empty") and page.input_value("#q") == ""
+    page.locator("#body tr.row").first.click()                                        # detail: flagged-because strip first, key numbers, more context
+    d = page.inner_text("td.detail").lower()
+    assert d.index("flagged because") < d.index("1 year") and "key numbers" in d and "more context" in d
+    assert page.locator("td.detail .extra:visible").count() == 0
+    page.click("td.detail button:has-text('More context')")
+    assert page.locator("td.detail .extra:visible").count() > 0
+    assert errors == []
     page.close()
