@@ -1,7 +1,8 @@
 """Write report.md and its charts from a finished backtest run.
 
 Wording rule (backtest-hygiene): describe what happened "historically, in this sample". Never say a rule works or will pay.
-Every number in the text is taken from the results table; nothing is typed in by hand.
+Every number in the text is taken from the results table, the frozen spec, the settings or the trial log; nothing is typed in by hand.
+Human-written review text lives in backtest_notes.py, keyed by spec hash, and is only printed for the spec it was written for.
 """
 from __future__ import annotations
 
@@ -15,7 +16,8 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
-from .backtest import EU, US, VARIANTS, Cell, _nondip_mask, cell_events, date_shift_placebo, shift_inputs  # noqa: E402
+from .backtest import EU, MAX_JUMP, PERIODS, US, VARIANTS, Cell, _nondip_mask, cell_events, date_shift_placebo, shift_inputs  # noqa: E402
+from .backtest_notes import notes_for, quoted_mismatch  # noqa: E402
 from .backtest_run import PRIMARY, PRIMARY_TEXT, SENSITIVITY_COSTS  # noqa: E402
 from .config import Settings  # noqa: E402
 from .fmt import bound, interval, md_table, pct  # noqa: E402,F401
@@ -109,6 +111,10 @@ def render_report(run: dict, s: Settings, charts: dict[str, str]) -> str:
     prim_is = cell(res, PRIMARY["variant"], PRIMARY["horizon"], PRIMARY["group"], "IS")
     allc = cell(res, PRIMARY["variant"], PRIMARY["horizon"], PRIMARY["group"], "ALL")
     first, last = days["date"].min().date(), days["date"].max().date()
+    H, ci = PRIMARY["horizon"], f"{bt.ci_level:.0%}"
+    shash = spec["spec_hash"]
+    notes = notes_for(shash)
+    n_groups, n_variants = int(res["group"].nunique()), len(VARIANTS)
     L = []
     w = L.append
     w(f"# Dip-rule event study\n\nRun {run['run_at']} · spec `{spec['spec_hash']}` · educational research, not investment advice. "
@@ -118,7 +124,7 @@ def render_report(run: dict, s: Settings, charts: dict[str, str]) -> str:
     if allc is None:
         w("No events were found for the primary variant, so there is nothing to report.\n")
         return "\n".join(L)
-    w(f"- **Events:** {int(allc['n']):,} price-only dip events at the 21-day horizon after a {bt.cooldown_days}-bar cooldown, "
+    w(f"- **Events:** {int(allc['n']):,} price-only dip events at the {H}-day horizon after a {bt.cooldown_days}-bar cooldown, "
       f"on {int(allc['n_stocks'])} stocks, {int(allc['n_months'])} calendar months ({first} to {last}).")
     w(f"- **Universe:** {spec['universe']['n']} current blue chips (US, Europe, Nordic). Survivorship bias applies (see below).")
     w(f"- **Costs:** {bt.cost_roundtrip:.2%} round trip, also shown at 2× and 4×. Entry at the next close, no intraday fills.")
@@ -129,10 +135,11 @@ def render_report(run: dict, s: Settings, charts: dict[str, str]) -> str:
         w("There were no out-of-sample events for the primary cell.\n")
     else:
         w(f"**Result.** Out of sample, {int(prim['n']):,} events in {int(prim['n_months'])} months averaged **{pct(prim['ex_own'])}** over their own stocks' "
-          f"non-dip days at 21 days (90% interval {interval(prim['ex_own_lo'], prim['ex_own_hi'])}); {excludes_zero(prim)}. "
+          f"non-dip days at {H} days ({ci} interval {interval(prim['ex_own_lo'], prim['ex_own_hi'])}); {excludes_zero(prim)}. "
           + ("In sample the same figure was " + f"{pct(prim_is['ex_own'])} ({interval(prim_is['ex_own_lo'], prim_is['ex_own_hi'])}). " if prim_is is not None else "")
           + f"Versus the regional index the figure was {pct(prim['ex_index'])} ({interval(prim['ex_index_lo'], prim['ex_index_hi'])}); versus the other stocks the same day {pct(prim['ex_peers'])} "
-          f"({interval(prim['ex_peers_lo'], prim['ex_peers_hi'])}). Share of date-shifted placebos (all events moved together by a random lag) at or above the events' mean: {prim.get('shift_p', float('nan')):.2f} (about 660 distinct lags, so read it to two decimals).\n")
+          f"({interval(prim['ex_peers_lo'], prim['ex_peers_hi'])}). Share of date-shifted placebos (all events moved together by a random lag) at or above the events' mean: {prim.get('shift_p', float('nan')):.2f}"
+          + (f" ({int(prim['shift_lags']):,} distinct lags were drawn, so read it to two decimals)." if "shift_lags" in prim.index and pd.notna(prim["shift_lags"]) else ".") + "\n")
         lo, hi = prim["ex_own_lo"], prim["ex_own_hi"]
         if np.isfinite(lo) and lo > 0:
             w("The pre-registered condition is met in this sample. That is a statement about these dates and these stocks; the sections below list why it may not carry over.\n")
@@ -145,9 +152,9 @@ def render_report(run: dict, s: Settings, charts: dict[str, str]) -> str:
         d = res[(res["period"] == per) & (res["n"] > 0) & res["ex_own_lo"].notna()]
         tally[per] = (int(((d["ex_own_lo"] > 0) | (d["ex_own_hi"] < 0)).sum()), len(d))
     if prim is not None:
-        w(f"**In sample versus out of sample.** Across the {tally['IS'][1]} cells (3 variants × 3 horizons × 3 region groups), {tally['IS'][0]} in-sample intervals for the excess over each stock's own non-dip days "
+        w(f"**In sample versus out of sample.** Across the {tally['IS'][1]} cells ({n_variants} variants × {len(bt.horizons)} horizons × {n_groups} region groups), {tally['IS'][0]} in-sample intervals for the excess over each stock's own non-dip days "
           f"exclude zero, against {tally['OOS'][0]} of {tally['OOS'][1]} out of sample ({tally['OOS_exstress'][0]} of {tally['OOS_exstress'][1]} with market-stress days removed). The cells overlap, so this is a tally, not "
-          f"{tally['IS'][1]} independent tests. It does not show that the in-sample and out-of-sample results differ from each other: the out-of-sample intervals are about ±{(prim['ex_own_hi'] - prim['ex_own_lo']) / 2 * 100:.1f} points wide at 21 days, "
+          f"{tally['IS'][1]} independent tests. It does not show that the in-sample and out-of-sample results differ from each other: the out-of-sample intervals are about ±{(prim['ex_own_hi'] - prim['ex_own_lo']) / 2 * 100:.1f} points wide at {H} days, "
           "so this sample has little power to detect an edge of the size seen in sample.\n")
     w(f"![Return distribution and placebo]({charts['distribution']})\n")
     # ---- tables
@@ -163,11 +170,11 @@ def render_report(run: dict, s: Settings, charts: dict[str, str]) -> str:
                          f"{pct(r['ex_index'])} ({interval(r['ex_index_lo'], r['ex_index_hi'])})", f"{pct(r['ex_peers'])} ({interval(r['ex_peers_lo'], r['ex_peers_hi'])})",
                          f"{r.get('shift_p', float('nan')):.2f}", int(r["n_months"])])
     w(md_table(["Variant", "Horizon", "Events", "Excess vs own non-dip days", "vs regional index", "vs other stocks", "Date-shift placebo p", "Months"], rows))
-    w("\nIntervals are 90% bootstrap intervals that resample whole calendar months. V3 uses today's fundamentals on past dates, so it is indicative only. "
+    w(f"\nIntervals are {ci} bootstrap intervals that resample whole calendar months. V3 uses today's fundamentals on past dates, so it is indicative only. "
       "The index baseline is not currency-adjusted for stocks that do not trade in the index currency.\n")
     if prim is not None:
         w(f"**Reading the index column.** It is not like-for-like: the stocks are dividend-adjusted and the indices are price-only, so it also carries roughly the dividend yield (not measured). "
-          f"On top of that, on ordinary (non-dip) days these same stocks beat their regional index by {pct(prim['nd_vs_idx'])} over 21 days out of sample, because the universe is today's survivors. "
+          f"On top of that, on ordinary (non-dip) days these same stocks beat their regional index by {pct(prim['nd_vs_idx'])} over {H} days out of sample, because the universe is today's survivors. "
           "Read 'vs regional index' with both in mind; it is the weakest of the three baselines. "
           "'vs own non-dip days' is the least distorted comparison, but survivorship can still bias even that one upward: dips that kept falling belong to companies that dropped out of the universe. "
           f"The independent random-day placebo (kept in `results.csv`) gave {prim.get('placebo_p', float('nan')):.3f} for the primary cell, but it ignores that events share dates and reads too optimistic, so it is not used.\n")
@@ -183,7 +190,7 @@ def render_report(run: dict, s: Settings, charts: dict[str, str]) -> str:
                     continue
                 rows.append([f"{h}d", gl, "full sample" if per == "ALL" else "out of sample", f"{int(r['n']):,}", pct(r["ex_own"]), interval(r["ex_own_lo"], r["ex_own_hi"]),
                              f"{r['hit_rate']:.0%} / {r['base_hit']:.0%}", pct(r["net_median"]), pct(r["p10"]), pct(r["p90"]), pct(r["worst"])])
-    w(md_table(["Horizon", "Region", "Period", "Events", "Excess (own)", "90% interval", "Hit rate: events / non-dip days (net)", "Median (net)", "10th pct", "90th pct", "Worst"], rows))
+    w(md_table(["Horizon", "Region", "Period", "Events", "Excess (own)", f"{ci} interval", "Hit rate: events / non-dip days (net)", "Median (net)", "10th pct", "90th pct", "Worst"], rows))
     w("\nHit rate, median and percentiles are net of costs, from entry to exit. A hit rate means little alone: the same stocks' ordinary windows also end higher most of the time. "
       "Worst = the single worst event. Events overlap in time at the longer horizons.\n")
     # ---- costs
@@ -204,12 +211,12 @@ def render_report(run: dict, s: Settings, charts: dict[str, str]) -> str:
     w("## Market-wide selloffs (V1, out of sample)\n")
     rows = []
     for h in bt.horizons:
-        for per, lab in (("OOS", "all out-of-sample events"), ("OOS_exstress", "excluding days the regional index was 10%+ below its 60-day high")):
+        for per, lab in (("OOS", "all out-of-sample events"), ("OOS_exstress", f"excluding days the regional index was {bt.stress_drawdown:.0%}+ below its {bt.stress_window}-day high")):
             r = cell(res, "V1_price_only", h, "All", per)
             if r is not None:
                 rows.append([f"{h}d", lab, f"{int(r['n']):,}", pct(r["ex_own"]), interval(r["ex_own_lo"], r["ex_own_hi"]), pct(r["net_mean_1x"])])
-    w(md_table(["Horizon", "Events", "n", "Excess (own)", "90% interval", "Mean net"], rows))
-    si, so = cell(res, "V1_price_only", 21, "All", "IS"), cell(res, "V1_price_only", 21, "All", "OOS")
+    w(md_table(["Horizon", "Events", "n", "Excess (own)", f"{ci} interval", "Mean net"], rows))
+    si, so = cell(res, "V1_price_only", H, "All", "IS"), cell(res, "V1_price_only", H, "All", "OOS")
     w(f"\nStress share of events: {allc['ev_stress_share']:.0%} overall"
       + (f", {si['ev_stress_share']:.0%} in sample and {so['ev_stress_share']:.0%} out of sample" if si is not None and so is not None else "")
       + ". Events cluster in market-wide selloffs, and the out-of-sample period contains " + ("more" if si is not None and so is not None and so["ev_stress_share"] > si["ev_stress_share"] else "no more") + " of them than the in-sample period.\n")
@@ -217,51 +224,77 @@ def render_report(run: dict, s: Settings, charts: dict[str, str]) -> str:
     w("## Data checks\n")
     zv = spec["data"].get("zero_volume_bars_removed", {})
     if zv:
-        w(f"- {zv['total']} zero-volume bars in {zv['tickers']} tickers were removed before the run ({zv['total'] / zv['of_bars']:.3%} of bars). Almost all are exchange-holiday placeholder rows with an unchanged price; "
-          "one was a corrupt price (NOVO-B.CO, 2010-05-14: price doubled, volume 0).")
+        w(f"- {zv['total']} zero-volume bars in {zv['tickers']} tickers were removed before the run ({zv['total'] / zv['of_bars']:.3%} of bars)."
+          + ("" if notes.get("data_notes") else " No note about them is recorded for this spec."))
+        for dn in notes.get("data_notes", []):
+            w(f"  - {dn}")
     w(f"- {run['n_series']} price series validated after cleaning. Findings: " + (", ".join(f"{k} × {v}" for k, v in val["check"].value_counts().items()) or "none") + ".")
     big = val[val["check"].isin(["large_move", "spike_revert"])]
     for _, b_ in big.iterrows():
         when = re.search(r"\d{4}-\d{2}-\d{2}", b_["detail"])
         part = "out of sample" if when and pd.Timestamp(when.group()) > cutoff else "in sample"
         w(f"  - {b_['ticker']}: {b_['detail']} ({part}).")
-    prim_events = cell_events(days, Cell("V1_price_only", 21, "All", "ALL"))
-    nsus = int(prim_events["suspect21"].sum())
-    w(f"- {nsus} of {len(prim_events):,} primary events touch a move of more than 40% in one day. They stay in the main numbers"
+    prim_events = cell_events(days, Cell("V1_price_only", H, "All", "ALL"))
+    nsus = int(prim_events[f"suspect{H}"].sum())
+    w(f"- {nsus} of {len(prim_events):,} primary events touch a move of more than {MAX_JUMP:.0%} in one day. They stay in the main numbers"
       + ("; the primary out-of-sample cell contains " + str(int(prim["n_suspect"])) + " of them" + (f", and without them it reads {pct(prim['ex_own_nosuspect'])} ({interval(prim['ex_own_nosuspect_lo'], prim['ex_own_nosuspect_hi'])})" if prim is not None and prim["n_suspect"] and "ex_own_nosuspect" in prim.index and pd.notna(prim["ex_own_nosuspect"]) else "") if prim is not None else "") + ".")
     w("- Prices are Yahoo's dividend-adjusted closes. They were cross-checked against exchange sources for sample tickers only (docs/m2-data-verification.md); long-history adjustments were not verified.\n")
     # ---- trials
     w("## How many things were tried\n")
-    w(f"{spec['headline_trials']} headline tests (3 variants × 3 horizons) were planned, and {spec['cells_computed']} cells were computed (adding 3 region groups and 4 periods), each with three baselines and a placebo. "
+    w(f"{spec['headline_trials']} headline tests ({n_variants} variants × {len(bt.horizons)} horizons) were planned, and {spec['cells_computed']} cells were computed (adding {n_groups} region groups and {len(PERIODS)} periods), each with three baselines and a placebo. "
       "The report prints a subset; `results.csv` has all of them and `output/backtests/trials.csv` logs every one on every run"
       + (f" ({run['trial_runs']} runs so far; several only reformatted the report)" if run.get("trial_runs") else "") + ". With this many looks, the best-looking cell is a candidate, not a finding.\n")
     w("## Changes after the first look\n")
-    w("The first run of this study was computed with an earlier spec, and its output was read before the corrections below were made. The pre-registered question, the thresholds and the split were not changed, "
-      "and the primary cell is identical in every run (+0.2660%, n = 1,504). The corrections were found by reading the first run's own numbers; they were not searched for in the other direction, "
-      "and the independent review (next section) found one more problem that was left uncorrected.\n")
-    for t in spec.get("revisions_after_first_look", []):
-        w(f"- {t}")
-    w("")
+    revs = spec.get("revisions_after_first_look", [])
+    if not revs:
+        w(f"No changes after the first look are recorded for spec `{shash}`. That is not a statement that none were made: only changes written into `backtest_notes.py` for this spec hash appear here.\n")
+    else:
+        hist = run.get("primary_history", [])
+        same = len(hist) >= 2 and all(h_["n"] == hist[0]["n"] and abs(h_["ex_own"] - hist[0]["ex_own"]) < 5e-7 for h_ in hist)
+        if same:
+            ident = f"the primary cell is identical in every logged run ({hist[0]['ex_own']:+.4%}, n = {hist[0]['n']:,}, {len(hist)} runs in trials.csv)"
+        elif len(hist) >= 2:
+            ident = "the primary cell differs between logged runs: " + "; ".join(f"{h_['ex_own']:+.4%} (n = {h_['n']:,}) in {h_['spec_hash'][:8]}" for h_ in hist[-4:])
+        else:
+            ident = "only one run of the primary cell is in the trial log, so no comparison between runs is possible"
+        w("The first run of this study was computed with an earlier spec, and its output was read before the corrections below were made. The pre-registered question, the thresholds and the split were not changed, "
+          f"and {ident}. The corrections were found by reading the first run's own numbers; they were not searched for in the other direction"
+          + (", and the independent review (next section) found one more problem that was left uncorrected.\n" if notes.get("review") else ".\n"))
+        for t_ in revs:
+            w(f"- {t_}")
+        w("")
     w("## Independent review\n")
-    w("A separate reviewer that did not write the code recomputed the signals, cooldown events (5 tickers), 20 forward returns and the primary cell from the raw prices without using this code. "
-      "It reported no look-ahead and no mismatch, and the same verdict (interval includes zero) under wider bootstrap blocks. Its other points are reflected in this report: "
-      "the index column's dividend mismatch, that survivorship still biases the own-days comparison, one bad price the validators missed (KNEBV.HE 2025-07-29: +29.6%, then −24.1%, on low volume; "
-      "it creates one false out-of-sample event and moves the primary excess from +0.2660% to +0.2667%, and a spike-and-revert check now flags such bars), and the in-sample interval's lower bound being −0.03%, not zero.\n")
+    if notes.get("review"):
+        w(notes["review"] + "\n")
+        warn = quoted_mismatch(shash, float(prim["ex_own"]) if prim is not None else None, int(prim["n"]) if prim is not None else None)
+        if warn:
+            w(f"**Check:** {warn}\n")
+    else:
+        w(f"No review is recorded for spec {shash}. Treat the numbers as unreviewed by the notes file; a separate review step (stats-reviewer) is still needed before they are relied on.\n")
     # ---- trust
     w("## How much to trust this\n")
+    n_uni = spec["universe"]["n"]
+    missing = spec["data"].get("missing_tickers")
+    src_txt, hist_from = spec["data"].get("source", "source not recorded"), spec["data"].get("history_from", first)
+    if run["n_series"] >= n_uni:
+        cov = f"**Coverage.** All {n_uni} stocks have price data."
+    elif missing:
+        cov = f"**Coverage.** {run['n_series']} of {n_uni} stocks: {', '.join(missing)} had no usable price data at the source and {'is' if len(missing) == 1 else 'are'} left out."
+    else:
+        cov = f"**Coverage.** {run['n_series']} of {n_uni} stocks have price data; the missing tickers are not recorded in this run's spec."
     for t in [
         "**Survivorship bias.** The universe is today's blue chips. Companies that fell out of the indices, were delisted or were taken over are missing, and those are more likely to have kept falling after a dip. This flatters any dip-based rule, including the excess over a stock's own non-dip days. No result here has been discounted for it.",
-        "**Events cluster.** Many events sit in the same selloffs, so the effective sample is far smaller than the event count. The intervals resample whole months for that reason; they still assume months are independent, and overlapping 21- and 63-day windows add more dependence.",
+        "**Events cluster.** Many events sit in the same selloffs, so the effective sample is far smaller than the event count. The intervals resample whole months for that reason; they still assume months are independent, and overlapping forward windows (horizons " + ", ".join(map(str, bt.horizons)) + " days) add more dependence.",
         "**Today's fundamentals in the past.** V3 filters past dips with the current quality score, which uses information that did not exist then. Treat V3 as indicative only; it is not shown to be better or worse than V1.",
         "**Thresholds were set before testing, but they are not proven.** They are the project's starting defaults; the report does not tune them. Changing them now and re-testing would create new trials.",
         "**Costs are simple.** One round-trip figure for all stocks and years. Real spreads, taxes, currency conversion and the cost of being unable to trade at the next close are not modelled.",
         "**Currency.** Returns are in each stock's own currency. The Europe + Nordic index baseline (STOXX 600, in EUR) is not currency-adjusted for CHF, SEK, DKK or NOK stocks.",
-        "**Data.** One free source with adjusted prices back to 2010. Continental European lines were not independently verified (see the M2 notes), and clean data-quality counts above do not prove the prices are right.",
+        f"**Data.** One free source ({src_txt}), history from {hist_from}. Continental European lines were not independently verified (see the M2 notes), and clean data-quality counts above do not prove the prices are right.",
         "**One sample.** A single market history with a handful of large selloffs. A different history could give a different answer.",
-        (f"**Low power.** Out-of-sample intervals are about ±{(prim['ex_own_hi'] - prim['ex_own_lo']) / 2 * 100:.1f} points wide at 21 days, " if prim is not None else "**Low power.** Out-of-sample intervals are wide, ")
+        (f"**Low power.** Out-of-sample intervals are about ±{(prim['ex_own_hi'] - prim['ex_own_lo']) / 2 * 100:.1f} points wide at {H} days, " if prim is not None else "**Low power.** Out-of-sample intervals are wide, ")
         + "so an edge of a few tenths of a percent could not be detected either way. 'Not shown' is not 'absent'.",
-        "**Coverage.** 59 of 60 stocks: ROG.SW (Roche) has no data at Yahoo. The exchange cross-check (M2) covered about three months of unadjusted closes for sample tickers; dividend adjustment and older history were not checked.",
-        "**Simplifications.** Costs are one flat figure even though dip days usually have wider spreads (the 4× column partly covers that). The worst-dip-after-entry numbers use closes only, not intraday lows. A 21-bar cooldown means events are at least 22 bars apart.",
+        cov + " The exchange cross-check (M2) covered about three months of unadjusted closes for sample tickers; dividend adjustment and older history were not checked.",
+        f"**Simplifications.** Costs are one flat figure even though dip days usually have wider spreads (the 4× column partly covers that). The worst-dip-after-entry numbers use closes only, not intraday lows. A {bt.cooldown_days}-bar cooldown means events in the same stock are at least {bt.cooldown_days + 1} bars apart.",
     ]:
         w(f"- {t}")
     w("")

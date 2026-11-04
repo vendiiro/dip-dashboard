@@ -1,6 +1,7 @@
 """Feature experiment: causal features, planted effect found OOS, null not found, in-sample only fixes sign and cut points."""
 import numpy as np
 import pandas as pd
+import pytest
 
 from dipdash.feature_experiment import (FAMILY, Settings, compute_features, demeaned_target, evaluate_features, freeze_spec,
                                         holm, mde, month_bootstrap, spearman, tercile_edges)
@@ -112,6 +113,35 @@ def test_in_sample_only_fixes_sign_and_cutpoints():
     assert np.allclose(a[["est", "lo", "hi"]].to_numpy(float), b[["est", "lo", "hi"]].to_numpy(float), equal_nan=True)
     x = np.arange(90.0)
     assert tercile_edges(x) == tercile_edges(np.concatenate([x, [1e9]])[:90])
+
+
+def test_holm_known_answers():
+    # unsorted input; hand-computed: sorted .005 .01 .03 .04 -> x4 x3 x2 x1 = .02 .03 .06 .04 -> running max .02 .03 .06 .06
+    rej, adj = holm([0.01, 0.04, 0.03, 0.005], alpha=0.05)
+    assert np.allclose(adj, [0.03, 0.06, 0.06, 0.02]) and list(rej) == [True, False, False, True]
+    rej, adj = holm([0.01, 0.01, 0.01])                                   # ties
+    assert np.allclose(adj, 0.03) and rej.all()
+    rej, adj = holm([0.04], alpha=0.05)                                   # m = 1: unchanged
+    assert np.allclose(adj, [0.04]) and list(rej) == [True]
+    rej, adj = holm([1.0, 1.0, 1.0])                                      # all p = 1: capped at 1, nothing rejected
+    assert np.allclose(adj, 1.0) and not rej.any()
+    rej, adj = holm([0.4, 0.9])                                           # the factor is capped at 1
+    assert np.allclose(adj, [0.8, 0.9]) and not rej.any()
+    rej, adj = holm([])
+    assert len(rej) == 0 and len(adj) == 0
+    rej, adj = holm([0.02, 0.02], alpha=0.04)                             # boundary: adjusted == alpha is rejected
+    assert np.allclose(adj, 0.04) and rej.all()
+
+
+def test_holm_matches_statsmodels():
+    multitest = pytest.importorskip("statsmodels.stats.multitest")
+    rng = np.random.default_rng(3)
+    for m in (1, 2, 7, 40):
+        p = np.round(rng.random(m) ** 3, 3)                               # rounding makes ties likely
+        for alpha in (0.05, 0.10):
+            rej, adj = holm(p, alpha=alpha)
+            r2, a2, _, _ = multitest.multipletests(p, alpha=alpha, method="holm")
+            assert np.allclose(adj, a2) and list(rej) == list(r2)
 
 
 def test_holm_mde_and_bootstrap_basics():

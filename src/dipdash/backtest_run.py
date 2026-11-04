@@ -18,6 +18,7 @@ import pandas as pd
 
 from .backtest import (EU, PERIODS, US, VARIANTS, Cell, add_events, add_peer_returns, add_periods, build_days, run_cells,
                        split_cutoff)
+from .backtest_notes import revisions_for
 from .config import Settings, Stock
 from .validate import validate_prices
 
@@ -46,18 +47,6 @@ def clean_bars(close: pd.Series, volume: pd.Series | None) -> tuple[pd.Series, i
     return c[keep], int((~keep).sum())
 
 
-REVISIONS = [
-    "Run 1 (spec 90205cfc6da3a007) was a full run that included the out-of-sample primary cell, so the freeze is 'before the first run', not before anyone saw a number. "
-    "Its spec file was overwritten by the next run (only the hash survives in trials.csv); specs are now archived by hash.",
-    "Placebo: the independent same-stock same-year draw ignores that events share dates and gave p = 0.002 beside an interval that included zero. "
-    "A date-shift placebo that moves all events by one common lag replaced it; the independent one stays in results.csv as 'placebo_*'. This lowered significance.",
-    "Baseline and placebo days must have a computable signal (252 bars of history); before, a stock's first year counted as 'non-dip'. No predictable direction; the primary cell did not move.",
-    "92 zero-volume bars were removed before the run (91 exchange-holiday placeholders and one corrupt price). They were all in sample.",
-    "Later runs with the same analysis (same numbers) only changed report charts and wording, so trials.csv shows several runs per spec.",
-    "Found by the independent review and NOT acted on in the numbers: one more bad price (KNEBV.HE 2025-07-29) creates one false out-of-sample event; removing it moves the primary excess from +0.2660% to +0.2667%.",
-]
-
-
 def freeze_spec(s: Settings, universe: list[Stock], data_meta: dict, calendar) -> dict:
     """Everything that defines the test, with a hash. Built from inputs only; no returns are involved."""
     bt = s.backtest
@@ -79,7 +68,7 @@ def freeze_spec(s: Settings, universe: list[Stock], data_meta: dict, calendar) -
                       "peers: mean of all other universe stocks the same signal date",
                       "date-shift placebo: all events moved by one common random lag of 70-400 bars, paired comparison (keeps clusters)",
                       "independent placebo: same stock, random non-dip day of the same year (ignores clustering; reference only)"],
-        "revisions_after_first_look": REVISIONS,
+        "revisions_after_first_look": [],                                                  # filled from backtest_notes once the hash is known
         "stress": {"definition": "regional index closes >= stress_drawdown below its trailing stress_window-bar high", "drawdown": bt.stress_drawdown, "window": bt.stress_window},
         "uncertainty": {"method": "bootstrap resampling calendar months", "draws": bt.bootstrap_draws, "level": bt.ci_level, "placebo_draws": bt.placebo_draws, "seed": bt.seed},
         "primary_hypothesis": PRIMARY_TEXT, "primary_cell": PRIMARY,
@@ -89,7 +78,20 @@ def freeze_spec(s: Settings, universe: list[Stock], data_meta: dict, calendar) -
     }
     notes = {"revisions_after_first_look", "sample_notes"}                                 # descriptive text must not change the identity of the analysis
     spec["spec_hash"] = hashlib.sha256(json.dumps({k: v for k, v in spec.items() if k not in notes}, sort_keys=True, default=str).encode()).hexdigest()[:16]
+    spec["revisions_after_first_look"] = revisions_for(spec["spec_hash"])               # notes for exactly this hash; none for a new spec
     return spec
+
+
+def primary_history(path: Path) -> list[dict]:
+    """The primary cell as logged in every run in trials.csv: run_at, spec_hash, n, ex_own. Used so the report only says
+    'identical in every run' when the log shows it."""
+    if not path.exists():
+        return []
+    log = pd.read_csv(path)
+    if "primary" not in log.columns:
+        return []
+    prim = log[log["primary"].astype(str).str.lower() == "true"]
+    return [{"run_at": r["run_at"], "spec_hash": r["spec_hash"], "n": int(r["n"]), "ex_own": float(r["ex_own"])} for _, r in prim.iterrows()]
 
 
 def append_trials(path: Path, spec: dict, results: pd.DataFrame, run_at: str) -> None:
@@ -149,4 +151,4 @@ def run_backtest(prices: dict, index_close: dict, universe: list[Stock], quality
     append_trials(tpath, spec, results, run_at)
     trial_runs = int(pd.read_csv(tpath)["run_at"].nunique())
     return {"spec": spec, "days": days, "results": results, "validation": validation, "cutoff": cutoff, "run_at": run_at,
-            "n_series": len(prices), "trial_runs": trial_runs}
+            "n_series": len(prices), "trial_runs": trial_runs, "primary_history": primary_history(tpath)}

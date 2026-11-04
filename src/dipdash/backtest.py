@@ -231,7 +231,8 @@ def date_shift_placebo(rows: np.ndarray, fwd: np.ndarray, tstart: np.ndarray, te
     (70 to 400 bars, either direction) and reads each stock's forward return at the shifted bar (F, NaN where not eligible).
     Crashes and rebounds therefore stay clustered, unlike independent random days, which understate the noise.
     Per draw the events' own mean is taken over the same events that found a valid shifted day, so the comparison is paired.
-    p = share of draws where the shifted mean is at least the events' mean."""
+    p = share of draws where the shifted mean is at least the events' mean. `shift_lags` = number of distinct lags among the kept draws
+    (at most 2 * (hi - lo + 1)); the p-value cannot be finer than the draws and lags allow."""
     rng = np.random.default_rng(seed)
     cand = np.concatenate([np.arange(-hi, -lo + 1), np.arange(lo, hi + 1)])
     delta = rng.choice(cand, size=draws)
@@ -252,7 +253,8 @@ def date_shift_placebo(rows: np.ndarray, fwd: np.ndarray, tstart: np.ndarray, te
         return {}
     o, p = obs_m[keep], pla_m[keep]
     out = {"shift_p": float((1 + (p >= o).sum()) / (keep.sum() + 1)), "shift_excess": float((o - p).mean()),
-           "shift_draws": int(keep.sum()), "shift_mean": float(p.mean())}
+           "shift_draws": int(keep.sum()), "shift_mean": float(p.mean()),
+           "shift_lags": int(len(np.unique(delta[keep])))}                              # distinct lags actually used: the placebo's resolution
     if with_draws:
         out["placebo_minus_events"] = p - o
     return out

@@ -98,10 +98,17 @@ def month_bootstrap(stat_fn, arrays: list[np.ndarray], months: np.ndarray, draws
 
 
 def holm(p: list[float], alpha: float = ALPHA) -> tuple[np.ndarray, np.ndarray]:
-    """Holm step-down adjusted p-values and reject flags (statsmodels)."""
-    from statsmodels.stats.multitest import multipletests
-    rej, adj, _, _ = multipletests(np.asarray(p, dtype=float), alpha=alpha, method="holm")
-    return rej, adj
+    """Holm step-down adjusted p-values and reject flags. Sort ascending; adjusted_(i) = running max of min(1, (m - i + 1) * p_(i));
+    map back to the input order; reject where adjusted <= alpha. Matches statsmodels' method='holm' (checked in the tests)."""
+    p = np.asarray(p, dtype=float)
+    m = len(p)
+    if m == 0:
+        return np.zeros(0, dtype=bool), np.zeros(0)
+    order = np.argsort(p, kind="stable")
+    stepped = np.minimum(1.0, (m - np.arange(m)) * p[order])
+    adj = np.empty(m)
+    adj[order] = np.maximum.accumulate(stepped)
+    return adj <= alpha, adj
 
 
 def mde(lo: float, hi: float, level: float = 0.90, alpha: float = ALPHA, power: float = 0.80) -> float:

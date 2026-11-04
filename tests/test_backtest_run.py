@@ -130,7 +130,7 @@ def test_the_frozen_spec_records_the_revisions_and_both_placebos():
     prices, ix, uni, q, s = synthetic()
     cal = sorted({d for c in prices.values() for d in c.index})
     spec = freeze_spec(s, uni, META, cal)
-    assert len(spec["revisions_after_first_look"]) >= 3
+    assert spec["revisions_after_first_look"] == []                         # a new spec never inherits another spec's history
     assert any("date-shift" in b for b in spec["baselines"]) and any("independent" in b for b in spec["baselines"])
     assert spec["spec_hash"] != "90205cfc6da3a007"
 
@@ -192,3 +192,94 @@ def test_a_trial_log_with_an_older_column_layout_is_set_aside_not_mixed(tmp_path
     assert "group" in fresh.columns and "abc" not in set(fresh["spec_hash"])
     older = list(tmp_path.glob("trials_older_layout_*.csv"))
     assert len(older) == 1 and "abc" in older[0].read_text()                    # the earlier history is kept
+
+
+# ---------------------------------------------------------------- RES-7: no hand-typed numbers in the report
+OLD_LITERALS = ("0.2660", "1,504", "660 distinct", "ROG.SW", "KNEBV", "NOVO-B", "59 of 60", "Roche", "back to 2010")
+CH = {"distribution": "d.png", "forest": "f.png"}
+
+
+def test_report_has_no_literals_from_the_published_run_and_shows_this_runs_numbers(tmp_path):
+    prices, ix, uni, q, s = synthetic(effect=0.006)
+    run = run_backtest(prices, ix, uni, q, s, tmp_path / "r", META)
+    text = render_report(run, s, CH)
+    for lit in OLD_LITERALS:
+        assert lit not in text, lit
+    prim = run["results"].query("variant == 'V1_price_only' and horizon == 21 and group == 'All' and period == 'OOS'").iloc[0]
+    assert f"{int(prim['n']):,} events" in text
+    assert f"{len(prices)} of {len(uni)}" not in text and f"All {len(uni)} stocks have price data" in text    # synthetic: nothing missing
+    assert f"{int(prim['shift_lags']):,} distinct lags were drawn" in text
+    assert f"{s.backtest.cooldown_days}-bar cooldown" in text and f"{s.backtest.ci_level:.0%} bootstrap intervals" in text
+    assert "No review is recorded for spec " + run["spec"]["spec_hash"] in text
+    assert "No changes after the first look are recorded" in text
+    assert "left uncorrected" not in text                                         # old disclosure only appears next to the review it refers to
+
+
+def test_placebo_reports_how_many_distinct_lags_it_used(tmp_path):
+    prices, ix, uni, q, s = synthetic()
+    run = run_backtest(prices, ix, uni, q, s, tmp_path / "r", META)
+    lags = run["results"]["shift_lags"].dropna()
+    assert len(lags) and (lags >= 1).all() and (lags <= 2 * (400 - 70 + 1)).all()
+    assert "shift_lags" in pd.read_csv(tmp_path / "r" / "results.csv").columns
+
+
+def test_missing_tickers_in_the_spec_are_named_and_counted(tmp_path):
+    prices, ix, uni, q, s = synthetic()
+    dropped = uni[-1].ticker
+    prices.pop(dropped)
+    run = run_backtest(prices, ix, uni, q, s, tmp_path / "r", {**META, "missing_tickers": [dropped]})
+    text = render_report(run, s, CH)
+    assert f"{len(prices)} of {len(uni)} stocks: {dropped} had no usable price data" in text
+
+
+def test_unknown_hash_prints_no_review_and_never_inherits_old_text():
+    from dipdash.backtest_notes import NOTES, REVIEWED_SPEC, notes_for, revisions_for
+    assert notes_for("0123456789abcdef") == {} and revisions_for("0123456789abcdef") == []
+    assert REVIEWED_SPEC in NOTES and NOTES[REVIEWED_SPEC]["review"]
+
+
+def test_notes_for_a_known_hash_are_printed_with_the_not_acted_on_disclosure_and_the_quoted_primary_is_checked(tmp_path, monkeypatch):
+    import dipdash.backtest_notes as bn
+    prices, ix, uni, q, s = synthetic(effect=0.006)
+    run0 = run_backtest(prices, ix, uni, q, s, tmp_path / "a", META)
+    h = run0["spec"]["spec_hash"]
+    prim = run0["results"].query("variant == 'V1_price_only' and horizon == 21 and group == 'All' and period == 'OOS'").iloc[0]
+    notes = {h: {"revisions": ["Test revision one.", "Test revision two NOT acted on."], "review": "Test review text.",
+                 "data_notes": ["Test data note."], "quoted": {"primary_ex_own": float(prim["ex_own"]), "primary_n": int(prim["n"])}}}
+    monkeypatch.setattr(bn, "NOTES", notes)
+    run = run_backtest(prices, ix, uni, q, s, tmp_path / "b", META)
+    assert run["spec"]["spec_hash"] == h and run["spec"]["revisions_after_first_look"] == notes[h]["revisions"]
+    run["primary_history"] = [{"run_at": "x", "spec_hash": h, "n": int(prim["n"]), "ex_own": float(prim["ex_own"])}] * 2
+    text = render_report(run, s, CH)
+    assert "Test review text." in text and "Test revision two NOT acted on." in text and "left uncorrected" in text
+    assert "identical in every logged run" in text and f"{float(prim['ex_own']):+.4%}" in text
+    assert "**Check:**" not in text                                                     # quoted figure agrees with the run
+    notes[h]["quoted"] = {"primary_ex_own": float(prim["ex_own"]) + 0.01, "primary_n": int(prim["n"])}
+    assert "**Check:** The recorded notes quote a primary result" in render_report(run, s, CH)
+    run["primary_history"][1] = {**run["primary_history"][0], "n": int(prim["n"]) + 1}
+    assert "identical in every logged run" not in render_report(run, s, CH)
+
+
+def test_editing_a_note_does_not_change_the_spec_hash(monkeypatch):
+    import dipdash.backtest_notes as bn
+    prices, ix, uni, q, s = synthetic()
+    cal = sorted({d for c in prices.values() for d in c.index})
+    h = freeze_spec(s, uni, META, cal)["spec_hash"]
+    monkeypatch.setattr(bn, "NOTES", {h: {"revisions": ["a"]}})
+    a = freeze_spec(s, uni, META, cal)
+    monkeypatch.setattr(bn, "NOTES", {h: {"revisions": ["a", "b", "an edited note"], "review": "changed"}})
+    b = freeze_spec(s, uni, META, cal)
+    assert a["spec_hash"] == b["spec_hash"] == h and a["revisions_after_first_look"] != b["revisions_after_first_look"]
+
+
+def test_the_recorded_notes_quote_the_published_sample_run():
+    """The review text in backtest_notes quotes +0.2660% and n = 1,504; they must agree with the committed sample results."""
+    from pathlib import Path
+    from dipdash.backtest_notes import NOTES, REVIEWED_SPEC
+    sample = Path(__file__).resolve().parents[1] / "docs" / "sample-output" / "backtest"
+    if not (sample / "results.csv").exists() or json.loads((sample / "spec.json").read_text())["spec_hash"] != REVIEWED_SPEC:
+        pytest.skip("sample output for the reviewed spec is not present")
+    r = pd.read_csv(sample / "results.csv").query("variant == 'V1_price_only' and horizon == 21 and group == 'All' and period == 'OOS'").iloc[0]
+    q = NOTES[REVIEWED_SPEC]["quoted"]
+    assert int(r["n"]) == q["primary_n"] and r["ex_own"] == pytest.approx(q["primary_ex_own"], abs=5e-7)
+    assert f"{q['primary_ex_own']:+.4%}" in NOTES[REVIEWED_SPEC]["review"]
