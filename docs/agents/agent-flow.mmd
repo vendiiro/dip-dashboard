@@ -1,0 +1,23 @@
+%%{init: {'theme':'base','themeVariables':{'fontFamily':'Arial','fontSize':'16px','primaryTextColor':'#141821','textColor':'#141821','lineColor':'#4a5263','edgeLabelBackground':'#eef0f4'},'themeCSS':'.edgeLabel, .edgeLabel span, .edgeLabel p, .label foreignObject div { color:#141821 !important; fill:#141821 !important; } .edgeLabel rect { fill:#eef0f4 !important; }'}}%%
+flowchart TB
+  DE["data-engineer<br/><i>clean prices + data checks</i>"] --> IN
+  UC["universe-curator<br/><i>which stocks</i>"] --> IN
+  SL["screen-logic<br/><i>flags + quality scores</i>"] --> IN
+  IN["integrator<br/><i>builds the payload = the contract</i>"] --> UB["ui-builder<br/><i>the page</i>"]
+  BA["backtest-analyst<br/><i>reports</i>"]
+  UB -- "every page change" --> UR["ui-reviewer 🔍"]
+  UB -- "reader-facing text" --> WG["wording-guard 🔍"]
+  IN -- "digest + alert text" --> WG
+  SL -- "every rule change" --> SR["stats-reviewer 🔍"]
+  BA -- "every report" --> SR
+  UR -- "findings" --> O
+  WG -- "findings" --> O
+  SR -- "verdict" --> O
+  O["orchestrator<br/><i>merges handoffs · updates BACKLOG</i>"] -- "decision-log lines" --> DS["docs-steward"]
+  O -- "full test run" --> TE["test-engineer · CI"]
+  classDef build fill:#ffffff,color:#141821,stroke:#4a5263
+  classDef review fill:#fbf0d9,color:#4d3300,stroke:#855500,stroke-dasharray:4 3
+  classDef root fill:#4a3fb5,color:#ffffff,stroke:#4a3fb5
+  class DE,UC,SL,IN,UB,BA,DS,TE build
+  class UR,SR,WG review
+  class O root

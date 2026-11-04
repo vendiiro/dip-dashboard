@@ -1,0 +1,35 @@
+%%{init: {'theme':'base','themeVariables':{'fontFamily':'Arial','fontSize':'16px','primaryTextColor':'#141821','lineColor':'#4a5263','edgeLabelBackground':'#ffffff','clusterBkg':'#f6f7f9','clusterBorder':'#c4cad4'}}}%%
+flowchart LR
+  O["<b>orchestrator</b><br/>plans waves · dispatches · merges<br/><i>BACKLOG.md · AGENTS.md</i>"]
+
+  O --> FE["<b>Dashboard</b>"]
+  O --> PL["<b>Pipeline &amp; contract</b>"]
+  O --> DA["<b>Data</b>"]
+  O --> RS["<b>Research</b>"]
+  O --> PF["<b>Platform</b>"]
+
+  FE --> UB["ui-builder<br/><i>template.html · browser tests</i>"]
+  FE --> UR["ui-reviewer 🔍<br/><i>screenshots · axe · critique</i>"]
+
+  PL --> IN["integrator<br/><i>cli · dashboard payload · digest · alerts</i>"]
+
+  DA --> DE["data-engineer<br/><i>fetch · cache · FX · earnings · validation</i>"]
+  DA --> UC["universe-curator<br/><i>universe.csv · ticker checks</i>"]
+
+  RS --> SL["screen-logic<br/><i>metrics · quality · dip rules · settings</i>"]
+  RS --> BA["backtest-analyst<br/><i>event study · experiments · reports</i>"]
+  RS --> SR["stats-reviewer 🔍<br/><i>hygiene checklist · verdict</i>"]
+
+  PF --> TE["test-engineer<br/><i>CI · pytest · deps · ownership test</i>"]
+  PF --> OR["ops-runner<br/><i>nightly run · snapshots · daily review</i>"]
+  PF --> DS["docs-steward<br/><i>README · CLAUDE.md · decision log</i>"]
+  PF --> WG["wording-guard 🔍<br/><i>no advice wording · plain text</i>"]
+
+  classDef root fill:#4a3fb5,color:#fff,stroke:#4a3fb5
+  classDef group fill:#e9e7f8,color:#141821,stroke:#c4cad4
+  classDef build fill:#ffffff,color:#141821,stroke:#4a5263
+  classDef review fill:#fbf0d9,color:#4d3300,stroke:#855500,stroke-dasharray:4 3
+  class O root
+  class FE,PL,DA,RS,PF group
+  class UB,IN,DE,UC,SL,BA,TE,OR,DS build
+  class UR,SR,WG review
