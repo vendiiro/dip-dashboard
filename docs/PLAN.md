@@ -1,11 +1,12 @@
 # Build plan: daily quality-dip dashboard
 
 Status: M0 approved 2026-11-02. M1 approved. M2 approved. M3 approved. M4 approved. M5 done and awaiting Iiro's review. All five milestones are built; Windows scheduling is untested.
+Work after M5 is tracked in `docs/BACKLOG.md`; this file is the original build record.
 Every milestone ends with a stop: I show the result, you give feedback, then I continue.
 
 ## 1. The idea in one paragraph
-Every night after the US close (00:15 Helsinki, Tue-Sat), a script pulls daily prices for ~60 US, European and
-Nordic blue chips. It flags stocks that fell sharply (1-day, 5-day or from their 20-day high). It then sorts those
+Every night after the US close (00:15 Helsinki, Tue-Sat), a script pulls daily prices for the US, European and
+Nordic blue chips in `config/universe.csv` (about 60 at M0; 348 on 2026-11-04). It flags stocks that fell sharply (1-day, 5-day or from their 20-day high). It then sorts those
 flags by a simple quality score built from fundamentals (ROE, margin, debt, free cash flow, growth, size). It also
 warns when a drop looks like a "falling knife" (long downtrend, far below the 52-week high). The result is a single
 self-contained `dashboard.html` plus a short `digest.md`. It answers "what is the situation today, and which names are
@@ -52,7 +53,7 @@ tests/            pytest on synthetic series (known answers)
 
 ## 5. Skills: chosen and skipped
 - **Use:** `dashboard-design` (project rules for layout and verification), `dataviz` (chart forms, colour, hover), `backtest-hygiene` (mandatory for M4), `openbb-data-pull` (M2), `data:validate-data` and `data:statistical-analysis` (M2, M4), `engineering:testing-strategy` (M1).
-- **Skipped:** `data:build-dashboard` (we already have a template shell and stricter project rules); TextToQuant (your plan covers crypto only, so it can't backtest equities); `frontend-design` (not installed in this session).
+- **Skipped:** `data:build-dashboard` (we already have a template shell and stricter project rules); TextToQuant (your plan covers crypto only, so it can't backtest equities); `frontend-design` (not installed in this session, as of M0, 2026-11-02).
 
 ## 6. Decisions I need from you (answer while reviewing the demo)
 1. **Colour for up/down.** The demo uses blue = up and red = down, always with a +/− sign. That pair is safer for colour-blind readers than red/green. Keep it, or switch to classic green/red?

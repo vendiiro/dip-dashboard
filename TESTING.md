@@ -7,8 +7,8 @@ never advice. Please try to break it.
 ## What you are testing, in one minute
 | Piece | What it does | Where to look |
 |---|---|---|
-| Screener | Pulls daily prices for 60 stocks, flags dips (1 day ≤ −4%, 5 days ≤ −7%, or ≥ 12% below the 20-day high), scores quality from six fundamentals checks, marks falling knives | `src/dipdash/` |
-| Dashboard | One self-contained HTML page: filters, sortable table, row details with a 1-year chart, context charts, data-quality panel | `output/dashboard.html` after a run, or `docs/sample-output/dashboard-demo.html` |
+| Screener | Pulls daily prices for every stock in `config/universe.csv`, flags dips (1 day ≤ −4%, 5 days ≤ −7%, or ≥ 12% below the 20-day high), scores quality from six fundamentals checks, marks falling knives | `src/dipdash/` |
+| Dashboard | One self-contained HTML page: filters, sortable table, row details with a 1-year chart, context charts, data-quality panel | `output/dashboard.html` after a run, or the canonical demo page `docs/sample-output/dashboard-demo.html` (`docs/demo/` is the frozen M0 mock) |
 | Digest | Plain-language daily summary: data quality first, market context, candidates with "flagged because", what changed | `output/digest.md`, example in `docs/sample-output/` |
 | Backtest | Event study of the rule on 2010-2026 history with costs, baselines, an untouched out-of-sample period and clustered confidence intervals | `python scripts/run_backtest.py`, report in `docs/sample-output/backtest/report.md` |
 | Nightly run | `run_daily.bat` + Task Scheduler (Tue-Sat 00:15) | `scripts/`, `START_HERE.md` section 4 |
@@ -18,7 +18,7 @@ never advice. Please try to break it.
 The report lists why you should also doubt the *positive* readings (survivorship, one sample, low power). Read it critically.
 
 ## Level 1: look only (5 minutes, nothing to install)
-1. Open `docs/sample-output/dashboard-demo.html` in a browser (synthetic data). Click rows, change filters, sort columns, resize to phone width, switch your system to dark mode.
+1. Open `docs/sample-output/dashboard-demo.html` in a browser (the canonical demo page, synthetic data). Click rows, change filters, sort columns, resize to phone width, switch your system to dark mode.
 2. Read `docs/sample-output/backtest/report.md` (charts are next to it). Read "How much to trust this" and "Changes after the first look" first.
 3. Read `docs/sample-output/digest_example_midsession_2026-11-02.md` and `docs/decisions.md` (every decision, correction and known gap, dated).
 
@@ -31,7 +31,7 @@ pip install pandas numpy pytest yfinance matplotlib
 python -m pytest -q
 python src/dip_screener.py --demo --out output/demo.html --history
 ```
-Expected: all tests pass (about 270; 15 more browser tests are skipped unless Playwright and a Chromium are installed), then `output/demo.html`, `output/digest.md`, `output/data_quality.demo.csv`, and dated copies in `output/history/`.
+Expected: the full suite passes (browser tests skip unless Playwright and a Chromium are installed), then `output/demo.html`, `output/digest.md`, `output/data_quality.demo.csv`, and dated copies in `output/history/`.
 `requirements.txt` also lists `openbb` (about 1 GB, only used for the second-source price cross-check) and `playwright` (browser tests and screenshots). Both are optional:
 without `openbb` the live run prints "Cross-check skipped" and carries on (the digest then says no cross-check was run).
 
@@ -40,12 +40,12 @@ without `openbb` the live run prints "Cross-check skipped" and carries on (the d
 python src/dip_screener.py --out output/dashboard.html --history --open
 python scripts/run_backtest.py
 ```
-Expected: about 59 of 60 stocks (Roche, `ROG.SW`, has no data at the source), about a minute; the backtest takes about 25 seconds with cached history (`--refresh` downloads a new one).
+Expected: nearly every stock; a few have no data at the source (for example Roche, `ROG.SW`) and are listed in `output/data_quality.csv`. Run time for the full universe is not measured yet; the backtest takes about 25 seconds with cached history (`--refresh` downloads a new one).
 **Run the screener after the market close.** Run mid-session it uses still-forming bars for open exchanges and the digest warns about it.
 
 ## What I most want you to try to break
 1. **Wrong numbers.** Pick three flagged stocks in the digest and check their 1-day and 5-day moves against another source (your broker, any finance site). Differences of more than rounding are bugs or data problems.
-2. **Failure handling.** Switch the network off partway through a live run, or run with a broken connection. Expected: the run exits with code 2, prints `FAILED: only N of 60 stocks could be screened`, and **yesterday's dashboard, digest, data-quality log and history are left exactly as they were**. A run that quietly replaces good files with a half-empty dashboard is a bug.
+2. **Failure handling.** Switch the network off partway through a live run, or run with a broken connection. Expected: the run exits with code 2, prints `FAILED: only N of M stocks could be screened`, and **yesterday's dashboard, digest, data-quality log and history are left exactly as they were**. A run that quietly replaces good files with a half-empty dashboard is a bug.
 3. **The dashboard.** Keyboard only (Tab, Enter, Space); phone width; light and dark; search for nothing; set filters so nothing matches; a very long company name. Anything clipped, unreadable, or not reachable by keyboard is a bug.
 4. **Wording.** Does anything read like advice ("buy", "sell", a price target, "will recover")? It should not. Is anything the screener says stronger than its data supports?
 5. **The backtest.** Look for look-ahead (anything from after the signal day used to decide a signal, filter, baseline or the in-sample/out-of-sample split), selection after seeing results, and survivorship. `output/backtests/<date>/spec.json` is what was frozen; `events.csv` lists every event with its returns, so you can recompute a few by hand (entry is the *next* close after the signal day).
