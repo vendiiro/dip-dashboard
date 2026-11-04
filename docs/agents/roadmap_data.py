@@ -1,4 +1,4 @@
-"""Single source for docs/ROADMAP.md and docs/agents/roadmap-tree.png. Edit here, then run:
+"""Single source for docs/ROADMAP.md and docs/agents/roadmap-tree.png. Edit here, then run (add --png to redraw the image):
     python docs/agents/roadmap_data.py   (writes the Markdown; the image is rendered from the same data)
 """
 # skill short names -> what they are
@@ -99,7 +99,79 @@ def markdown() -> str:
     out += [f"- `{k}`: {v}" for k, v in SKILLS.items()]
     return "\n".join(out) + "\n"
 
+PROJECT_SKILLS = {"dashboard-design", "openbb-data-pull", "backtest-hygiene"}
+
+
+def html(plans_dir) -> str:
+    """The roadmap tree as one HTML page (rendered to agents/roadmap-tree.png with --png). Plain stdlib, no dependencies."""
+    from html import escape as e
+    css = """
+    body{font:15px/1.4 Arial,Helvetica,sans-serif;color:#141821;background:#fff;margin:24px;width:1900px}
+    h1{font-size:26px;margin:0 0 4px} .sub{color:#4a5263;margin:0 0 16px}
+    .top{display:grid;grid-template-columns:330px repeat(5,1fr);gap:10px;margin-bottom:14px}
+    .orch{background:#4a3fb5;color:#fff;border-radius:10px;padding:14px 16px}
+    .orch b{font-size:18px} .orch .s{font-size:13px;opacity:.95;margin:2px 0 10px}
+    .loop{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+    .loop span{background:#fff;color:#2b2470;font-weight:600;font-size:13px;border-radius:6px;padding:3px 9px}
+    .loop i{font-style:normal;color:#fff}
+    .dec{background:#fdf6e3;border:1.5px dashed #a87400;border-radius:10px;padding:10px 12px;font-size:14px}
+    .dec .u{color:#7a5200;font-size:13px;margin-top:4px}
+    .waves{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;align-items:start}
+    .wh{background:#e9e7f8;border-radius:10px;padding:10px 12px;margin-bottom:8px}
+    .wh b{font-size:17px} .wh div{color:#4a5263;font-size:13.5px}
+    .card{border:1.5px solid #c4cad4;border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#fff}
+    .card.wait{border-style:dashed;border-color:#a87400;background:#fffcf3}
+    .id{font-family:Menlo,Consolas,monospace;font-weight:700;color:#3a2fa0;font-size:14px}
+    .t{margin:3px 0 6px} .r{font-size:13.5px;color:#2d3340} .r b{color:#4a5263;display:inline-block;width:52px}
+    .sk{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+    .sk span{font-size:12px;border-radius:5px;padding:2px 7px;background:#eef0f4;color:#2d3340}
+    .sk span.p{background:#e3f3e8;color:#0d5a24}
+    .meta{font-size:13px;color:#4a5263;margin-top:6px} .w{color:#7a5200;font-weight:700}
+    .ok{color:#0d5a24;font-weight:700}
+    .foot{color:#4a5263;font-size:13.5px;margin-top:12px}"""
+    out = [f"<!doctype html><meta charset=utf-8><style>{css}</style>",
+           "<h1>Roadmap: required steps, subagents and skills</h1>",
+           "<p class=sub>Every card runs the same loop. Green skills are the project's own; grey are plugin skills. "
+           "Dashed cards wait for one of your decisions. ✓ plan ready = a written plan in docs/plans/wave-1/.</p><div class=top>",
+           "<div class=orch><b>orchestrator</b><div class=s>main session · plans waves, dispatches, merges</div><div class=loop>"
+           "<span>plan</span><i>→</i><span>build</span><i>→</i><span>review</span><i>→</i><span>merge</span></div></div>"]
+    out += [f"<div class=dec><b>{d}</b> {e(t)}<div class=u>→ unblocks {e(u)}</div></div>" for d, t, u in DECISIONS]
+    out.append("</div><div class=waves>")
+    for wave, items in WAVES:
+        num, _, desc = wave.partition(" · ")
+        out.append(f"<div><div class=wh><b>{e(num)}</b><div>{e(desc)}</div></div>")
+        for i, t, b, r, sk, dep, dec in items:
+            planned = wave.startswith("Wave 1") and (plans_dir / f"{i.split(' ')[0]}.md").exists()
+            chips = "".join(f"<span class={'p' if s in PROJECT_SKILLS else 'g'}>{e(s)}</span>" for s in sk)
+            meta = []
+            if dep:
+                meta.append(f"after {e(dep)}")
+            if planned:
+                meta.append("<span class=ok>✓ plan ready</span>")
+            if dec:
+                meta.append(f"<span class=w>⏸ waits for {dec}</span>")
+            out.append(f"<div class='card{' wait' if dec else ''}'><div class=id>{e(i)}</div><div class=t>{e(t)}</div>"
+                       f"<div class=r><b>build</b>{e(b)}</div><div class=r><b>review</b>{e(r)}</div>"
+                       f"<div class=sk>{chips}</div>" + (f"<div class=meta>{' · '.join(meta)}</div>" if meta else "") + "</div>")
+        out.append("</div>")
+    out.append("</div><p class=foot>plan = read-only planner applying CLAUDE.md Rule 1 · build = owner agent (→ = handed on in that order) · "
+               "review = read-only agent that did not write the change · merge = full test run + backlog update</p>")
+    return "".join(out)
+
+
 if __name__ == "__main__":
+    import sys
     from pathlib import Path
-    Path(__file__).resolve().parents[1].joinpath("ROADMAP.md").write_text(markdown(), encoding="utf-8")
+    docs = Path(__file__).resolve().parents[1]
+    docs.joinpath("ROADMAP.md").write_text(markdown(), encoding="utf-8")
     print("wrote docs/ROADMAP.md")
+    if "--png" in sys.argv:                      # needs Playwright + Chromium (dev only)
+        from playwright.sync_api import sync_playwright
+        page_html = html(docs / "plans" / "wave-1")
+        with sync_playwright() as p:
+            b = p.chromium.launch()
+            pg = b.new_page(viewport={"width": 1950, "height": 1000}, device_scale_factor=1.5)
+            pg.set_content(page_html)
+            pg.screenshot(path=str(docs / "agents" / "roadmap-tree.png"), full_page=True)
+            b.close()
+        print("wrote docs/agents/roadmap-tree.png")
