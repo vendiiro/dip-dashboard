@@ -1,0 +1,290 @@
+ticker,name,region,sector
+AAPL,Apple,US,Tech
+MSFT,Microsoft,US,Tech
+GOOGL,Alphabet,US,Communication
+AMZN,Amazon,US,Consumer disc.
+META,Meta Platforms,US,Communication
+NVDA,Nvidia,US,Tech
+BRK-B,Berkshire Hathaway,US,Financials
+JNJ,Johnson & Johnson,US,Health care
+PG,Procter & Gamble,US,Staples
+KO,Coca-Cola,US,Staples
+PEP,PepsiCo,US,Staples
+V,Visa,US,Financials
+MA,Mastercard,US,Financials
+UNH,UnitedHealth,US,Health care
+JPM,JPMorgan Chase,US,Financials
+XOM,Exxon Mobil,US,Energy
+CVX,Chevron,US,Energy
+WMT,Walmart,US,Staples
+COST,Costco,US,Staples
+HD,Home Depot,US,Consumer disc.
+MCD,McDonald's,US,Consumer disc.
+DIS,Disney,US,Communication
+NKE,Nike,US,Consumer disc.
+ADBE,Adobe,US,Tech
+ORCL,Oracle,US,Tech
+CSCO,Cisco,US,Tech
+INTC,Intel,US,Tech
+PFE,Pfizer,US,Health care
+MRK,Merck,US,Health care
+ABBV,AbbVie,US,Health care
+LLY,Eli Lilly,US,Health care
+TSLA,Tesla,US,Consumer disc.
+NFLX,Netflix,US,Communication
+ASML.AS,ASML,Europe,Tech
+SAP.DE,SAP,Europe,Tech
+SIE.DE,Siemens,Europe,Industrials
+NESN.SW,Nestle,Europe,Staples
+ROG.SW,Roche,Europe,Health care
+NOVN.SW,Novartis,Europe,Health care
+MC.PA,LVMH,Europe,Consumer disc.
+OR.PA,L'Oreal,Europe,Staples
+AIR.PA,Airbus,Europe,Industrials
+NOKIA.HE,Nokia,Nordic,Tech
+SAMPO.HE,Sampo,Nordic,Financials
+KNEBV.HE,Kone,Nordic,Industrials
+NESTE.HE,Neste,Nordic,Energy
+UPM.HE,UPM-Kymmene,Nordic,Materials
+FORTUM.HE,Fortum,Nordic,Utilities
+STERV.HE,Stora Enso,Nordic,Materials
+WRT1V.HE,Wartsila,Nordic,Industrials
+ERIC-B.ST,Ericsson,Nordic,Tech
+VOLV-B.ST,Volvo,Nordic,Industrials
+ATCO-A.ST,Atlas Copco,Nordic,Industrials
+INVE-B.ST,Investor AB,Nordic,Financials
+HM-B.ST,H&M,Nordic,Consumer disc.
+NOVO-B.CO,Novo Nordisk,Nordic,Health care
+MAERSK-B.CO,A.P. Moller-Maersk,Nordic,Industrials
+DSV.CO,DSV,Nordic,Industrials
+EQNR.OL,Equinor,Nordic,Energy
+DNB.OL,DNB Bank,Nordic,Financials
+AMD,AMD,US,Tech
+AVGO,Broadcom,US,Tech
+QCOM,Qualcomm,US,Tech
+TXN,Texas Instruments,US,Tech
+IBM,IBM,US,Tech
+CRM,Salesforce,US,Tech
+NOW,ServiceNow,US,Tech
+INTU,Intuit,US,Tech
+AMAT,Applied Materials,US,Tech
+MU,Micron,US,Tech
+BAC,Bank of America,US,Financials
+WFC,Wells Fargo,US,Financials
+C,Citigroup,US,Financials
+GS,Goldman Sachs,US,Financials
+MS,Morgan Stanley,US,Financials
+AXP,American Express,US,Financials
+BLK,BlackRock,US,Financials
+SCHW,Charles Schwab,US,Financials
+COF,Capital One,US,Financials
+T,AT&T,US,Communication
+VZ,Verizon,US,Communication
+CMCSA,Comcast,US,Communication
+TMUS,T-Mobile US,US,Communication
+AMGN,Amgen,US,Health care
+GILD,Gilead Sciences,US,Health care
+BMY,Bristol-Myers Squibb,US,Health care
+TMO,Thermo Fisher,US,Health care
+ABT,Abbott,US,Health care
+DHR,Danaher,US,Health care
+MDT,Medtronic,US,Health care
+ISRG,Intuitive Surgical,US,Health care
+CVS,CVS Health,US,Health care
+LOW,Lowe's,US,Consumer disc.
+SBUX,Starbucks,US,Consumer disc.
+BKNG,Booking Holdings,US,Consumer disc.
+TJX,TJX Companies,US,Consumer disc.
+GM,General Motors,US,Consumer disc.
+F,Ford,US,Consumer disc.
+MDLZ,Mondelez,US,Staples
+MO,Altria,US,Staples
+PM,Philip Morris,US,Staples
+CL,Colgate-Palmolive,US,Staples
+CAT,Caterpillar,US,Industrials
+DE,Deere,US,Industrials
+HON,Honeywell,US,Industrials
+UPS,UPS,US,Industrials
+UNP,Union Pacific,US,Industrials
+RTX,RTX,US,Industrials
+LMT,Lockheed Martin,US,Industrials
+GE,GE Aerospace,US,Industrials
+BA,Boeing,US,Industrials
+MMM,3M,US,Industrials
+COP,ConocoPhillips,US,Energy
+SLB,Schlumberger,US,Energy
+LIN,Linde,US,Materials
+NEE,NextEra Energy,US,Utilities
+DUK,Duke Energy,US,Utilities
+SO,Southern Company,US,Utilities
+ALV.DE,Allianz,Europe,Financials
+MBG.DE,Mercedes-Benz,Europe,Consumer disc.
+BMW.DE,BMW,Europe,Consumer disc.
+VOW3.DE,Volkswagen,Europe,Consumer disc.
+BAS.DE,BASF,Europe,Materials
+BAYN.DE,Bayer,Europe,Health care
+DTE.DE,Deutsche Telekom,Europe,Communication
+DB1.DE,Deutsche Boerse,Europe,Financials
+IFX.DE,Infineon,Europe,Tech
+MUV2.DE,Munich Re,Europe,Financials
+ADS.DE,Adidas,Europe,Consumer disc.
+RMS.PA,Hermes,Europe,Consumer disc.
+KER.PA,Kering,Europe,Consumer disc.
+CS.PA,AXA,Europe,Financials
+BNP.PA,BNP Paribas,Europe,Financials
+SAN.PA,Sanofi,Europe,Health care
+TTE.PA,TotalEnergies,Europe,Energy
+SU.PA,Schneider Electric,Europe,Industrials
+AI.PA,Air Liquide,Europe,Materials
+DG.PA,Vinci,Europe,Industrials
+EL.PA,EssilorLuxottica,Europe,Health care
+SAF.PA,Safran,Europe,Industrials
+ENEL.MI,Enel,Europe,Utilities
+ISP.MI,Intesa Sanpaolo,Europe,Financials
+UCG.MI,UniCredit,Europe,Financials
+ENI.MI,Eni,Europe,Energy
+IBE.MC,Iberdrola,Europe,Utilities
+SAN.MC,Banco Santander,Europe,Financials
+BBVA.MC,BBVA,Europe,Financials
+ITX.MC,Inditex,Europe,Consumer disc.
+ABI.BR,AB InBev,Europe,Staples
+INGA.AS,ING Group,Europe,Financials
+AD.AS,Ahold Delhaize,Europe,Staples
+HEIA.AS,Heineken,Europe,Staples
+ADYEN.AS,Adyen,Europe,Financials
+ZURN.SW,Zurich Insurance,Europe,Financials
+UBSG.SW,UBS,Europe,Financials
+CFR.SW,Richemont,Europe,Consumer disc.
+ABBN.SW,ABB,Europe,Industrials
+LONN.SW,Lonza,Europe,Health care
+SREN.SW,Swiss Re,Europe,Financials
+NDA-FI.HE,Nordea,Nordic,Financials
+SEB-A.ST,SEB,Nordic,Financials
+SHB-A.ST,Handelsbanken,Nordic,Financials
+SWED-A.ST,Swedbank,Nordic,Financials
+ASSA-B.ST,Assa Abloy,Nordic,Industrials
+SAND.ST,Sandvik,Nordic,Industrials
+ESSITY-B.ST,Essity,Nordic,Staples
+CARL-B.CO,Carlsberg,Nordic,Staples
+VWS.CO,Vestas,Nordic,Industrials
+TEL.OL,Telenor,Nordic,Communication
+MOWI.OL,Mowi,Nordic,Staples
+YAR.OL,Yara,Nordic,Materials
+SHW,Sherwin-Williams,US,Materials
+ECL,Ecolab,US,Materials
+APD,Air Products,US,Materials
+FCX,Freeport-McMoRan,US,Materials
+NEM,Newmont,US,Materials
+DOW,Dow,US,Materials
+NUE,Nucor,US,Materials
+AEP,American Electric Power,US,Utilities
+D,Dominion Energy,US,Utilities
+EXC,Exelon,US,Utilities
+SRE,Sempra,US,Utilities
+XEL,Xcel Energy,US,Utilities
+PCG,PG&E,US,Utilities
+EOG,EOG Resources,US,Energy
+PSX,Phillips 66,US,Energy
+MPC,Marathon Petroleum,US,Energy
+OXY,Occidental Petroleum,US,Energy
+KMI,Kinder Morgan,US,Energy
+WMB,Williams Companies,US,Energy
+VLO,Valero Energy,US,Energy
+CHTR,Charter Communications,US,Communication
+TTWO,Take-Two Interactive,US,Communication
+PLD,Prologis,US,Real Estate
+AMT,American Tower,US,Real Estate
+EQIX,Equinix,US,Real Estate
+O,Realty Income,US,Real Estate
+SPG,Simon Property Group,US,Real Estate
+PSA,Public Storage,US,Real Estate
+WELL,Welltower,US,Real Estate
+CCI,Crown Castle,US,Real Estate
+ETN,Eaton,US,Industrials
+CSX,CSX,US,Industrials
+NSC,Norfolk Southern,US,Industrials
+FDX,FedEx,US,Industrials
+WM,Waste Management,US,Industrials
+EMR,Emerson Electric,US,Industrials
+ITW,Illinois Tool Works,US,Industrials
+GD,General Dynamics,US,Industrials
+NOC,Northrop Grumman,US,Industrials
+REGN,Regeneron,US,Health care
+VRTX,Vertex Pharmaceuticals,US,Health care
+ZTS,Zoetis,US,Health care
+SYK,Stryker,US,Health care
+BSX,Boston Scientific,US,Health care
+EW,Edwards Lifesciences,US,Health care
+HCA,HCA Healthcare,US,Health care
+ELV,Elevance Health,US,Health care
+ADI,Analog Devices,US,Tech
+LRCX,Lam Research,US,Tech
+KLAC,KLA,US,Tech
+SNPS,Synopsys,US,Tech
+CDNS,Cadence Design Systems,US,Tech
+PANW,Palo Alto Networks,US,Tech
+ACN,Accenture,US,Tech
+ANET,Arista Networks,US,Tech
+ORLY,O'Reilly Automotive,US,Consumer disc.
+MAR,Marriott,US,Consumer disc.
+CMG,Chipotle,US,Consumer disc.
+ROST,Ross Stores,US,Consumer disc.
+LULU,Lululemon,US,Consumer disc.
+DHI,D.R. Horton,US,Consumer disc.
+KMB,Kimberly-Clark,US,Staples
+GIS,General Mills,US,Staples
+KR,Kroger,US,Staples
+STZ,Constellation Brands,US,Staples
+SYY,Sysco,US,Staples
+TGT,Target,US,Staples
+SPGI,S&P Global,US,Financials
+MCO,Moody's,US,Financials
+ICE,Intercontinental Exchange,US,Financials
+CME,CME Group,US,Financials
+PGR,Progressive,US,Financials
+CB,Chubb,US,Financials
+AON,Aon,US,Financials
+PNC,PNC Financial,US,Financials
+MET,MetLife,US,Financials
+AIG,AIG,US,Financials
+SIKA.SW,Sika,Europe,Materials
+GIVN.SW,Givaudan,Europe,Materials
+AKZA.AS,Akzo Nobel,Europe,Materials
+SOLB.BR,Solvay,Europe,Materials
+RWE.DE,RWE,Europe,Utilities
+EOAN.DE,E.ON,Europe,Utilities
+ENGI.PA,Engie,Europe,Utilities
+TRN.MI,Terna,Europe,Utilities
+SRG.MI,Snam,Europe,Utilities
+NTGY.MC,Naturgy,Europe,Utilities
+REP.MC,Repsol,Europe,Energy
+GALP.LS,Galp Energia,Europe,Energy
+ORA.PA,Orange,Europe,Communication
+TEF.MC,Telefonica,Europe,Communication
+PUB.PA,Publicis,Europe,Communication
+TELIA.ST,Telia,Nordic,Communication
+VNA.DE,Vonovia,Europe,Real Estate
+LR.PA,Legrand,Europe,Industrials
+SGO.PA,Saint-Gobain,Europe,Industrials
+DHL.DE,DHL Group,Europe,Industrials
+RHM.DE,Rheinmetall,Europe,Industrials
+PRY.MI,Prysmian,Europe,Industrials
+SKF-B.ST,SKF,Nordic,Industrials
+FRE.DE,Fresenius,Europe,Health care
+SHL.DE,Siemens Healthineers,Europe,Health care
+UCB.BR,UCB,Europe,Health care
+DEMANT.CO,Demant,Nordic,Health care
+COLO-B.CO,Coloplast,Nordic,Health care
+CAP.PA,Capgemini,Europe,Tech
+DSY.PA,Dassault Systemes,Europe,Tech
+RACE.MI,Ferrari,Europe,Consumer disc.
+BN.PA,Danone,Europe,Staples
+CA.PA,Carrefour,Europe,Staples
+UNA.AS,Unilever,Europe,Staples
+BEI.DE,Beiersdorf,Europe,Staples
+HEN3.DE,Henkel,Europe,Staples
+RI.PA,Pernod Ricard,Europe,Staples
+G.MI,Generali,Europe,Financials
+NN.AS,NN Group,Europe,Financials
+KBC.BR,KBC Group,Europe,Financials
+RED.MC,Redeia,Europe,Utilities

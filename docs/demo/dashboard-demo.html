@@ -1,0 +1,662 @@
+<title>Quality-Dip Screen</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a single scanning column. Header strip, then summary tiles, then filters, then the candidate table, then context charts, then definitions. */
+:root{
+  --bg:#f6f7f9; --surface:#ffffff; --sunken:#eef0f4; --line:#dde1e8; --line-strong:#c4cad4;
+  --ink:#141821; --ink-2:#4a5263; --ink-3:#717a8c;
+  --accent:#4a3fb5; --accent-soft:#e9e7f8;
+  --up:#2366c9; --down:#c3372f; --down-soft:#f8e3e1; --neutral-bar:#b9c0cc;
+  --good:#16833a; --warn:#9a6400; --serious:#b8501f; --crit:#c3372f;
+  --good-bg:#e3f3e8; --warn-bg:#fbf0d9; --serious-bg:#fbe7dc; --crit-bg:#f8e3e1;
+  --demo-bg:#fff5d6; --demo-ink:#6b4a00;
+  --f-display:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-data:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#12141a; --surface:#1a1d25; --sunken:#22262f; --line:#2c313c; --line-strong:#3c4250;
+  --ink:#eceef3; --ink-2:#b4bbc8; --ink-3:#8a92a2;
+  --accent:#a69cf2; --accent-soft:#2a2747;
+  --up:#6aa5ff; --down:#ff7a6e; --down-soft:#3a2120; --neutral-bar:#4a5161;
+  --good:#5fcf83; --warn:#f0b54a; --serious:#f28a5a; --crit:#ff7a6e;
+  --good-bg:#18301f; --warn-bg:#33280f; --serious-bg:#38231a; --crit-bg:#3a2120;
+  --demo-bg:#33290c; --demo-ink:#f3d27a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12141a; --surface:#1a1d25; --sunken:#22262f; --line:#2c313c; --line-strong:#3c4250;
+  --ink:#eceef3; --ink-2:#b4bbc8; --ink-3:#8a92a2;
+  --accent:#a69cf2; --accent-soft:#2a2747;
+  --up:#6aa5ff; --down:#ff7a6e; --down-soft:#3a2120; --neutral-bar:#4a5161;
+  --good:#5fcf83; --warn:#f0b54a; --serious:#f28a5a; --crit:#ff7a6e;
+  --good-bg:#18301f; --warn-bg:#33280f; --serious-bg:#38231a; --crit-bg:#3a2120;
+  --demo-bg:#33290c; --demo-ink:#f3d27a; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 var(--f-body);margin:0}
+.wrap{max-width:1240px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:16px}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;letter-spacing:.005em}
+h1{font-size:26px;font-weight:600}
+h2{font-size:18px;font-weight:600}
+h3{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2)}
+.num,td.n,.tile .big{font-family:var(--f-data);font-variant-numeric:tabular-nums}
+.up{color:var(--up)} .down{color:var(--down)} .muted{color:var(--ink-3)}
+a{color:var(--accent)}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.stack{display:flex;flex-direction:column;gap:16px;min-width:0}
+.wrap>*,.stack>*{min-width:0;max-width:100%}
+/* demo banner */
+.demo{background:var(--demo-bg);color:var(--demo-ink);border-radius:8px;padding:8px 12px;font-size:13px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.demo b{font-family:var(--f-display);letter-spacing:.06em;text-transform:uppercase;font-size:12px}
+
+/* header */
+header.top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px 24px;flex-wrap:wrap}
+.meta{display:flex;flex-wrap:wrap;gap:4px 16px;color:var(--ink-2);font-size:13px;margin-top:4px}
+.meta span b{color:var(--ink);font-weight:500}
+.tabs{display:flex;gap:2px;background:var(--sunken);padding:3px;border-radius:8px}
+.tabs button{border:0;background:none;padding:8px 14px;border-radius:6px;cursor:pointer;color:var(--ink-2);min-height:40px;font-weight:500}
+.tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.dq{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-strong);background:var(--surface);border-radius:999px;padding:4px 10px;font-size:12.5px;cursor:pointer;min-height:32px}
+.dq .dot{width:8px;height:8px;border-radius:50%;background:var(--warn)}
+.dqpanel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 14px;font-size:13px}
+.dqpanel ul{margin:6px 0 0;padding-left:18px}
+
+/* tiles */
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.tile .lab{font-size:12.5px;color:var(--ink-2)}
+.tile .big{font-size:28px;font-weight:500;line-height:1.1}
+.tile .foot{font-size:12.5px;color:var(--ink-3)}
+.tile .chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{font-family:var(--f-data);font-size:11.5px;background:var(--sunken);border-radius:4px;padding:1px 6px;color:var(--ink-2)}
+.mkt{display:grid;grid-template-columns:1fr auto auto;gap:2px 10px;font-size:13px;align-items:baseline}
+.mkt .h{font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em}
+.mkt .num{text-align:right}
+
+/* controls */
+.controls{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.ctl{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--ink-2);min-width:0}
+.ctl .v{color:var(--ink);font-family:var(--f-data)}
+.seg{display:flex;background:var(--sunken);border-radius:7px;padding:2px;gap:2px;flex-wrap:wrap}
+.seg button{border:0;background:none;padding:6px 10px;border-radius:5px;cursor:pointer;color:var(--ink-2);min-height:36px}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.1)}
+select,input[type=search]{background:var(--bg);border:1px solid var(--line-strong);border-radius:6px;padding:7px 9px;min-height:38px}
+input[type=range]{width:150px;accent-color:var(--accent);min-height:30px}
+.check{flex-direction:row;align-items:center;gap:8px;min-height:38px;color:var(--ink)}
+.check input{width:18px;height:18px;accent-color:var(--accent)}
+
+/* table */
+.tablecard{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.tablehead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;padding:12px 14px 8px}
+.tablehead .muted{font-size:12.5px}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:1060px}
+th,td{padding:8px 7px;border-bottom:1px solid var(--line);white-space:nowrap;text-align:right;vertical-align:middle}
+th{font-size:11.5px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;background:var(--surface);position:sticky;top:0;user-select:none}
+th.sortable{cursor:pointer} th.sortable:hover{color:var(--ink)}
+th .arr{color:var(--accent)}
+th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--surface);z-index:1}
+th.l,td.l{text-align:left}
+tbody tr.row{cursor:pointer}
+tbody tr.row:hover td{background:var(--sunken)}
+tr.open td{background:var(--sunken)}
+.tk{font-weight:600;font-family:var(--f-data);font-size:13px;display:flex;align-items:center;gap:6px}
+.nm{font-size:12px;color:var(--ink-3)}
+.new{font-family:var(--f-body);font-size:10.5px;font-weight:600;letter-spacing:.05em;color:var(--accent);background:var(--accent-soft);border-radius:4px;padding:0 5px}
+.caret{display:inline-block;width:10px;color:var(--ink-3);transition:transform .15s}
+tr.open .caret{transform:rotate(90deg)}
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:500;padding:2px 8px;border-radius:999px;border:1px solid transparent}
+.b-good{background:var(--good-bg);color:var(--good)} .b-crit{background:var(--crit-bg);color:var(--crit)}
+.b-serious{background:var(--serious-bg);color:var(--serious)} .b-warn{background:var(--warn-bg);color:var(--warn)}
+.b-none{background:var(--sunken);color:var(--ink-3)}
+.qm{display:inline-flex;gap:2px;vertical-align:middle;margin-left:6px}
+.qm i{width:6px;height:12px;border-radius:1px;background:var(--line-strong)}
+.qm i.ok{background:var(--good)} .qm i.na{background:repeating-linear-gradient(45deg,var(--line-strong) 0 2px,transparent 2px 4px)}
+.empty{padding:28px;text-align:center;color:var(--ink-2)}
+td.detail{white-space:normal;text-align:left;padding:14px;position:static;background:var(--sunken)}
+.dgrid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr) minmax(0,1fr);gap:16px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.checks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:13px}
+.checks li{display:grid;grid-template-columns:18px 1fr auto;gap:6px;align-items:baseline}
+.checks .val{font-family:var(--f-data);font-size:12px;color:var(--ink-2)}
+.ok{color:var(--good)} .bad{color:var(--crit)} .na{color:var(--ink-3)}
+.kv{display:grid;grid-template-columns:1fr auto;gap:3px 10px;font-size:13px}
+.kv span:nth-child(even){font-family:var(--f-data);text-align:right}
+.news{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.news .src{color:var(--ink-3);font-size:12px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink-2)}
+.legend i{display:inline-block;width:14px;height:0;border-top:2px solid;vertical-align:middle;margin-right:5px}
+
+/* context charts */
+.ctx{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.card p{margin:0;color:var(--ink-2);font-size:13px;max-width:65ch}
+svg text{font-family:var(--f-body);fill:var(--ink-3);font-size:11px}
+svg .tick{stroke:var(--line)} svg .axis{stroke:var(--line-strong)}
+.tip{position:fixed;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12px;padding:6px 8px;border-radius:6px;max-width:260px;z-index:20;line-height:1.4}
+.tip .num{font-size:12px}
+
+footer{color:var(--ink-2);font-size:13px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;border-top:1px solid var(--line);padding-top:16px}
+footer dl{margin:0;display:grid;gap:6px}
+footer dt{font-weight:600;color:var(--ink)}
+footer dd{margin:0}
+
+/* backtest + digest tabs */
+.trust{border:1px solid var(--line-strong);border-radius:10px;padding:14px;background:var(--surface)}
+.trust ul{margin:8px 0 0;padding-left:18px;display:grid;gap:4px}
+.lead{display:flex;flex-wrap:wrap;gap:8px}
+.lead .chip{font-size:12.5px;padding:3px 8px}
+.illus{background:repeating-linear-gradient(135deg,var(--demo-bg) 0 10px,transparent 10px 20px);border:1px dashed var(--demo-ink);color:var(--demo-ink);border-radius:8px;padding:8px 12px;font-size:13px;font-weight:500}
+.digest{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 20px;max-width:760px;font-size:14px}
+.digest h2{margin-bottom:4px}
+.digest h3{margin:16px 0 6px}
+.digest ul{margin:0;padding-left:20px;display:grid;gap:3px}
+.digest code{font-family:var(--f-data);font-size:12.5px;background:var(--sunken);padding:0 4px;border-radius:3px}
+
+@media (max-width:900px){
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ctx,.dgrid{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:480px){
+  h1{font-size:22px}
+  .tiles{grid-template-columns:minmax(0,1fr)}
+  td.detail{padding:10px 0}
+  td.detail .dgrid{position:sticky;left:10px;width:calc(100vw - 54px)}
+  .tile .big{font-size:24px}
+  input[type=range]{width:100%}
+  .ctl{flex:1 1 140px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <div class="demo" role="note"><b>Demo</b><span>Synthetic prices and fundamentals for real tickers. It shows the layout and the screening logic. None of these numbers are real market data.</span></div>
+
+  <header class="top">
+    <div>
+      <h1>Quality-Dip Screen</h1>
+      <div class="meta">
+        <span>US close <b id="m-us"></b></span>
+        <span>Europe close <b id="m-eu"></b></span>
+        <span>Generated <b>2026-10-30 00:15 Helsinki</b></span>
+        <button class="dq" id="dqbtn" aria-expanded="false"><span class="dot"></span><span id="dqlabel"></span></button>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button role="tab" aria-selected="true" data-tab="screen">Screen</button>
+      <button role="tab" aria-selected="false" data-tab="backtest">Backtest</button>
+      <button role="tab" aria-selected="false" data-tab="digest">Digest</button>
+    </nav>
+  </header>
+  <div class="dqpanel" id="dqpanel" hidden></div>
+
+  <!-- ===================== SCREEN ===================== -->
+  <section id="tab-screen" class="stack">
+    <div class="tiles" id="tiles"></div>
+
+    <div class="controls">
+      <div class="ctl">Show
+        <div class="seg" id="show">
+          <button data-v="quality" aria-pressed="false">Quality dips</button>
+          <button data-v="dips" aria-pressed="true">All dips</button>
+          <button data-v="all" aria-pressed="false">All stocks</button>
+        </div>
+      </div>
+      <label class="ctl" for="win">Drop measured over
+        <select id="win">
+          <option value="r1">1 day</option>
+          <option value="r5" selected>5 days</option>
+          <option value="r21">1 month (21d)</option>
+          <option value="dd20">From 20-day high</option>
+        </select></label>
+      <label class="ctl" for="drop">Minimum drop <span class="v" id="dropv"></span>
+        <input type="range" id="drop" min="2" max="20" step="1" value="7"></label>
+      <label class="ctl" for="qmin">Minimum quality <span class="v" id="qv"></span>
+        <input type="range" id="qmin" min="0" max="100" step="10" value="60"></label>
+      <div class="ctl">Region
+        <div class="seg" id="region">
+          <button data-v="" aria-pressed="true">All</button>
+          <button data-v="US" aria-pressed="false">US</button>
+          <button data-v="Europe" aria-pressed="false">Europe</button>
+          <button data-v="Nordic" aria-pressed="false">Nordic</button>
+        </div>
+      </div>
+      <label class="ctl check" for="hideknife"><input type="checkbox" id="hideknife"> Hide falling knives</label>
+      <label class="ctl" for="q">Search<input type="search" id="q" placeholder="Ticker or name"></label>
+    </div>
+
+    <div class="tablecard">
+      <div class="tablehead"><h2 id="tabletitle">Candidates</h2><span class="muted">Click a row for details. Click a column to sort. Sparkline: 90 days, each row scaled to its own min–max.</span></div>
+      <div class="scroll"><table>
+        <thead><tr id="head"></tr></thead>
+        <tbody id="body"></tbody>
+      </table></div>
+      <div class="empty" id="empty" hidden>No stocks match. Lower the minimum drop, lower the minimum quality, or switch “Show” to All dips.</div>
+    </div>
+
+    <div class="ctx">
+      <div class="card">
+        <h2>Where today’s moves sit</h2>
+        <p id="histcap"></p>
+        <div id="hist"></div>
+      </div>
+      <div class="card">
+        <h2>Fallers by sector</h2>
+        <p>Stocks currently flagged as a dip, by sector. If one sector dominates, the cause may be sector news rather than company news.</p>
+        <div id="sect"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== BACKTEST ===================== -->
+  <section id="tab-backtest" class="stack" hidden>
+    <div class="illus">Layout preview only. The numbers on this tab are placeholders, not results. Real numbers arrive in milestone 4, after the backtest is run.</div>
+    <div class="card">
+      <h2>How did stocks behave after this kind of dip?</h2>
+      <div class="lead">
+        <span class="chip">1,184 events after a 21-day cooldown</span>
+        <span class="chip">2014-01 → 2026-10</span>
+        <span class="chip">59 current blue chips</span>
+        <span class="chip">Costs 0.10% round trip (also 2× and 4×)</span>
+        <span class="chip">Out-of-sample: last 40% of time, untouched</span>
+      </div>
+      <p>Signal at the close of day t, entry at the next day’s close. Excess return = stock return minus its home index over the same window. Confidence intervals in the table come from a date-clustered bootstrap, because events bunch up in market-wide selloffs.</p>
+      <div id="bt-chart"></div>
+    </div>
+    <div class="card">
+      <h2>By horizon and region (out-of-sample period)</h2>
+      <div class="scroll"><table style="min-width:720px" id="bt-table"></table></div>
+    </div>
+    <div class="trust">
+      <h2>How much to trust this</h2>
+      <ul>
+        <li><b>Survivorship bias.</b> The universe is today’s winners. Companies that fell out of the index are missing, which makes buying dips look better than it was.</li>
+        <li><b>Clustered events.</b> Many events fall in the same selloffs (2020, 2022). Results excluding those periods are shown separately.</li>
+        <li><b>Fundamentals are not point-in-time.</b> The quality-filtered version uses today’s fundamentals, so it is “indicative” only.</li>
+        <li><b>Variants tried:</b> logged in <code>trials.csv</code>. The best variant is a hypothesis, not a finding.</li>
+        <li>Taxes and FX are ignored.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===================== DIGEST ===================== -->
+  <section id="tab-digest" hidden>
+    <div class="digest" id="digest"></div>
+  </section>
+
+  <footer>
+    <dl>
+      <dt>Dip</dt><dd>Fell at least the minimum drop over the chosen window. Defaults: 1 day ≤ −4%, 5 days ≤ −7%, or ≥ 12% below the 20-day high.</dd>
+      <dt>Quality score</dt><dd>Share of six checks passed: ROE ≥ 12%, net margin ≥ 8%, debt/equity ≤ 150%, positive free cash flow, positive revenue growth, market cap ≥ 20B. Needs at least three checks with data.</dd>
+    </dl>
+    <dl>
+      <dt>Falling knife</dt><dd>Price below a falling 200-day average and at least 35% under the 52-week high. A long slide, not a one-off drop.</dd>
+      <dt>RSI</dt><dd>14-day Relative Strength Index, 0–100. Under 30 means the stock has fallen fast relative to its recent moves.</dd>
+      <dt>Vol ×</dt><dd>Today’s volume divided by the average of the previous 20 days.</dd>
+    </dl>
+    <dl>
+      <dt>Sources</dt><dd>Live runs use OpenBB with a Yahoo Finance fallback. Fundamentals are cached for 7 days and can be stale or wrong. Verify them before you rely on them.</dd>
+      <dt>Not investment advice</dt><dd>This is an educational research shortlist. A drop is not a reason to buy. Read the news and filings to judge whether the cause is temporary.</dd>
+    </dl>
+  </footer>
+</div>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+(() => {
+// ---------- seeded RNG ----------
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const rnd = mulberry32(20261029);
+const gauss = (m=0,s=1) => { let u=0,v=0; while(!u)u=rnd(); while(!v)v=rnd(); return m + s*Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); };
+const U = (a,b) => a + (b-a)*rnd();
+
+const MINUS = '−';
+function pct(v, d=1, sign=true){ if (v==null || !isFinite(v)) return '–'; const s=(Math.abs(v)*100).toFixed(d)+'%'; return v<0? MINUS+s : (sign && v>0? '+'+s : s); }
+function big(v){ const a=Math.abs(v), s = a>=1e12?(a/1e12).toFixed(2)+'T':a>=1e9?(a/1e9).toFixed(1)+'B':(a/1e6).toFixed(0)+'M'; return (v<0?MINUS:'')+s; }
+// ---------- universe (real tickers, synthetic data) ----------
+const UNI = `AAPL|Apple|US|Tech;MSFT|Microsoft|US|Tech;GOOGL|Alphabet|US|Communication;AMZN|Amazon|US|Consumer disc.;META|Meta Platforms|US|Communication;NVDA|Nvidia|US|Tech;BRK-B|Berkshire Hathaway|US|Financials;JNJ|Johnson & Johnson|US|Health care;PG|Procter & Gamble|US|Staples;KO|Coca-Cola|US|Staples;PEP|PepsiCo|US|Staples;V|Visa|US|Financials;MA|Mastercard|US|Financials;UNH|UnitedHealth|US|Health care;JPM|JPMorgan Chase|US|Financials;XOM|Exxon Mobil|US|Energy;CVX|Chevron|US|Energy;WMT|Walmart|US|Staples;COST|Costco|US|Staples;HD|Home Depot|US|Consumer disc.;MCD|McDonald's|US|Consumer disc.;DIS|Disney|US|Communication;NKE|Nike|US|Consumer disc.;ADBE|Adobe|US|Tech;ORCL|Oracle|US|Tech;CSCO|Cisco|US|Tech;INTC|Intel|US|Tech;PFE|Pfizer|US|Health care;MRK|Merck|US|Health care;ABBV|AbbVie|US|Health care;LLY|Eli Lilly|US|Health care;TSLA|Tesla|US|Consumer disc.;NFLX|Netflix|US|Communication;ASML.AS|ASML|Europe|Tech;SAP.DE|SAP|Europe|Tech;SIE.DE|Siemens|Europe|Industrials;NESN.SW|Nestle|Europe|Staples;ROG.SW|Roche|Europe|Health care;NOVN.SW|Novartis|Europe|Health care;MC.PA|LVMH|Europe|Consumer disc.;OR.PA|L'Oreal|Europe|Staples;AIR.PA|Airbus|Europe|Industrials;NOKIA.HE|Nokia|Nordic|Tech;SAMPO.HE|Sampo|Nordic|Financials;KNEBV.HE|Kone|Nordic|Industrials;NESTE.HE|Neste|Nordic|Energy;UPM.HE|UPM-Kymmene|Nordic|Materials;FORTUM.HE|Fortum|Nordic|Utilities;STERV.HE|Stora Enso|Nordic|Materials;WRT1V.HE|Wartsila|Nordic|Industrials;ERIC-B.ST|Ericsson|Nordic|Tech;VOLV-B.ST|Volvo|Nordic|Industrials;ATCO-A.ST|Atlas Copco|Nordic|Industrials;INVE-B.ST|Investor AB|Nordic|Financials;HM-B.ST|H&M|Nordic|Consumer disc.;NOVO-B.CO|Novo Nordisk|Nordic|Health care;MAERSK-B.CO|A.P. Moller-Maersk|Nordic|Industrials;DSV.CO|DSV|Nordic|Industrials;EQNR.OL|Equinor|Nordic|Energy;DNB.OL|DNB Bank|Nordic|Financials`
+  .split(';').map(s => { const [t,name,region,sector] = s.split('|'); return {t,name,region,sector}; });
+const CCY = t => /\.(AS|DE|PA|HE)$/.test(t)?'EUR':/\.SW$/.test(t)?'CHF':/\.ST$/.test(t)?'SEK':/\.CO$/.test(t)?'DKK':/\.OL$/.test(t)?'NOK':'USD';
+const SCEN = {ADBE:'Q','MC.PA':'Q',COST:'Q','ATCO-A.ST':'Q','NOVO-B.CO':'Q','ASML.AS':'Q1','SAMPO.HE':'Q1',UNH:'Q1',INTC:'K','NESTE.HE':'K','STERV.HE':'K',PFE:'L','HM-B.ST':'L','NOKIA.HE':'L1','WRT1V.HE':'N0','MAERSK-B.CO':'S'};
+const INDEX = {US:{name:'S&P 500',r1:-0.0042,r5:-0.0113}, Europe:{name:'STOXX 600',r1:-0.0068,r5:-0.0181}, Nordic:{name:'OMX Helsinki 25',r1:-0.0051,r5:-0.0229}};
+
+// business-day calendar ending Thu 2026-10-29
+const N = 460, DATES = [];
+{ let d = new Date(Date.UTC(2026,9,29)); while (DATES.length < N) { const w = d.getUTCDay(); if (w && w < 6) DATES.unshift(d.toISOString().slice(0,10)); d = new Date(d - 864e5); } }
+
+function makeSeries(s) {
+  const r = Array.from({length:N}, () => gauss(0.0003, 0.012));
+  if (s === 'Q' || s === 'Q1' || s === 'L' || s === 'L1' || s === 'N0') for (let i=N-260;i<N;i++) r[i] = gauss(0.0007, 0.011);
+  if (s === 'K') for (let i=N-230;i<N-5;i++) r[i] = gauss(-0.0026, 0.013);
+  if (s === 'Q' || s === 'L' || s === 'K' || s === 'N0') for (let i=N-5;i<N;i++) r[i] = gauss(-0.021, 0.006);
+  if (s === 'Q1' || s === 'L1') { for (let i=N-5;i<N-1;i++) r[i] = gauss(0.0005, 0.006); r[N-1] = U(-0.078,-0.055); }
+  const base = U(25, 520); let p = base; const close = r.map(x => (p *= Math.exp(x)));
+  const vol = close.map(() => U(1.5e6, 6e6));
+  if (['Q','L','K','N0'].includes(s)) for (let i=N-5;i<N;i++) vol[i] *= U(1.6,2.4);
+  if (s === 'Q1' || s === 'L1') vol[N-1] *= U(3,4.2);
+  return {close, vol};
+}
+function makeFund(s) {
+  if (s === 'N0') return {};
+  const good = ['Q','Q1'].includes(s) || (!['L','L1','K'].includes(s) && rnd() < 0.7);
+  const f = good ? {roe:U(.14,.42), margin:U(.1,.33), de:U(15,130), fcf:U(2e9,6e10), growth:U(.02,.16), mcap:U(4e10,3e12)}
+                 : {roe:U(.01,.09), margin:U(.005,.06), de:U(160,260), fcf:-U(1e8,3e9), growth:U(-.09,-.005), mcap:U(2.5e10,2e11)};
+  if (good && rnd() < 0.5) { const k = ['roe','margin','growth'][Math.floor(rnd()*3)]; f[k] = k==='growth' ? -U(.005,.04) : U(.02,.07); }
+  if (s === 'K' && rnd()<.5) f.de = U(60,120);
+  f.fpe = U(11,34); f.tpe = f.fpe*U(1.05,1.4); f.dy = U(0,.04);
+  return f;
+}
+
+// ---------- metrics (mirrors src/dip_screener.py) ----------
+const sma = (a,n,i) => { if (i < n-1) return NaN; let s=0; for (let k=i-n+1;k<=i;k++) s+=a[k]; return s/n; };
+function rsi14(c){ let up=0,dn=0; const a=1/14; for(let i=1;i<c.length;i++){const d=c[i]-c[i-1]; up=up*(1-a)+Math.max(d,0)*a; dn=dn*(1-a)+Math.max(-d,0)*a;} return dn===0?100:100-100/(1+up/dn); }
+function metrics(close, vol) {
+  const L = close.length - 1, last = close[L], ret = n => last/close[L-n]-1;
+  const max = (n) => Math.max(...close.slice(-n));
+  const s200 = sma(close,200,L), s200p = sma(close,200,L-21);
+  const daily = close.slice(-64).map((v,i,a)=> i? v/a[i-1]-1 : null).slice(1);
+  const mu = daily.reduce((a,b)=>a+b,0)/daily.length, sd = Math.sqrt(daily.reduce((a,b)=>a+(b-mu)**2,0)/(daily.length-1));
+  const prevVol = vol.slice(-21,-1).reduce((a,b)=>a+b,0)/20;
+  const m = { price:last, r1:ret(1), r5:ret(5), r21:ret(21), dd20:last/max(20)-1, dd52:last/max(252)-1,
+    vs200:last/s200-1, s200falling: s200 < s200p, rsi:rsi14(close.slice(-120)), volx: vol[L]/prevVol, z5: ret(5)/(sd*Math.sqrt(5)) };
+  m.knife = m.vs200 < 0 && m.s200falling && m.dd52 <= -0.35;
+  return m;
+}
+const CHECKS = [
+  ['Return on equity ≥ 12%','roe',v=>v>=.12, v=>pct(v,1,false)],
+  ['Net margin ≥ 8%','margin',v=>v>=.08, v=>pct(v,1,false)],
+  ['Debt/equity ≤ 150%','de',v=>v<=150, v=>v.toFixed(0)+'%'],
+  ['Free cash flow positive','fcf',v=>v>0, v=>big(v)],
+  ['Revenue growth positive','growth',v=>v>0, v=>pct(v,1)],
+  ['Market cap ≥ 20B','mcap',v=>v>=2e10, v=>big(v)],
+];
+function quality(f){ let pass=0,av=0; const checks = CHECKS.map(([label,k,fn,fmt]) => { const v=f[k]; if (v==null) return {label,ok:null}; av++; const ok=fn(v); pass+=ok; return {label,ok,val:fmt(v)}; }); return {q: av>=3 ? Math.round(100*pass/av) : null, checks}; }
+
+// ---------- build rows ----------
+const rows = [], stale = [];
+for (const u of UNI) {
+  const s = SCEN[u.t] || 'N';
+  const {close, vol} = makeSeries(s);
+  if (s === 'S') { stale.push({t:u.t, last:DATES[N-6], why:'last bar is 5 trading days old'}); continue; }
+  const f = makeFund(s), m = metrics(close, vol), mY = metrics(close.slice(0,-1), vol.slice(0,-1)), qq = quality(f);
+  rows.push({...u, ...m, ccy:CCY(u.t), q:qq.q, checks:qq.checks, f, close, yday:mY, idx:INDEX[u.region], asof:DATES[N-1]});
+}
+const noFund = rows.filter(r => r.q == null).map(r => r.t);
+
+// ---------- formatting ----------
+const sgnCls = v => v==null||!isFinite(v)||Math.abs(v)<5e-4 ? '' : v<0 ? 'down':'up';
+const $ = id => document.getElementById(id);
+const el = (tag, cls, txt) => { const e=document.createElement(tag); if(cls) e.className=cls; if(txt!=null) e.textContent=txt; return e; };
+const NS='http://www.w3.org/2000/svg';
+const sv = (tag, attrs={}, parent) => { const e=document.createElementNS(NS,tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if(parent) parent.appendChild(e); return e; };
+
+// ---------- tooltip ----------
+const tip = $('tip');
+function showTip(e, nodes){ tip.replaceChildren(...nodes); tip.hidden=false; const x=Math.min(e.clientX+14, innerWidth-tip.offsetWidth-8), y=Math.min(e.clientY+14, innerHeight-tip.offsetHeight-8); tip.style.left=x+'px'; tip.style.top=y+'px'; }
+const hideTip = () => tip.hidden = true;
+
+// ---------- state ----------
+const S = { show:'dips', region:'', sortKey:null, sortDir:1, open:null };
+function setupOf(r, m=r) {
+  const drop = -(+$('drop').value)/100, w = $('win').value, v = m[w];
+  if (!(v <= drop)) return {label:'No dip', rank:0, cls:'b-none', icon:'·'};
+  if (m.knife) return {label:'Falling knife', rank:1, cls:'b-crit', icon:'⚠'};
+  if (r.q == null) return {label:'Dip, no fundamentals', rank:2, cls:'b-warn', icon:'?'};
+  if (r.q >= +$('qmin').value) return {label:'Quality dip', rank:4, cls:'b-good', icon:'✓'};
+  return {label:'Dip, low quality', rank:2, cls:'b-serious', icon:'✗'};
+}
+
+// ---------- header + data quality ----------
+$('m-us').textContent = 'Thu 29 Oct'; $('m-eu').textContent = 'Thu 29 Oct';
+$('dqlabel').textContent = `${stale.length} stale · ${noFund.length} without fundamentals`;
+{
+  const p = $('dqpanel');
+  p.append(el('b',null,'Data quality for this run'));
+  const ul = el('ul');
+  stale.forEach(s => ul.append(el('li',null,`${s.t}: skipped, ${s.why} (last bar ${s.last}).`)));
+  noFund.forEach(t => ul.append(el('li',null,`${t}: no fundamentals returned. Quality score is blank and the stock cannot count as a quality dip.`)));
+  ul.append(el('li',null,`${rows.length} of ${UNI.length} tickers screened. No price jumps over 40% (possible split errors) found.`));
+  p.append(ul);
+  $('dqbtn').onclick = () => { p.hidden = !p.hidden; $('dqbtn').setAttribute('aria-expanded', String(!p.hidden)); };
+}
+
+// ---------- tabs ----------
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-selected', String(x===b)));
+  ['screen','backtest','digest'].forEach(t => $('tab-'+t).hidden = t !== b.dataset.tab);
+});
+
+// ---------- tiles ----------
+function tiles(all) {
+  const box = $('tiles'); box.replaceChildren();
+  const qd = all.filter(r => r.setup.rank===4), newQ = qd.filter(r => setupOf(r, r.yday).rank !== 4), kn = all.filter(r => r.setup.label==='Falling knife');
+  const mk = (lab, n, foot, chips) => { const t = el('div','tile'); t.append(el('div','lab',lab), el('div','big',String(n))); if (chips && chips.length){ const c=el('div','chips'); chips.forEach(x=>c.append(el('span','chip',x))); t.append(c);} if (foot) t.append(el('div','foot',foot)); box.append(t); };
+  mk('Quality dips', qd.length, `Dip on the chosen window and quality ≥ ${$('qmin').value}`, qd.map(r=>r.t));
+  mk('New since yesterday', newQ.length, newQ.length ? 'Became a quality dip with today’s close' : 'Same quality dips as yesterday', newQ.map(r=>r.t));
+  mk('Falling-knife flags', kn.length, 'Dipping inside a long downtrend', kn.map(r=>r.t));
+  const t = el('div','tile'); t.append(el('div','lab','Market context'));
+  const g = el('div','mkt'); g.append(el('span','h','Index'), el('span','h num','1d'), el('span','h num','5d'));
+  Object.values(INDEX).forEach(ix => g.append(el('span',null,ix.name), el('span','num '+sgnCls(ix.r1),pct(ix.r1)), el('span','num '+sgnCls(ix.r5),pct(ix.r5))));
+  t.append(g, el('div','foot','A broad selloff lifts every stock’s drop. Compare with “5d vs index”.')); box.append(t);
+}
+
+// ---------- table ----------
+const COLS = [
+  {k:'t', l:'Stock', cls:'l'}, {k:'price', l:'Price'}, {k:'r1', l:'1d'}, {k:'r5', l:'5d'}, {k:'x5', l:'5d vs index'}, {k:'r21', l:'1m'},
+  {k:'dd52', l:'vs 52w high'}, {k:'vs200', l:'vs 200d avg'}, {k:'rsi', l:'RSI'}, {k:'volx', l:'Vol ×'},
+  {k:'q', l:'Quality', cls:'l'}, {k:'setup', l:'Setup', cls:'l'}, {k:'spark', l:'90 days', nosort:true},
+];
+function spark(c){
+  const v = c.slice(-90), w=78, h=26, mn=Math.min(...v), mx=Math.max(...v), rg=mx-mn||1;
+  const svg = sv('svg',{width:w,height:h,viewBox:`0 0 ${w} ${h}`,'aria-hidden':'true'});
+  const pts = v.map((y,i)=>[ (i/(v.length-1))*(w-4)+1, h-3-((y-mn)/rg)*(h-6) ]);
+  sv('path',{d:'M'+pts.map(p=>p.join(',')).join('L')+`L${pts.at(-1)[0]},${h}L1,${h}Z`, fill:'var(--sunken)', stroke:'none'}, svg);
+  sv('polyline',{points:pts.map(p=>p.join(',')).join(' '), fill:'none', stroke:'var(--ink-2)', 'stroke-width':1.4}, svg);
+  const end = pts.at(-1); sv('circle',{cx:end[0],cy:end[1],r:2.6, fill: v.at(-1) < v[0] ? 'var(--down)' : 'var(--up)'}, svg);
+  return svg;
+}
+function qmeter(r){ const s = el('span','qm'); r.checks.forEach(c => s.append(el('i', c.ok===true?'ok':c.ok===null?'na':''))); s.title = r.checks.filter(c=>c.ok).length+' of 6 checks passed'; return s; }
+
+function render() {
+  $('dropv').textContent = MINUS + $('drop').value + '%'; $('qv').textContent = $('qmin').value;
+  const all = rows.map(r => Object.assign(r, {setup: setupOf(r), x5: r.r5 - r.idx.r5}));
+  tiles(all);
+  const qs = $('q').value.trim().toLowerCase();
+  let list = all.filter(r => {
+    if (S.region && r.region !== S.region) return false;
+    if (qs && !(r.t.toLowerCase().includes(qs) || r.name.toLowerCase().includes(qs))) return false;
+    if ($('hideknife').checked && r.knife) return false;
+    if (S.show === 'quality') return r.setup.rank === 4;
+    if (S.show === 'dips') return r.setup.rank > 0;
+    return true;
+  });
+  const w = $('win').value;
+  list.sort((a,b) => {
+    if (!S.sortKey) return (b.setup.rank - a.setup.rank) || (a[w]-b[w]);
+    const k=S.sortKey, d=S.sortDir;
+    if (k==='t') return d*a.t.localeCompare(b.t);
+    const x = k==='setup'? a.setup.rank : a[k], y = k==='setup'? b.setup.rank : b[k];
+    if (x==null) return 1; if (y==null) return -1; return d*(x-y);
+  });
+  $('tabletitle').textContent = {quality:'Quality dips', dips:'All dips', all:'All stocks'}[S.show] + ` · ${list.length}`;
+
+  const head = $('head'); head.replaceChildren();
+  COLS.forEach(c => { const th = el('th', (c.cls||'') + (c.nosort?'':' sortable'), c.l); if (S.sortKey===c.k) th.append(el('span','arr', S.sortDir>0?' ▲':' ▼'));
+    if (!c.nosort) { th.tabIndex=0; th.onclick = th.onkeydown = (e) => { if (e.type==='keydown' && e.key!=='Enter') return; S.sortDir = S.sortKey===c.k ? -S.sortDir : (['t','q','setup','rsi'].includes(c.k)? 1 : 1); if (c.k==='q'||c.k==='setup') S.sortDir = S.sortKey===c.k ? S.sortDir : -1; S.sortKey=c.k; render(); }; }
+    head.append(th); });
+
+  const body = $('body'); body.replaceChildren(); $('empty').hidden = list.length>0;
+  list.forEach(r => {
+    const tr = el('tr','row' + (S.open===r.t?' open':'')); tr.tabIndex = 0;
+    const c0 = el('td','l'); const tk = el('div','tk'); tk.append(el('span','caret','›'), document.createTextNode(r.t));
+    if (r.setup.rank===4 && setupOf(r, r.yday).rank!==4) tk.append(el('span','new','NEW'));
+    c0.append(tk, el('div','nm', `${r.name} · ${r.region}`)); tr.append(c0);
+    const n = (txt, cls='') => tr.append(el('td','n '+cls, txt));
+    { const td=el('td','n',r.price.toFixed(2)); td.append(el('span','nm',' '+r.ccy)); tr.append(td); }
+    ['r1','r5','x5','r21','dd52','vs200'].forEach(k => n(pct(r[k]), sgnCls(r[k])));
+    n(r.rsi.toFixed(0), r.rsi<30?'down':''); n(r.volx.toFixed(1)+'×', r.volx>=2?'':'muted');
+    const tq = el('td','l n'); tq.append(document.createTextNode(r.q==null?'–':String(r.q)), qmeter(r)); tr.append(tq);
+    const tb = el('td','l'); tb.append(el('span','badge '+r.setup.cls, r.setup.icon+' '+r.setup.label)); tr.append(tb);
+    const tsp = el('td'); tsp.append(spark(r.close)); tr.append(tsp);
+    tr.onclick = () => { S.open = S.open===r.t ? null : r.t; render(); };
+    tr.onkeydown = e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); tr.onclick(); } };
+    body.append(tr);
+    if (S.open===r.t) { const d=el('tr'); const td=el('td','detail'); td.colSpan=COLS.length; td.append(detail(r)); d.append(td); body.append(d); }
+  });
+  hist(all); sectors(all); digest(all);
+}
+
+// ---------- row detail ----------
+function detail(r){
+  const g = el('div','dgrid');
+  // price chart
+  const p1 = el('div','panel'); p1.append(el('h3',null,'1 year · price, 200-day average, 52-week high'));
+  p1.append(priceChart(r));
+  const lg = el('div','legend');
+  [['var(--ink-2)','Price'],['var(--accent)','200-day average'],['var(--ink-3)','52-week high']].forEach(([c,l],i)=>{ const s=el('span'); const k=el('i'); k.style.borderTopColor=c; if(i) k.style.borderTopStyle='dashed'; s.append(k,l); lg.append(s); });
+  const sh = el('span'); const k=el('i'); k.style.cssText='border:0;width:12px;height:10px;background:var(--down-soft);vertical-align:-1px'; sh.append(k,'Drop window'); lg.append(sh);
+  p1.append(lg); g.append(p1);
+  // quality + knife
+  const p2 = el('div','panel'); p2.append(el('h3',null, r.q==null? 'Quality checks · no data' : `Quality checks · ${r.q}/100`));
+  const ul = el('ul','checks');
+  r.checks.forEach(c => { const li=el('li'); li.append(el('span', c.ok===true?'ok':c.ok===false?'bad':'na', c.ok===true?'✓':c.ok===false?'✗':'?'), el('span',null,c.label), el('span','val', c.ok===null?'no data':c.val)); ul.append(li); });
+  p2.append(ul, el('h3',null,'Falling-knife checklist'));
+  const ul2 = el('ul','checks');
+  [[r.vs200<0,'Below 200-day average',pct(r.vs200)],[r.s200falling,'200-day average falling','last 21 days'],[r.dd52<=-.35,'≥ 35% under 52-week high',pct(r.dd52)]]
+    .forEach(([on,l,v]) => { const li=el('li'); li.append(el('span', on?'bad':'ok', on?'●':'○'), el('span',null,l), el('span','val',v)); ul2.append(li); });
+  p2.append(ul2, el('div','nm', r.knife ? 'All three are true, so this is flagged as a falling knife.' : 'A falling knife needs all three. Filled dots are met.'));
+  g.append(p2);
+  // valuation + headlines
+  const p3 = el('div','panel'); p3.append(el('h3',null,'Context'));
+  const kv = el('div','kv'); const f=r.f;
+  [['5d move vs '+r.idx.name, pct(r.x5)],['Forward P/E', f.fpe? f.fpe.toFixed(1):'–'],['Trailing P/E', f.tpe? f.tpe.toFixed(1):'–'],['Dividend yield', f.dy!=null? pct(f.dy,1,false):'–'],['Market cap', f.mcap? big(f.mcap)+' '+r.ccy:'–'],['From 20-day high', pct(r.dd20)],['5d move in std devs', r.z5.toFixed(1)]]
+    .forEach(([a,b]) => kv.append(el('span',null,a), el('span',null,b)));
+  p3.append(kv, el('h3',null,'Headlines · read before deciding'));
+  const nl = el('ul','news');
+  if (r.setup.rank>0) ['Example headline: latest company news appears here','Example headline: analyst or sector news appears here','Example headline: results or guidance news appears here']
+    .forEach(h => { const li=el('li'); li.append(el('div',null,h), el('div','src','demo · live runs fetch up to 5 headlines')); nl.append(li); });
+  else nl.append(el('li','src','Headlines are fetched only for stocks with a notable drop.'));
+  p3.append(nl); g.append(p3);
+  return g;
+}
+function priceChart(r){
+  const W=560,H=200,pl=8,pr=52,pt=10,pb=22;
+  const n=252, c=r.close.slice(-n), s=r.close.map((_,i)=>sma(r.close,200,i)).slice(-n);
+  const hi = c.map((_,i)=>Math.max(...r.close.slice(r.close.length-n+i-251, r.close.length-n+i+1)));
+  const all=[...c,...s.filter(isFinite)], mn=Math.min(...all)*.98, mx=Math.max(...all,...hi)*1.01;
+  const X=i=>pl+i/(n-1)*(W-pl-pr), Y=v=>pt+(1-(v-mn)/(mx-mn))*(H-pt-pb);
+  const svg = sv('svg',{viewBox:`0 0 ${W} ${H}`,width:'100%',role:'img','aria-label':`${r.t} one-year price chart`});
+  // grid + y labels
+  for (let k=0;k<=3;k++){ const v=mn+(mx-mn)*k/3; sv('line',{x1:pl,x2:W-pr,y1:Y(v),y2:Y(v),class:'tick'},svg); sv('text',{x:W-pr+6,y:Y(v)+4},svg).textContent=v.toFixed(0); }
+  // month labels
+  const DD = DATES.slice(-n); let last='';
+  DD.forEach((d,i)=>{ const m=d.slice(5,7); if(m!==last && i>8 && i<n-8 && (+m%3===1)){ sv('text',{x:X(i),y:H-6,'text-anchor':'middle'},svg).textContent=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+m-1]+' '+d.slice(2,4);} last=m; });
+  // drop window shading
+  const span = {r1:1,r5:5,r21:21,dd20:20}[$('win').value];
+  sv('rect',{x:X(n-1-span),y:pt,width:X(n-1)-X(n-1-span)+2,height:H-pt-pb,fill:'var(--down-soft)'},svg);
+  const line=(arr,attrs)=>sv('path',{d:arr.map((v,i)=>isFinite(v)?(i&&isFinite(arr[i-1])?'L':'M')+X(i).toFixed(1)+','+Y(v).toFixed(1):'').join(''),fill:'none',...attrs},svg);
+  line(hi,{stroke:'var(--ink-3)','stroke-width':1.2,'stroke-dasharray':'2 3'});
+  line(s,{stroke:'var(--accent)','stroke-width':1.6,'stroke-dasharray':'5 3'});
+  line(c,{stroke:'var(--ink-2)','stroke-width':1.8});
+  sv('circle',{cx:X(n-1),cy:Y(c[n-1]),r:4,fill:'var(--down)',stroke:'var(--surface)','stroke-width':2},svg);
+  // hover crosshair
+  const cross = sv('line',{y1:pt,y2:H-pb,stroke:'var(--ink-3)','stroke-width':1,visibility:'hidden'},svg);
+  const dot = sv('circle',{r:3.5,fill:'var(--ink)',visibility:'hidden'},svg);
+  const hit = sv('rect',{x:pl,y:0,width:W-pl-pr,height:H,fill:'transparent'},svg);
+  hit.addEventListener('mousemove', e => { const b=svg.getBoundingClientRect(), x=(e.clientX-b.left)*W/b.width; const i=Math.max(0,Math.min(n-1,Math.round((x-pl)/(W-pl-pr)*(n-1))));
+    cross.setAttribute('x1',X(i)); cross.setAttribute('x2',X(i)); cross.setAttribute('visibility','visible'); dot.setAttribute('cx',X(i)); dot.setAttribute('cy',Y(c[i])); dot.setAttribute('visibility','visible');
+    showTip(e,[el('div',null,DD[i]), el('div','num',`Price ${c[i].toFixed(2)} ${r.ccy}`), el('div','num',`200d avg ${isFinite(s[i])?s[i].toFixed(2):'–'}`), el('div','num',`vs 52w high ${pct(c[i]/hi[i]-1)}`)]); });
+  hit.addEventListener('mouseleave', () => { cross.setAttribute('visibility','hidden'); dot.setAttribute('visibility','hidden'); hideTip(); });
+  return svg;
+}
+
+// ---------- histogram of 5d moves ----------
+function hist(all){
+  const thr = -(+$('drop').value)/100, vals = all.map(r=>r.r5), med = [...vals].sort((a,b)=>a-b)[Math.floor(vals.length/2)];
+  $('histcap').textContent = `5-day move of every screened stock. The median stock moved ${pct(med)}. Red bars are at or past the 5-day dip threshold you set (${pct(thr)}). If the whole distribution has shifted left, the market is selling off broadly.`;
+  const lo = Math.floor(Math.min(...vals,thr)*50)/50, hi = Math.ceil(Math.max(...vals,0.02)*50)/50, bins=[];
+  for (let b=lo; b<hi-1e-9; b+=0.02) bins.push({a:b,b:b+0.02,items:vals.map((v,i)=>[v,all[i]]).filter(([v])=>v>=b&&v<b+0.02).map(x=>x[1])});
+  const W=560,H=210,pl=26,pr=8,pt=18,pb=28, mxc=Math.max(...bins.map(b=>b.items.length));
+  const X=v=>pl+(v-lo)/(hi-lo)*(W-pl-pr), Y=n=>pt+(1-n/mxc)*(H-pt-pb);
+  const svg = sv('svg',{viewBox:`0 0 ${W} ${H}`,width:'100%',role:'img','aria-label':'Histogram of 5-day moves'});
+  for (let k=0;k<=mxc;k+=Math.max(1,Math.ceil(mxc/4))){ sv('line',{x1:pl,x2:W-pr,y1:Y(k),y2:Y(k),class:'tick'},svg); sv('text',{x:pl-6,y:Y(k)+4,'text-anchor':'end'},svg).textContent=k; }
+  bins.forEach(b => { if(!b.items.length) return; const dip = b.b <= thr+1e-9;
+    const r = sv('rect',{x:X(b.a)+1,y:Y(b.items.length),width:X(b.b)-X(b.a)-2,height:H-pb-Y(b.items.length),rx:2,fill: dip?'var(--down)':'var(--neutral-bar)'},svg);
+    r.style.cursor='default';
+    r.addEventListener('mousemove', e => showTip(e,[el('div',null,`${pct(b.a,0)} to ${pct(b.b,0)} · ${b.items.length} stocks`), el('div','num',b.items.map(x=>x.t).join(', '))]));
+    r.addEventListener('mouseleave', hideTip); });
+  for (let v=lo; v<=hi+1e-9; v+=0.04) sv('text',{x:X(v),y:H-8,'text-anchor':'middle'},svg).textContent=pct(Math.round(v*100)/100,0);
+  sv('line',{x1:pl,x2:W-pr,y1:H-pb,y2:H-pb,class:'axis'},svg);
+  const mark=(v,label,col,anchor)=>{ sv('line',{x1:X(v),x2:X(v),y1:pt-6,y2:H-pb,stroke:col,'stroke-width':1.5,'stroke-dasharray':'4 3'},svg); sv('text',{x:X(v)+(anchor==='end'?-5:5),y:pt-2,'text-anchor':anchor,style:'fill:var(--ink-2)'},svg).textContent=label; };
+  mark(thr,'dip threshold','var(--down)','end'); mark(med,'median stock','var(--ink-2)','start');
+  $('hist').replaceChildren(svg);
+}
+
+// ---------- sectors ----------
+function sectors(all){
+  const tot = {}, dip = {};
+  all.forEach(r => { tot[r.sector]=(tot[r.sector]||0)+1; if (r.setup.rank>0) dip[r.sector]=(dip[r.sector]||0)+1; });
+  const list = Object.keys(dip).sort((a,b)=>dip[b]-dip[a]||a.localeCompare(b));
+  if (!list.length){ $('sect').replaceChildren(el('div','empty','No stocks are flagged as a dip with the current settings.')); return; }
+  const rowH=26, W=440, lab=110, H=list.length*rowH+4, mx=Math.max(...list.map(s=>dip[s]));
+  const svg = sv('svg',{viewBox:`0 0 ${W} ${H}`,width:'100%',role:'img','aria-label':'Dips by sector'});
+  list.forEach((s,i)=>{ const y=i*rowH+3, w=(W-lab-90)*dip[s]/mx;
+    sv('text',{x:lab-8,y:y+15,'text-anchor':'end',style:'fill:var(--ink-2);font-size:12px'},svg).textContent=s;
+    const r=sv('rect',{x:lab,y:y+3,width:Math.max(w,3),height:rowH-10,rx:3,fill:'var(--accent)'},svg);
+    sv('text',{x:lab+w+6,y:y+15,style:'fill:var(--ink);font-size:12px'},svg).textContent=`${dip[s]}`;
+    sv('text',{x:lab+w+22,y:y+15,style:'font-size:11px'},svg).textContent=`of ${tot[s]}`;
+    r.addEventListener('mousemove',e=>showTip(e,[el('div',null,s), el('div','num',all.filter(x=>x.sector===s&&x.setup.rank>0).map(x=>x.t).join(', '))])); r.addEventListener('mouseleave',hideTip); });
+  $('sect').replaceChildren(svg);
+}
+
+// ---------- digest preview ----------
+function digest(all){
+  const d = $('digest'); d.replaceChildren();
+  const qd = all.filter(r=>r.setup.rank===4).sort((a,b)=>a.r5-b.r5), kn = all.filter(r=>r.setup.label==='Falling knife');
+  const newQ = qd.filter(r=>setupOf(r,r.yday).rank!==4), gone = all.filter(r=>r.setup.rank!==4 && setupOf(r,r.yday).rank===4);
+  d.append(el('h2',null,'Daily digest · Thu 29 Oct 2026'), el('div','nm','Preview of output/digest.md (synthetic data). Written by the nightly run, read in any editor.'));
+  const sec=(h,items)=>{ d.append(el('h3',null,h)); const ul=el('ul'); items.forEach(t=>ul.append(el('li',null,t))); d.append(ul); };
+  sec('Data quality', [`${rows.length} of ${UNI.length} tickers screened.`, ...stale.map(s=>`${s.t} skipped: ${s.why}.`), noFund.length? `No fundamentals: ${noFund.join(', ')}.`:'All tickers had fundamentals.']);
+  sec('Market context', Object.values(INDEX).map(ix=>`${ix.name}: ${pct(ix.r1)} today, ${pct(ix.r5)} over 5 days.`));
+  sec(`Quality dips (${qd.length})`, qd.length? qd.map(r=>`${r.t} (${r.name}): ${pct(r.r5)} over 5 days, ${pct(r.x5)} vs ${r.idx.name}, quality ${r.q}, RSI ${r.rsi.toFixed(0)}.`) : ['None today.']);
+  sec('Changes since yesterday', [`New: ${newQ.map(r=>r.t).join(', ')||'none'}.`, `No longer flagged: ${gone.map(r=>r.t).join(', ')||'none'}.`]);
+  sec(`Falling-knife flags (${kn.length})`, kn.length? kn.map(r=>`${r.t}: ${pct(r.dd52)} from 52-week high, below a falling 200-day average.`) : ['None.']);
+  d.append(el('p','nm','Screen results for research, not investment advice. Settings: '+$('win').selectedOptions[0].text+' drop ≥ '+$('drop').value+'%, quality ≥ '+$('qmin').value+'.'));
+}
+
+// ---------- backtest preview (placeholder numbers) ----------
+(function backtest(){
+  const W=620,H=230,pl=34,pr=110,pt=14,pb=30, lo=-0.25, hi=0.25;
+  const dens=(m,s)=>{const pts=[]; for(let x=lo;x<=hi+1e-9;x+=0.005){pts.push([x,Math.exp(-((x-m)**2)/(2*s*s))/(s*Math.sqrt(2*Math.PI))]);} return pts;};
+  const ev=dens(0.008,0.078), pl_=dens(0.004,0.064), my=Math.max(...ev.map(p=>p[1]),...pl_.map(p=>p[1]));
+  const X=v=>pl+(v-lo)/(hi-lo)*(W-pl-pr), Y=v=>pt+(1-v/my)*(H-pt-pb);
+  const svg=sv('svg',{viewBox:`0 0 ${W} ${H}`,width:W,role:'img','aria-label':'Placeholder distribution chart'}); svg.style.maxWidth='100%'; svg.style.height='auto';
+  for(let v=-0.2;v<=0.2+1e-9;v+=0.1){ sv('line',{x1:X(v),x2:X(v),y1:pt,y2:H-pb,class:'tick'},svg); sv('text',{x:X(v),y:H-10,'text-anchor':'middle'},svg).textContent=pct(Math.round(v*10)/10,0); }
+  sv('line',{x1:pl,x2:W-pr,y1:H-pb,y2:H-pb,class:'axis'},svg);
+    const path=(pts,col,dash,fill)=>{ if(fill) sv('path',{d:'M'+pts.map(p=>X(p[0])+','+Y(p[1])).join('L')+`L${X(hi)},${Y(0)}L${X(lo)},${Y(0)}Z`,fill:fill,stroke:'none'},svg); sv('path',{d:'M'+pts.map(p=>X(p[0])+','+Y(p[1])).join('L'),fill:'none',stroke:col,'stroke-width':2,'stroke-dasharray':dash||''},svg); };
+  path(pl_,'var(--ink-3)','5 4'); path(ev,'var(--accent)','', 'var(--accent-soft)');
+  sv('text',{x:X(0.1)+4,y:Y(ev[Math.round((0.1-lo)/0.005)][1])-4,style:'fill:var(--accent);font-weight:600'},svg).textContent='Dip events';
+  sv('text',{x:X(0.13)+4,y:Y(pl_[Math.round((0.13-lo)/0.005)][1])+14,style:'fill:var(--ink-2)'},svg).textContent='Random-date placebo';
+  sv('text',{x:W-pr+8,y:pt+12,style:'fill:var(--ink-2)'},svg).textContent='21-day excess';
+  sv('text',{x:W-pr+8,y:pt+26,style:'fill:var(--ink-2)'},svg).textContent='return after entry';
+  $('bt-chart').replaceChildren(svg);
+  const T=$('bt-table'); const hd=el('tr'); ['Horizon','Region','Events','Mean excess','90% CI','Median','Hit rate','10th pct','Worst'].forEach((h,i)=>hd.append(el('th',i<2?'l':'',h))); const th=el('thead'); th.append(hd); T.append(th);
+  const tb=el('tbody'); [[ '5d','US',212,.003,[-.002,.008],.002,.53,-.051,-.18],['5d','Europe+Nordic',261,.001,[-.004,.006],.001,.51,-.058,-.22],['21d','US',212,.006,[-.006,.018],.004,.54,-.094,-.31],['21d','Europe+Nordic',261,.002,[-.011,.015],.001,.50,-.108,-.36],['63d','US',201,.011,[-.012,.034],.009,.55,-.161,-.44],['63d','Europe+Nordic',248,.004,[-.019,.027],.003,.51,-.172,-.48]]
+    .forEach(r=>{ const tr=el('tr'); tr.append(el('td','l',r[0]),el('td','l',r[1]),el('td','n',String(r[2])),el('td','n '+sgnCls(r[3]),pct(r[3])),el('td','n',`${pct(r[4][0])} to ${pct(r[4][1])}`),el('td','n',pct(r[5])),el('td','n',(r[6]*100).toFixed(0)+'%'),el('td','n down',pct(r[7])),el('td','n down',pct(r[8]))); tb.append(tr); });
+  T.append(tb);
+})();
+
+// ---------- controls ----------
+const segs = (id, key) => document.querySelectorAll('#'+id+' button').forEach(b => b.onclick = () => { document.querySelectorAll('#'+id+' button').forEach(x=>x.setAttribute('aria-pressed', String(x===b))); S[key]=b.dataset.v; S.sortKey=null; render(); });
+segs('show','show'); segs('region','region');
+['win','drop','qmin','hideknife','q'].forEach(id => $(id).addEventListener('input', () => { S.sortKey=null; render(); }));
+$('drop').addEventListener('input', ()=>{});
+$('win').addEventListener('change', () => { const def={r1:4,r5:7,r21:10,dd20:12}[$('win').value]; $('drop').value=def; render(); });
+render();
+S.open = [...document.querySelectorAll('#body tr.row')].length ? rows.filter(r=>r.setup.rank===4).sort((a,b)=>a.r5-b.r5)[0]?.t ?? null : null;
+render();
+})();
+</script>

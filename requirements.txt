@@ -1,0 +1,9 @@
+pandas>=2.0
+numpy>=1.26
+yfinance>=0.2.40
+openbb==5.0.0   # pinned: V5 provider set is in flux (see docs/m2-data-verification.md)
+pytest>=8.0
+playwright>=1.45   # for dashboard screenshots; then run: playwright install chromium
+matplotlib>=3.8   # OPTIONAL for the nightly run: charts in the backtest report only
+arch>=7.0   # OPTIONAL: only forecast.py (volatility range, not wired in: it failed its calibration check)
+scipy>=1.11   # used by forecast.py and feature_experiment.py (p-values, quantiles)

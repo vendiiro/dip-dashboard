@@ -1,0 +1,115 @@
+# Thresholds are untested defaults until the backtest supports them.
+
+[dip]
+drop_1d = 0.04          # 1-day fall
+drop_5d = 0.07          # 5-day fall
+drawdown_20d = 0.12     # below 20-day high
+
+[quality]
+min_score = 60
+roe_min = 0.12
+margin_min = 0.08
+debt_to_equity_max = 150
+market_cap_min = 20_000_000_000   # in USD; other currencies are converted
+
+[falling_knife]
+below_200d_falling = true
+drawdown_52w = 0.35
+
+[news]
+fetch_if_5d_drop = 0.05
+
+[backtest]
+horizons = [5, 21, 63]
+cooldown_days = 21
+cost_roundtrip = 0.001
+oos_fraction = 0.4
+start_date = "2010-01-01"   # first signal date; earlier bars are only warm-up for the 252-day inputs
+stress_drawdown = 0.10      # "market stress" = regional index this far below its trailing high
+stress_window = 60          # trailing window (bars) for that high
+ci_level = 0.90
+bootstrap_draws = 5000
+placebo_draws = 2000
+seed = 20261102
+
+[schedule]
+timezone = "Europe/Helsinki"
+run_time = "00:15"      # after the US close
+
+[data]
+max_stale_trading_days = 4   # skip a ticker whose last bar is older than this
+min_screened_fraction = 0.9   # a run that screens fewer than this share of the universe fails and keeps yesterday's files (a normal night screens 59 of 60)
+
+[earnings]
+recent_days = 5     # "reported recently" = last report within this many trading days up to the data date
+soon_days = 10      # "reports soon" = next report within this many trading days after the data date
+
+# Market context shown next to stock moves ("5d vs index"). A stock is matched, in this order, to:
+#   1. an index whose `suffixes` lists the ticker's exchange suffix (".ST" -> Stockholm; see [[country_indices]] below),
+#   2. the region-level index (an entry without `suffixes`) for the stock's `region` in universe.csv,
+#   3. the index of [context] fallback_region (Europe-wide) for any other non-US stock.
+# No match, or the index returned no data that night: the cell shows "-" and the row carries the reason (payload field idx_why).
+# The comparison is a % move against a % move in the same currency, so no FX conversion is needed. Never use a USD ETF
+# (EWD, EWN) as a stand-in: its % move would include the USD/SEK or USD/NOK change.
+# Retested on Yahoo 2026-11-04 (1y of daily bars, last bar 2026-11-03): see docs/decisions.md. ^OMXS30 (1 bar) and ^OSEBX
+# (404) are still unusable; ^OMXSPI and OSEBX.OL replace them. Copenhagen ^OMXC25 works.
+[context]
+fallback_region = "Europe"
+
+[[indices]]
+symbol = "^GSPC"
+name = "S&P 500"
+region = "US"
+
+[[indices]]
+symbol = "^STOXX"
+name = "STOXX 600"
+region = "Europe"
+
+[[indices]]
+symbol = "^OMXH25"
+name = "OMX Helsinki 25"
+region = "Nordic"
+suffixes = [".HE"]
+
+[[country_indices]]
+symbol = "^OMXSPI"
+name = "OMX Stockholm All-Share"
+region = "Nordic"
+suffixes = [".ST"]
+
+[[country_indices]]
+symbol = "^OMXC25"
+name = "OMX Copenhagen 25"
+region = "Nordic"
+suffixes = [".CO"]
+
+[[country_indices]]
+symbol = "OSEBX.OL"
+name = "Oslo Bors All-Share"
+region = "Nordic"
+suffixes = [".OL"]
+
+[[country_indices]]
+symbol = "^AEX"
+name = "AEX"
+region = "Europe"
+suffixes = [".AS"]
+
+[[country_indices]]
+symbol = "^GDAXI"
+name = "DAX (total return)"
+region = "Europe"
+suffixes = [".DE"]
+
+[[country_indices]]
+symbol = "^FCHI"
+name = "CAC 40"
+region = "Europe"
+suffixes = [".PA"]
+
+[[country_indices]]
+symbol = "^SSMI"
+name = "SMI"
+region = "Europe"
+suffixes = [".SW"]

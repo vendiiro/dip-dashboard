@@ -1,0 +1,179 @@
+{
+  "rule": {
+    "dip": {
+      "drop_1d": 0.04,
+      "drop_5d": 0.07,
+      "drawdown_20d": 0.12
+    },
+    "falling_knife": {
+      "below_200d_falling": true,
+      "drawdown_52w": 0.35
+    },
+    "quality": {
+      "min_score": 60,
+      "roe_min": 0.12,
+      "margin_min": 0.08,
+      "debt_to_equity_max": 150,
+      "market_cap_min": 20000000000
+    },
+    "dip_definition": "1-day <= -drop_1d OR 5-day <= -drop_5d OR close >= drawdown_20d below its 20-day high; needs 252 bars of history"
+  },
+  "variants": {
+    "V1_price_only": "dip rule, price only (primary)",
+    "V2_no_knife": "dip rule, falling knives removed (price only)",
+    "V3_quality_indicative": "dip rule with today's quality score >= min (INDICATIVE: today's fundamentals leak into the past)"
+  },
+  "universe": {
+    "n": 60,
+    "tickers": [
+      "AAPL",
+      "MSFT",
+      "GOOGL",
+      "AMZN",
+      "META",
+      "NVDA",
+      "BRK-B",
+      "JNJ",
+      "PG",
+      "KO",
+      "PEP",
+      "V",
+      "MA",
+      "UNH",
+      "JPM",
+      "XOM",
+      "CVX",
+      "WMT",
+      "COST",
+      "HD",
+      "MCD",
+      "DIS",
+      "NKE",
+      "ADBE",
+      "ORCL",
+      "CSCO",
+      "INTC",
+      "PFE",
+      "MRK",
+      "ABBV",
+      "LLY",
+      "TSLA",
+      "NFLX",
+      "ASML.AS",
+      "SAP.DE",
+      "SIE.DE",
+      "NESN.SW",
+      "ROG.SW",
+      "NOVN.SW",
+      "MC.PA",
+      "OR.PA",
+      "AIR.PA",
+      "NOKIA.HE",
+      "SAMPO.HE",
+      "KNEBV.HE",
+      "NESTE.HE",
+      "UPM.HE",
+      "FORTUM.HE",
+      "STERV.HE",
+      "WRT1V.HE",
+      "ERIC-B.ST",
+      "VOLV-B.ST",
+      "ATCO-A.ST",
+      "INVE-B.ST",
+      "HM-B.ST",
+      "NOVO-B.CO",
+      "MAERSK-B.CO",
+      "DSV.CO",
+      "EQNR.OL",
+      "DNB.OL"
+    ],
+    "bias": "current constituents only: survivorship bias; delisted names are missing"
+  },
+  "data": {
+    "source": "yfinance, dividend-adjusted daily closes",
+    "raw_file": "2026-11-02_072431.csv.gz",
+    "raw_sha256": "9bffaf24afef5754c83bd353901e2f05a95dc00babb74a282e74bfb28875b839",
+    "history_from": "2008-08-19",
+    "n_series": 59,
+    "last_bar": "2026-10-30",
+    "missing_tickers": [
+      "ROG.SW"
+    ],
+    "zero_volume_bars_removed": {
+      "total": 92,
+      "tickers": 25,
+      "of_bars": 267884
+    },
+    "index_last_bar": {
+      "US": "2026-10-30",
+      "Europe+Nordic": "2026-10-30"
+    },
+    "universe_sha256": "e3874d3d834bf01ebd524b16164a610d8e273d539ef5aa62b810b1b9ca8fae8c",
+    "settings_sha256": "c6014c8c93dc769f170cd8b373bd8fd52ba515767b034a4b625dc82b6289d286"
+  },
+  "indices": {
+    "US": "^GSPC",
+    "Europe+Nordic": "^STOXX"
+  },
+  "entry": "next close after the signal bar (the signal uses data up to and including the signal bar's close)",
+  "exit": "h trading bars after entry; h in horizons",
+  "horizons": [
+    5,
+    21,
+    63
+  ],
+  "cooldown_bars": 21,
+  "costs": {
+    "roundtrip": 0.001,
+    "sensitivity_multiples": [
+      1,
+      2,
+      4
+    ],
+    "note": "subtracted from event returns; baselines are compared before costs on both sides"
+  },
+  "split": {
+    "oos_fraction": 0.4,
+    "cutoff": "2020-02-06",
+    "purge": "in-sample events whose exit is after the cutoff are dropped"
+  },
+  "baselines": [
+    "own: same stock, non-dip days with a computable signal, same period",
+    "index: ^GSPC (US) / ^STOXX (Europe+Nordic), same dates, not FX adjusted",
+    "peers: mean of all other universe stocks the same signal date",
+    "date-shift placebo: all events moved by one common random lag of 70-400 bars, paired comparison (keeps clusters)",
+    "independent placebo: same stock, random non-dip day of the same year (ignores clustering; reference only)"
+  ],
+  "revisions_after_first_look": [
+    "Run 1 (spec 90205cfc6da3a007) was a full run that included the out-of-sample primary cell, so the freeze is 'before the first run', not before anyone saw a number. Its spec file was overwritten by the next run (only the hash survives in trials.csv); specs are now archived by hash.",
+    "Placebo: the independent same-stock same-year draw ignores that events share dates and gave p = 0.002 beside an interval that included zero. A date-shift placebo that moves all events by one common lag replaced it; the independent one stays in results.csv as 'placebo_*'. This lowered significance.",
+    "Baseline and placebo days must have a computable signal (252 bars of history); before, a stock's first year counted as 'non-dip'. No predictable direction; the primary cell did not move.",
+    "92 zero-volume bars were removed before the run (91 exchange-holiday placeholders and one corrupt price). They were all in sample.",
+    "Later runs with the same analysis (same numbers) only changed report charts and wording, so trials.csv shows several runs per spec.",
+    "Found by the independent review and NOT acted on in the numbers: one more bad price (KNEBV.HE 2025-07-29) creates one false out-of-sample event; removing it moves the primary excess from +0.2660% to +0.2667%."
+  ],
+  "stress": {
+    "definition": "regional index closes >= stress_drawdown below its trailing stress_window-bar high",
+    "drawdown": 0.1,
+    "window": 60
+  },
+  "uncertainty": {
+    "method": "bootstrap resampling calendar months",
+    "draws": 5000,
+    "level": 0.9,
+    "placebo_draws": 2000,
+    "seed": 20261102
+  },
+  "primary_hypothesis": "For the price-only dip rule (V1), after the cooldown, the mean 21-trading-day forward return (entry at the next close), minus the same stock's mean 21-day return on its non-dip days in the same period, is greater than zero in the out-of-sample period (the last 40% of trading dates), all regions pooled, before costs. It counts as supported only if the 90% month-clustered bootstrap interval excludes zero. Every other cell in the report is descriptive.",
+  "primary_cell": {
+    "variant": "V1_price_only",
+    "horizon": 21,
+    "group": "All",
+    "period": "OOS",
+    "baseline": "own"
+  },
+  "headline_trials": 9,
+  "cells_computed": 108,
+  "sample_notes": "events touching a >40% one-day move stay in the main numbers and are also reported without them",
+  "spec_hash": "79288caaa97d33b1"
+}

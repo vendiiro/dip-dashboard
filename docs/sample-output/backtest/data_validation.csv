@@ -1,0 +1,3 @@
+ticker,check,severity,detail
+NFLX,large_move,warn,+42.2% on 2013-01-24: check for a split or adjustment error
+KNEBV.HE,spike_revert,warn,"+29.6% on 2025-07-29 and back the next day, likely a bad price: thin volume"

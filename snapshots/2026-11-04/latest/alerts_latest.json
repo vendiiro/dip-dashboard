@@ -1,0 +1,16 @@
+{
+ "asof": "2026-11-04",
+ "count": 1,
+ "alerts": [
+  {
+   "ticker": "*",
+   "name": "",
+   "condition": "newly_flagged_summary",
+   "kind": "info",
+   "headline": "3 candidates newly flagged by the screen",
+   "detail": "newly flagged versus the previous close: DHI, SYY, VRTX. First run: other conditions are recorded, not announced.",
+   "context": {},
+   "asof": "2026-11-04"
+  }
+ ]
+}

@@ -1,0 +1,55 @@
+# Trigger alerts: informational notices that a research condition you set became true at the latest close.
+# They are evaluated for every currently flagged candidate and for the stocks in [[watch]] below.
+# All conditions use daily closes only (no intraday data). Each fires once, when it turns from false to true.
+# Nothing here is investment advice, and the thresholds are untested defaults.
+
+[defaults]
+# Which conditions to evaluate. Remove a name to switch it off.
+#   recovery            close back above its sma_days-day average after being below it the day before
+#   rsi_rebound         RSI(14) moves from below rsi_level to rsi_level or above
+#   new_low             close below the lowest close of the previous new_low_days days (shown as a caution)
+#   drop_continues      a further 1-day fall of at least drop_continues for a stock flagged at the previous close (caution)
+#   earnings_window     reported within earnings_recent_days or reports within earnings_soon_days trading days
+#   newly_flagged       meets the dip rules now, did not at the previous close
+#   no_longer_flagged   met the dip rules at the previous close, does not now
+conditions = ["recovery", "rsi_rebound", "new_low", "drop_continues", "earnings_window", "newly_flagged", "no_longer_flagged"]
+sma_days = 20
+rsi_level = 30
+new_low_days = 60
+drop_continues = 0.04        # 4% one-day fall
+earnings_recent_days = 5
+earnings_soon_days = 10
+
+# Watchlist: empty by default. Any key from [defaults] can be overridden per ticker. `levels` are absolute prices in the
+# stock's own currency; direction is "up", "down" or "both". `note` is free text kept with the alert.
+#
+# [[watch]]
+# ticker = "AMD"
+# note = "price I want to follow after the last earnings report"
+# levels = [{ price = 150.0, direction = "up" }]
+#
+# [[watch]]
+# ticker = "ASML.AS"
+# new_low_days = 40
+# levels = [{ price = 600.0, direction = "down" }, { price = 700.0, direction = "up" }]
+#
+# [[watch]]
+# ticker = "NESTE.HE"
+# conditions = ["recovery", "new_low"]
+
+# ---- Your watchlist (added 2026-11-04) ----
+# Evaluated every night with the default conditions above, whether or not the screen flags them.
+# Add `levels = [{ price = 150.0, direction = "up" }]` (a price in the stock's own currency) or
+# `conditions = [...]` to any stock below to change what it watches.
+
+[[watch]]
+ticker = "NESTE.HE"
+
+[[watch]]
+ticker = "AMD"
+
+[[watch]]
+ticker = "ASML.AS"
+
+[[watch]]
+ticker = "NVDA"

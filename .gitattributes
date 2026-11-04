@@ -1,0 +1,7 @@
+# Normalise text to LF in the repository; the Windows batch file must stay CRLF (a test checks it).
+* text=auto
+*.bat text eol=crlf
+*.ps1 text eol=lf
+*.png binary
+*.gz binary
+*.ipynb text eol=lf
