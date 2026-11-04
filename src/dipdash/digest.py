@@ -35,8 +35,9 @@ def day_name(iso: str | None) -> str:
     return datetime.strptime(iso, "%Y-%m-%d").strftime("%a %d %b %Y")
 
 
-STANDING_CAVEAT = ("So far no tested version of this screen has shown an out-of-sample edge that the sample can separate from noise "
-                   "(see docs/decisions.md). A flag is not a sign of a later rebound; treat the list as a place to start reading.")
+STANDING_CAVEAT = ("So far no tested version of this screen has done better than chance on data it had not seen (see docs/decisions.md). "
+                   "A flag says only that a stock fell and passed the checks; it says nothing about what the price does next. "
+                   "Treat the list as a place to start reading.")
 
 
 def _is_event_backtest(folder: Path) -> bool:

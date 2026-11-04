@@ -225,7 +225,7 @@ def test_standing_caveat_always_present(tmp_path):
     for line in (None, "A backtest folder exists (x) but its results could not be read.", "Latest backtest (x): fine."):
         text = build_digest(payload([row("AAA")]), S, backtest_line=line)
         assert STANDING_CAVEAT in text
-    assert "out-of-sample edge" in STANDING_CAVEAT
+    assert "done better than chance on data it had not seen" in STANDING_CAVEAT
 
 
 def test_history_dates_and_previous_data_date(tmp_path):

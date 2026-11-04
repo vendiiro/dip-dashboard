@@ -52,7 +52,7 @@ One entry of `rows`. Keys are exactly these.
 | `vs200` | float | yes | fraction | price relative to the 200-day average (-0.1 = 10% below) |
 | `rsi` | float | yes | 0 to 100 | 14-day RSI |
 | `z5` | float | yes | standard deviations | 5-day move divided by its usual size for this stock |
-| `volx` | float | yes | multiple | last volume over its recent average; null without volume |
+| `volx` | float | yes | multiple | last volume over its 20-day average; null without volume |
 | `x5` | float | yes | fraction | 5-day move minus the index's 5-day move |
 | `res1` | float | yes | fraction | 1-day move after removing the market-beta part |
 | `res5` | float | yes | fraction | 5-day move after removing the market-beta part |
