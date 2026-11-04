@@ -14,3 +14,13 @@ a digest and trigger alerts. **Educational research only: it never gives investm
 State of the findings so far (details in the snapshot README): the dip rule shows no out-of-sample edge that the sample can separate from noise,
 no tested price feature shows detectable signal, and the volatility-range forecast failed its calibration check and is not wired in.
 The dashboard is a listing and monitoring tool.
+
+## Focus: themes and company size
+The **Focus** panel at the top of the dashboard narrows the whole page (tiles, table and charts) to one or more themes,
+such as *AI & cloud*, *Semiconductors* or *Pharma & biotech* (Eli Lilly, Novo Nordisk ...), and optionally to large companies only
+(market cap ≥ $100B or ≥ $500B). Each theme card shows how many quality dips it has today and its median 5-day move.
+Several themes can be on at once. The choice is remembered in the browser and kept in the link (`#focus=ai,pharma&size=100000000000`),
+so a view can be bookmarked.
+
+Themes live in `config/themes.toml`: add, rename or regroup them freely. Every ticker must be in `config/universe.csv`
+(a test checks this). Themes are a browsing aid only: they never change whether a stock counts as a dip or how quality is scored.

@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from .config import Settings, Stock
+from .config import Settings, Stock, Theme
 from .fsio import atomic_write_text
 from .metrics import clean, compute_metrics, history
 from .quality import quality
@@ -61,13 +61,18 @@ def build_payload(universe: list[Stock], prices: Prices, funds: dict, settings: 
                   today: date | None = None, fx_to_usd: dict[str, float] | None = None,
                   indices: list[dict] | None = None, issues: list[Issue] | None = None,
                   now: datetime | None = None, index_history: dict | None = None,
-                  earnings: dict | None = None) -> dict:
+                  earnings: dict | None = None, themes: list[Theme] | None = None) -> dict:
     """One row per screened stock plus a data_quality list for every ticker that was skipped."""
     today = today or date.today()
     indices = indices or []
     partial = {i.ticker for i in (issues or []) if i.check == "partial_bar"}     # last bar is dated today: the session may still be open
     index_history = index_history or {}
     earnings = earnings or {}
+    themes = themes or []
+    theme_of: dict[str, list[str]] = {}
+    for th in themes:
+        for t in th.tickers:
+            theme_of.setdefault(t, []).append(th.id)
     rows, skipped = [], []
     for s in universe:
         if s.ticker not in prices:
@@ -105,7 +110,7 @@ def build_payload(universe: list[Stock], prices: Prices, funds: dict, settings: 
         m["earn"] = earnings.get(s.ticker)
         m["partial"] = s.ticker in partial
         m.update({
-            "t": s.ticker, "name": s.name, "region": s.region, "sector": s.sector,
+            "t": s.ticker, "name": s.name, "region": s.region, "sector": s.sector, "themes": theme_of.get(s.ticker, []),
             "q": q, "qchecks": checks, "fpe": clean(f.get("forwardPE"), 1), "tpe": clean(f.get("trailingPE"), 1),
             "ccy": f.get("currency") or "", "news": [],
             "dip": bool(dip_reasons(m, settings.dip)), "why": dip_reasons(m, settings.dip),
@@ -123,6 +128,7 @@ def build_payload(universe: list[Stock], prices: Prices, funds: dict, settings: 
     return {"generated": stamp, "tz": tz, "demo": demo, "rows": rows, "data_quality": skipped,
             "fx_to_usd": fx_to_usd or {}, "indices": indices,
             "issues": [asdict(i) for i in (issues or [])],
+            "themes": [{"id": t.id, "name": t.name, "desc": t.desc, "tickers": list(t.tickers)} for t in themes],
             "settings": {"dip": asdict(settings.dip), "quality": asdict(settings.quality),
                          "knife": asdict(settings.falling_knife)}}
 

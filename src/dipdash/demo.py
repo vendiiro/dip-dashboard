@@ -32,7 +32,7 @@ def demo_inputs(universe: list[Stock]):
         funds[s.ticker] = {
             "returnOnEquity": 0.22 if good else 0.04, "profitMargins": 0.18 if good else 0.03,
             "debtToEquity": 60 if good else 220, "freeCashflow": 1e9 if good else -2e8,
-            "revenueGrowth": 0.06 if good else -0.02, "marketCap": 1e11, "forwardPE": 18 + i % 9,
+            "revenueGrowth": 0.06 if good else -0.02, "marketCap": 2.5e10 * (1 + (i * 7) % 40),   # 25B to 1T USD, so the size filter has something to do "forwardPE": 18 + i % 9,
             "trailingPE": 22 + i % 7, "currency": expected_currency(s.ticker) or "USD",
         }
     return prices, funds

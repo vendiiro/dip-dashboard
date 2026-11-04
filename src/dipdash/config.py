@@ -150,6 +150,42 @@ def load_settings(path: Path | str | None = None) -> Settings:
     return Settings(**sections, indices=indices, country_indices=country)
 
 
+@dataclass(frozen=True)
+class Theme:
+    """A named group of stocks the dashboard can focus on (config/themes.toml). A browsing aid only: it never changes the screen."""
+    id: str
+    name: str
+    desc: str = ""
+    tickers: tuple[str, ...] = ()
+
+
+def load_themes(path: Path | str | None = None, universe: list[Stock] | None = None) -> list[Theme]:
+    """Read themes.toml. A missing file means no themes. With `universe`, a ticker that is not in it is an error,
+    so a typo cannot silently drop a stock from a theme."""
+    p = Path(path) if path else CONFIG_DIR / "themes.toml"
+    if not p.exists():
+        return []
+    raw = tomllib.loads(p.read_text(encoding="utf-8"))
+    unknown = set(raw) - {"theme"}
+    if unknown:
+        raise ValueError(f"{p.name}: unknown section(s) {sorted(unknown)}; expected [[theme]]")
+    known = {s.ticker for s in universe} if universe is not None else None
+    out, ids = [], set()
+    for t in raw.get("theme", []):
+        th = _section(Theme, t, "theme")
+        if not th.id or not th.name:
+            raise ValueError(f"{p.name}: every [[theme]] needs an id and a name")
+        if th.id in ids:
+            raise ValueError(f"{p.name}: duplicate theme id {th.id!r}")
+        ids.add(th.id)
+        if len(set(th.tickers)) != len(th.tickers):
+            raise ValueError(f"{p.name}: theme {th.id!r} lists a ticker twice")
+        if known is not None and (missing := [x for x in th.tickers if x not in known]):
+            raise ValueError(f"{p.name}: theme {th.id!r} has ticker(s) not in the universe: {missing}")
+        out.append(th)
+    return out
+
+
 def load_universe(path: Path | str | None = None) -> list[Stock]:
     """Read universe.csv. Only `ticker` is required; name defaults to the ticker, region to 'Other'."""
     p = Path(path) if path else CONFIG_DIR / "universe.csv"

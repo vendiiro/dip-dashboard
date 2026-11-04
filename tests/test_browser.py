@@ -10,6 +10,8 @@ pw = pytest.importorskip("playwright.sync_api")
 
 from dipdash.cli import main  # noqa: E402
 
+NET_IGNORE = ("ERR_TUNNEL", "ERR_NAME_NOT_RESOLVED", "ERR_CONNECTION", "ERR_BLOCKED", "ERR_INTERNET_DISCONNECTED")
+
 
 @pytest.fixture(scope="module")
 def browser():
@@ -33,7 +35,8 @@ def open_page(browser, url, w=1280, h=900, scheme="light"):
     page = browser.new_page(viewport={"width": w, "height": h}, color_scheme=scheme)
     errors = []
     page.on("pageerror", lambda e: errors.append(str(e)))
-    page.on("console", lambda m: m.type == "error" and "font" not in m.text.lower() and errors.append(m.text))
+    # The web-font stylesheet is optional; a blocked font host (offline, sandbox proxy) is not a page error.
+    page.on("console", lambda m: m.type == "error" and not any(x in m.text for x in NET_IGNORE) and "font" not in m.text.lower() and errors.append(m.text))
     page.goto(url, wait_until="domcontentloaded")
     page.wait_for_selector("#tiles .tile")
     return page, errors
@@ -51,7 +54,7 @@ def test_renders_without_errors_or_sideways_scroll(browser, demo_html, w, h, sch
 
 def test_default_view_uses_the_settings_rule_and_opens_the_top_candidate(browser, demo_html):
     page, _ = open_page(browser, demo_html)
-    assert page.input_value("#win") == "any" and page.is_disabled("#drop")
+    assert page.input_value("#win") == "any" and page.is_hidden("#droplab")   # default rules: the single slider is hidden
     assert page.locator("tr.row.open").count() == 1 and page.locator("td.detail").count() == 1
     page.close()
 
@@ -60,7 +63,7 @@ def test_show_filter_changes_the_row_count(browser, demo_html):
     page, _ = open_page(browser, demo_html)
     dips = page.locator("#body tr.row").count()
     page.click("#show button[data-v=all]")
-    assert page.locator("#body tr.row").count() == 60 > dips
+    assert page.locator("#body tr.row").count() == page.evaluate("DATA.rows.length") > dips
     page.click("#show button[data-v=quality]")
     assert 0 < page.locator("#body tr.row").count() <= dips
     page.close()
@@ -75,7 +78,7 @@ def test_search_and_region_filters(browser, demo_html):
     assert page.is_visible("#empty") and "No stocks match" in page.inner_text("#empty")
     page.fill("#q", "")
     page.click("#region button[data-v=Nordic]")
-    assert page.locator("#body tr.row").count() == 18
+    assert page.locator("#body tr.row").count() == page.evaluate("DATA.rows.filter(r => r.region === 'Nordic').length")
     page.close()
 
 
@@ -154,6 +157,9 @@ def test_default_dip_count_equals_the_python_rule(browser, demo_html):
 
 def test_new_since_yesterday_tile_matches_the_rows_marked_new(browser, demo_html):
     page, _ = open_page(browser, demo_html)
+    more = page.locator("#tiles .tile").nth(1).locator(".chipmore")
+    if more.count():
+        more.click()                                              # the tile shows the first few chips; expand to see them all
     chips = sorted(page.locator("#tiles .tile").nth(1).locator(".chip").all_inner_texts())
     marked = sorted(t for t, new in page.evaluate(SHOWN) if new)
     assert chips == marked and len(chips) > 0
@@ -205,3 +211,38 @@ def test_many_identical_warnings_show_as_one_line_in_the_data_quality_panel(brow
     assert errors == [] and len(items) == 2
     assert "(8 stocks) partial bar" in items[0] and "S0, S1" in items[0]
     page.close()
+
+
+def _count_rows(page):
+    return page.locator("#body tr.row").count()
+
+
+def test_theme_focus_narrows_the_table_and_is_kept_in_the_link(browser, demo_html):
+    page, errors = open_page(browser, demo_html)
+    page.click('#show button[data-v="all"]')
+    total = _count_rows(page)
+    page.click('.th[data-id="pharma"]')
+    pharma = _count_rows(page)
+    assert 0 < pharma < total
+    tickers = page.eval_on_selector_all("#body tr.row", "rs => rs.map(r => r.dataset.t)")
+    assert "LLY" in tickers and "NVDA" not in tickers
+    assert "focus=pharma" in page.evaluate("location.hash")
+    page.click('.th[data-id="ai"]')                               # several themes combine (union)
+    assert _count_rows(page) > pharma
+    page.click('.th[data-id=""]')                                 # "All stocks" clears the focus
+    assert _count_rows(page) == total
+    assert errors == []
+
+
+def test_size_filter_only_keeps_big_companies(browser, demo_html):
+    page, errors = open_page(browser, demo_html)
+    page.click('#show button[data-v="all"]')
+    total = _count_rows(page)
+    page.click('#size button[data-v="5e11"]')
+    big = _count_rows(page)
+    assert 0 < big < total
+    page.goto(demo_html.split("#")[0] + "#focus=semis&size=100000000000")   # a bookmarked view restores itself
+    page.reload(); page.wait_for_selector("#tiles .tile")
+    assert page.get_attribute('.th[data-id="semis"]', "aria-pressed") == "true"
+    assert page.get_attribute('#size button[data-v="1e11"]', "aria-pressed") == "true"
+    assert errors == []

@@ -1,0 +1,114 @@
+# Themes: named groups of large-cap stocks you can focus the dashboard on (the "Focus" chips).
+# A stock can sit in several themes (Nvidia is both AI and Semiconductors). Every ticker must be in universe.csv;
+# a test checks that. Add, remove or rename themes freely: the dashboard builds its chips from this file.
+#
+# Themes are a browsing aid, not a screen: they never change whether a stock counts as a dip or how quality is scored.
+# Membership is a hand-made judgement about where most of a company's business is, as of late 2026.
+
+[[theme]]
+id = "ai"
+name = "AI & cloud"
+desc = "Companies whose growth story is tied to AI: cloud platforms, AI chips, data-centre networking and AI software."
+tickers = ["NVDA", "MSFT", "GOOGL", "AMZN", "META", "ORCL", "AVGO", "AMD", "ANET", "CRM", "NOW", "IBM", "EQIX", "SAP.DE", "ASML.AS", "SU.PA"]
+
+[[theme]]
+id = "semis"
+name = "Semiconductors"
+desc = "Chip designers, chip makers and the equipment and design-software suppliers they depend on."
+tickers = ["NVDA", "AMD", "AVGO", "QCOM", "TXN", "INTC", "MU", "ADI", "AMAT", "LRCX", "KLAC", "SNPS", "CDNS", "ASML.AS", "IFX.DE"]
+
+[[theme]]
+id = "software"
+name = "Software & IT"
+desc = "Enterprise software, cybersecurity and IT services."
+tickers = ["MSFT", "ORCL", "ADBE", "CRM", "NOW", "INTU", "PANW", "ACN", "IBM", "SNPS", "CDNS", "SAP.DE", "DSY.PA", "CAP.PA"]
+
+[[theme]]
+id = "megatech"
+name = "Big Tech"
+desc = "The largest US technology and platform companies."
+tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA", "AVGO", "NFLX"]
+
+[[theme]]
+id = "pharma"
+name = "Pharma & biotech"
+desc = "Drug makers and biotech, including the obesity and diabetes leaders (Eli Lilly, Novo Nordisk)."
+tickers = ["LLY", "NOVO-B.CO", "JNJ", "MRK", "ABBV", "PFE", "AMGN", "GILD", "BMY", "REGN", "VRTX", "ZTS", "ROG.SW", "NOVN.SW", "SAN.PA", "BAYN.DE", "UCB.BR"]
+
+[[theme]]
+id = "medtech"
+name = "Medtech & life science"
+desc = "Medical devices, diagnostics, lab tools and contract manufacturing."
+tickers = ["TMO", "ABT", "DHR", "MDT", "ISRG", "SYK", "BSX", "EW", "EL.PA", "SHL.DE", "LONN.SW", "COLO-B.CO", "DEMANT.CO"]
+
+[[theme]]
+id = "healthcare-services"
+name = "Health insurers & care"
+desc = "US health insurers, pharmacy and hospital operators. Sensitive to US policy news."
+tickers = ["UNH", "ELV", "CVS", "HCA"]
+
+[[theme]]
+id = "payments"
+name = "Payments & exchanges"
+desc = "Card networks, payment processors, stock exchanges and ratings agencies."
+tickers = ["V", "MA", "AXP", "ADYEN.AS", "SPGI", "MCO", "ICE", "CME", "DB1.DE"]
+
+[[theme]]
+id = "banks"
+name = "Banks"
+desc = "Large US, European and Nordic banks."
+tickers = ["JPM", "BAC", "WFC", "C", "GS", "MS", "PNC", "SCHW", "BNP.PA", "SAN.MC", "BBVA.MC", "ISP.MI", "UCG.MI", "INGA.AS", "UBSG.SW", "NDA-FI.HE", "DNB.OL", "SEB-A.ST", "SHB-A.ST", "SWED-A.ST"]
+
+[[theme]]
+id = "insurance"
+name = "Insurance"
+desc = "Insurers and reinsurers."
+tickers = ["BRK-B", "PGR", "CB", "AON", "MET", "AIG", "ALV.DE", "MUV2.DE", "CS.PA", "ZURN.SW", "SREN.SW", "G.MI", "NN.AS", "SAMPO.HE"]
+
+[[theme]]
+id = "luxury"
+name = "Luxury & brands"
+desc = "Luxury houses, beauty and global consumer brands with pricing power."
+tickers = ["MC.PA", "RMS.PA", "KER.PA", "CFR.SW", "OR.PA", "RACE.MI", "EL.PA", "NKE", "ADS.DE", "LULU", "ITX.MC"]
+
+[[theme]]
+id = "staples"
+name = "Consumer staples"
+desc = "Food, drink and household products: usually steadier businesses."
+tickers = ["PG", "KO", "PEP", "COST", "WMT", "MDLZ", "PM", "CL", "NESN.SW", "UNA.AS", "BN.PA", "ABI.BR", "HEIA.AS", "BEI.DE"]
+
+[[theme]]
+id = "defence"
+name = "Defence & aerospace"
+desc = "Defence contractors, aircraft makers and engine suppliers."
+tickers = ["LMT", "RTX", "NOC", "GD", "GE", "BA", "AIR.PA", "SAF.PA", "RHM.DE"]
+
+[[theme]]
+id = "industrial-automation"
+name = "Electrification & automation"
+desc = "Grid equipment, factory automation and machinery that benefit from electrification and data-centre build-outs."
+tickers = ["ETN", "SIE.DE", "SU.PA", "ABBN.SW", "LR.PA", "EMR", "HON", "PRY.MI", "ATCO-A.ST", "KNEBV.HE", "CAT", "DE"]
+
+[[theme]]
+id = "energy"
+name = "Oil & gas"
+desc = "Integrated oil majors, producers and refiners. Driven largely by the oil price."
+tickers = ["XOM", "CVX", "COP", "EOG", "SLB", "TTE.PA", "ENI.MI", "EQNR.OL", "REP.MC", "OXY", "MPC", "PSX"]
+
+[[theme]]
+id = "clean-energy"
+name = "Utilities & clean power"
+desc = "Regulated utilities and renewable-power companies. Sensitive to interest rates."
+tickers = ["NEE", "DUK", "SO", "AEP", "IBE.MC", "ENEL.MI", "RWE.DE", "EOAN.DE", "ENGI.PA", "VWS.CO", "FORTUM.HE", "NESTE.HE"]
+
+[[theme]]
+id = "autos"
+name = "Autos & EVs"
+desc = "Car makers, including electric-vehicle makers."
+tickers = ["TSLA", "GM", "F", "MBG.DE", "BMW.DE", "VOW3.DE", "RACE.MI", "VOLV-B.ST"]
+
+[[theme]]
+id = "nordic"
+name = "Nordic champions"
+desc = "The largest companies listed in Helsinki, Stockholm, Copenhagen and Oslo."
+tickers = ["NOVO-B.CO", "NDA-FI.HE", "SAMPO.HE", "KNEBV.HE", "NOKIA.HE", "ATCO-A.ST", "INVE-B.ST", "VOLV-B.ST", "ERIC-B.ST", "ASSA-B.ST", "DSV.CO", "EQNR.OL", "DNB.OL"]

@@ -181,11 +181,38 @@ footer dl{margin:0;display:grid;gap:6px;align-content:start}
 footer dt{font-weight:600;color:var(--ink)}
 footer dd{margin:0}
 
+/* Focus: theme picker. Cards are toggles (aria-pressed); several can be on at once. */
+.focus{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.focushead{display:flex;justify-content:space-between;align-items:baseline;gap:8px 16px;flex-wrap:wrap}
+.focushead p{margin:0;font-size:12.5px;color:var(--ink-3);max-width:70ch}
+.focusbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.linkbtn{font:inherit;font-size:12.5px;background:none;border:0;padding:4px 0;color:var(--accent);cursor:pointer;text-decoration:underline;min-height:32px}
+.themes{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:8px}
+.th{position:relative;display:flex;flex-direction:column;gap:5px;text-align:left;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:9px 11px 10px;cursor:pointer;min-height:76px;min-width:0;transition:border-color .12s,background .12s}
+.th:hover{border-color:var(--line-strong)}
+.th[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
+.th .nm1{font-weight:600;font-size:13.5px;color:var(--ink);padding-right:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.th .tick{position:absolute;top:8px;right:9px;width:16px;height:16px;border-radius:4px;border:1.5px solid var(--line-strong);display:grid;place-items:center;font-size:11px;line-height:1;color:var(--surface)}
+.th[aria-pressed="true"] .tick{background:var(--accent);border-color:var(--accent)}
+.th .st{font-size:12px;color:var(--ink-2);display:flex;gap:4px 10px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
+.th .st b{font-family:var(--f-data);font-weight:500;color:var(--ink)}
+.th .st .hot{color:var(--good);font-weight:600}
+.mix{display:flex;height:5px;border-radius:3px;overflow:hidden;background:var(--sunken);gap:1px}
+.mix i{display:block;height:100%}
+.mix .q{background:var(--good)} .mix .d{background:var(--warn)} .mix .k{background:var(--crit)}
+.focusnote{font-size:12.5px;color:var(--ink-2);margin:0}
+.focusnote b{color:var(--ink);font-weight:600}
+.thtag{font-size:10.5px;color:var(--ink-3);border:1px solid var(--line);border-radius:4px;padding:0 5px;white-space:nowrap}
+.tags{display:flex;flex-wrap:wrap;gap:4px}
+
 @media (max-width:900px){
   .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
   .ctx,.dgrid{grid-template-columns:minmax(0,1fr)}
 }
 @media (max-width:600px){
+  .themes{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:4px;margin:0 -14px;padding-left:14px;padding-right:14px;scrollbar-width:thin}
+  .th{flex:0 0 172px;scroll-snap-align:start;min-height:80px}
+  .focus .moreth{display:none}
   .scroll{display:none}
   .cards{display:flex}
   .seg button{min-height:40px;padding:6px 12px}
@@ -220,6 +247,7 @@ footer dd{margin:0}
 
   <header class="top">
     <h1>Quality-Dip Screen</h1>
+    <p class="muted" style="margin:0;font-size:13.5px">Large-cap US and European stocks that fell sharply, checked for business quality. Choose a focus to narrow the whole page.</p>
     <div class="meta">
       <span>US close <b id="m-us">–</b></span>
       <span>Europe close <b id="m-eu">–</b></span>
@@ -228,6 +256,22 @@ footer dd{margin:0}
     </div>
   </header>
   <div class="dqpanel" id="dqpanel" hidden></div>
+
+  <section class="focus" id="focus" aria-labelledby="focus-h">
+    <div class="focushead">
+      <h2 id="focus-h">Focus</h2>
+      <div class="focusbar">
+        <div class="seg" id="size" role="group" aria-label="Company size">
+          <button data-v="0" aria-pressed="true">Any size</button>
+          <button data-v="1e11" aria-pressed="false" title="Market cap at least 100 billion USD">≥ $100B</button>
+          <button data-v="5e11" aria-pressed="false" title="Market cap at least 500 billion USD">≥ $500B</button>
+        </div>
+      </div>
+    </div>
+    <p class="focusnote" id="focusnote"></p>
+    <div class="themes" id="themes" role="group" aria-label="Themes"></div>
+    <div class="focusbar"><button type="button" class="linkbtn moreth" id="moreth" hidden></button><button type="button" class="linkbtn" id="clearth" hidden>Clear focus</button></div>
+  </section>
 
   <div class="tiles" id="tiles"></div>
 
@@ -336,7 +380,76 @@ const REGION_ORDER = ['US', 'Europe', 'Nordic'];
 regions.sort((a, b) => (REGION_ORDER.indexOf(a) + 1 || 99) - (REGION_ORDER.indexOf(b) + 1 || 99) || a.localeCompare(b));
 [['', 'All'], ...regions.map(r => [r, r])].forEach(([v, l], i) => { const b = el('button', null, l); b.dataset.v = v; b.setAttribute('aria-pressed', String(i === 0)); $('region').append(b); });
 
-const S = {show: 'dips', region: '', sortKey: null, sortDir: 1, open: null};
+const S = {show: 'dips', region: '', sortKey: null, sortDir: 1, open: null, themes: new Set(), size: 0, allThemes: false};
+
+// ---------- focus (themes + size) ----------
+// Remembered per browser, and readable from the link (#focus=ai,pharma&size=1e11) so a view can be bookmarked.
+const THEMES = DATA.themes || [], THEME = Object.fromEntries(THEMES.map(t => [t.id, t]));
+const mcap = r => { const c = (r.qchecks || []).find(c => c.key === 'marketCap'); return c && c.value != null ? c.value : null; };
+const SIZES = new Map([[0, 'any size'], [1e11, 'market cap ≥ $100B'], [5e11, 'market cap ≥ $500B']]);
+(function restoreFocus() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem('dipdash.focus') || '{}'); } catch (e) { saved = {}; }
+  const h = new URLSearchParams(location.hash.slice(1));
+  const ids = h.has('focus') ? h.get('focus').split(',') : saved.themes || [];
+  ids.filter(id => THEME[id]).forEach(id => S.themes.add(id));
+  const sz = h.has('size') ? h.get('size') : saved.size;
+  if (sz != null && SIZES.has(+sz)) S.size = +sz;
+})();
+function saveFocus() {
+  try { localStorage.setItem('dipdash.focus', JSON.stringify({themes: [...S.themes], size: S.size})); } catch (e) { /* storage blocked: fine */ }
+  const h = new URLSearchParams(); if (S.themes.size) h.set('focus', [...S.themes].join(',')); if (S.size) h.set('size', String(S.size));
+  try { history.replaceState(null, '', h.toString() ? '#' + h.toString() : location.pathname + location.search); } catch (e) { /* file:// in some browsers */ }
+}
+const inSize = r => !S.size || (mcap(r) != null && mcap(r) >= S.size);
+const inThemes = r => !S.themes.size || (r.themes || []).some(id => S.themes.has(id));
+function focusPanel(all) {
+  const box = $('themes'); box.replaceChildren();
+  const sized = all.filter(inSize);
+  const SHOW = 9, order = THEMES.filter((t, i) => S.allThemes || i < SHOW || S.themes.has(t.id) || mq.matches);
+  if (mq.matches) order.sort((a, b) => S.themes.has(b.id) - S.themes.has(a.id));   // phone: picked themes lead the scroll strip
+  const card = (id, name, members, desc) => {
+    const b = el('button', 'th'); b.type = 'button'; b.dataset.id = id;
+    const on = id === '' ? !S.themes.size : S.themes.has(id); b.setAttribute('aria-pressed', String(on));
+    const q = members.filter(r => r.setup.rank === 4).length, kn = members.filter(r => r.setup.label === 'Falling knife').length,
+          d = members.filter(r => r.setup.rank > 0).length - q - kn, n = members.length;
+    const r5 = members.map(r => r.r5).filter(v => v != null).sort((a, b) => a - b), med = r5.length ? r5[Math.floor(r5.length / 2)] : null;
+    b.append(el('span', 'nm1', name), el('span', 'tick', on ? '✓' : ''));
+    const st = el('span', 'st');
+    const a1 = el('span'); a1.append(el('b', q ? 'hot' : null, String(q)), ' quality dip' + (q === 1 ? '' : 's')); st.append(a1);
+    const a2 = el('span'); a2.append('5d ', el('b', sgnCls(med), pct(med))); a2.title = 'Median 5-day move of the stocks in this group'; st.append(a2);
+    b.append(st);
+    const mix = el('span', 'mix'); mix.setAttribute('aria-hidden', 'true');
+    [['q', q], ['d', d], ['k', kn]].forEach(([c, k]) => { if (k) { const i = el('i', c); i.style.width = (100 * k / Math.max(1, n)) + '%'; mix.append(i); } });
+    b.append(mix);
+    b.title = (desc ? desc + '\n' : '') + `${n} stocks: ${q} quality dips, ${d} other dips, ${kn} falling knives. Bar: green quality dips, amber other dips, red falling knives.`;
+    b.setAttribute('aria-label', `${name}: ${n} stocks, ${q} quality dips, median 5-day move ${pct(med)}`);
+    b.onclick = () => {
+      if (id === '') S.themes.clear(); else if (S.themes.has(id)) S.themes.delete(id); else S.themes.add(id);
+      S.sortKey = null; S.open = null; saveFocus(); S.focus = '.th[data-id="' + id + '"]'; render();
+    };
+    box.append(b);
+  };
+  card('', 'All stocks', sized, 'Every stock in the universe');
+  order.forEach(t => card(t.id, t.name, sized.filter(r => (r.themes || []).includes(t.id)), t.desc));
+  const more = $('moreth'), hiddenN = THEMES.length - order.length;
+  more.hidden = mq.matches || (THEMES.length <= SHOW);
+  more.textContent = S.allThemes ? 'Show fewer themes' : `Show all ${THEMES.length} themes (${hiddenN} more)`;
+  more.setAttribute('aria-expanded', String(S.allThemes));
+  $('clearth').hidden = !S.themes.size && !S.size;
+  const note = $('focusnote'); note.replaceChildren();
+  if (!S.themes.size) note.append('Showing ', el('b', null, 'all ' + sized.length + ' stocks'), S.size ? ' with ' + SIZES.get(S.size) + '.' : '.', ' Pick one or more themes to narrow the list; the counts and charts below follow your choice.');
+  else {
+    const picked = [...S.themes].map(id => THEME[id]);
+    note.append('Showing ', el('b', null, picked.map(t => t.name).join(' + ')), ` · ${sized.filter(inThemes).length} stocks` + (S.size ? ', ' + SIZES.get(S.size) : '') + '. ');
+    if (picked.length === 1 && picked[0].desc) note.append(picked[0].desc);
+  }
+  document.querySelectorAll('#size button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.v === S.size)));
+}
+$('moreth').onclick = () => { S.allThemes = !S.allThemes; render(); $('moreth').focus(); };
+$('clearth').onclick = () => { S.themes.clear(); S.size = 0; S.open = null; saveFocus(); render(); };
+document.querySelectorAll('#size button').forEach(b => b.onclick = () => { S.size = +b.dataset.v; S.open = null; S.sortKey = null; saveFocus(); render(); });
+if (!THEMES.length) $('themes').hidden = true;
 
 // ---------- header, data quality ----------
 const latest = a => a.length ? a.map(r => r.asof).sort().at(-1) : null;
@@ -553,7 +666,9 @@ function render() {
   if (isAny) $('dropnote').textContent = `Default rules: 1 day ${MINUS}${(ST.dip.drop_1d * 100).toFixed(0)}%, 5 days ${MINUS}${(ST.dip.drop_5d * 100).toFixed(0)}%, or ${(ST.dip.drawdown_20d * 100).toFixed(0)}% under the 20-day high. Choose one window above to set your own minimum drop.`;
   $('dropv').textContent = MINUS + $('drop').value + '%'; $('qv').textContent = $('qmin').value;
   $('drop').setAttribute('aria-valuetext', 'minimum drop ' + MINUS + $('drop').value + ' percent on ' + W.noun);
-  const all = rows.map(r => Object.assign(r, {setup: setupOf(r, r)}));
+  const everything = rows.map(r => Object.assign(r, {setup: setupOf(r, r)}));
+  focusPanel(everything);
+  const all = everything.filter(r => inSize(r) && inThemes(r));
   tiles(all); ctlSummary();
   if (!alertsPanel.done) { alertsPanel(); alertsPanel.done = true; }
   const qs = $('q').value.trim().toLowerCase();
@@ -572,7 +687,8 @@ function render() {
     const x = k === 'setup' ? a.setup.rank : a[k], y = k === 'setup' ? b.setup.rank : b[k];
     if (x == null) return 1; if (y == null) return -1; return d * (x - y);
   });
-  $('tabletitle').textContent = {quality: 'Quality dips', dips: 'All dips', all: 'All stocks'}[S.show] + ` · ${list.length}`;
+  $('tabletitle').textContent = {quality: 'Quality dips', dips: 'All dips', all: 'All stocks'}[S.show] + ` · ${list.length}` + (S.themes.size === 1 ? ' in ' + THEME[[...S.themes][0]].name : S.themes.size ? ' in ' + S.themes.size + ' themes' : '');
+  $('empty').textContent = S.themes.size || S.size ? 'No stocks in this focus match. Switch “Show” to All stocks, lower the minimum drop, or clear the focus.' : 'No stocks match. Lower the minimum drop, lower the minimum quality, or switch “Show” to All dips.';
   S.list = list;
 
   const head = $('head'); head.replaceChildren();
@@ -682,6 +798,7 @@ function detail(r) {
    ['Last earnings', earnText(r, 'last')], ['Next earnings', earnText(r, 'next')]]
     .forEach(([a, b]) => kv.append(el('span', null, a), el('span', null, b)));
   p3.append(kv);
+  if (r.themes && r.themes.length) { const tg = el('div', 'tags'); r.themes.forEach(id => THEME[id] && tg.append(el('span', 'thtag', THEME[id].name))); p3.append(el('h3', null, 'Themes'), tg); }
   if (r.res5 == null && r.res_why) p3.append(el('div', 'foot', 'No residual: ' + r.res_why + '.'));
   if (r.earn && r.earn.note && (r.earn.stale || r.earn.error || !r.earn.last || !r.earn.next || /scheduled date passed/.test(r.earn.note))) p3.append(el('div', 'foot', 'Earnings dates: ' + r.earn.note));
   if (r.why && r.why.length) { p3.append(el('h3', null, 'Flagged because')); const wl = el('ul', 'news'); r.why.forEach(w => wl.append(el('li', null, w))); p3.append(wl); }
@@ -746,7 +863,7 @@ function hist(all) {
   $('histtitle').textContent = 'Where the ' + W_.noun + ' sits';
   if (!vals.length) { $('hist').replaceChildren(el('div', 'empty', 'No data for this window.')); return; }
   const sorted = [...vals].sort((a, b) => a - b), med = sorted[Math.floor(sorted.length / 2)], step = W_.step;
-  $('histcap').textContent = `${W_.noun[0].toUpperCase() + W_.noun.slice(1)} of every screened stock. The median stock is at ${pct(med)}. Red bars are at or past the ${any ? '5-day rule' : 'drop limit you set'} (${pct(thr)}).` +
+  $('histcap').textContent = `${W_.noun[0].toUpperCase() + W_.noun.slice(1)} of every stock ${S.themes.size || S.size ? 'in your focus' : 'screened'}. The median stock is at ${pct(med)}. Red bars are at or past the ${any ? '5-day rule' : 'drop limit you set'} (${pct(thr)}).` +
     (any ? ' Stocks flagged by the 1-day or 20-day-high rule can sit in grey bars.' : '') + ' If the whole distribution has shifted left, the market is selling off broadly.';
   const rawLo = Math.min(...vals, thr), rawHi = Math.max(...vals, 0), every = (rawHi - rawLo) / step > 14 ? 4 : 2, unit = step * every;
   const lo = Math.floor(rawLo / unit + 1e-9) * unit, hi = Math.ceil(rawHi / unit - 1e-9) * unit, bins = [];

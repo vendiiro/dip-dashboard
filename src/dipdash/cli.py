@@ -10,7 +10,7 @@ from dataclasses import asdict
 from datetime import date, timedelta
 from pathlib import Path
 
-from .config import ROOT, load_settings, load_universe
+from .config import ROOT, load_settings, load_themes, load_universe
 from .dashboard import build_payload, write_dashboard
 from .digest import build_digest, history_dates, latest_backtest_line
 from .fsio import atomic_write_text
@@ -20,6 +20,7 @@ from .screen import needs_news
 def make_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="dipdash", description=__doc__)
     ap.add_argument("--demo", action="store_true", help="synthetic data, no network")
+    ap.add_argument("--themes", help="TOML with [[theme]] groups for the Focus chips (default config/themes.toml)")
     ap.add_argument("--universe", help="CSV with columns ticker,name,region[,sector] (default config/universe.csv)")
     ap.add_argument("--settings", help="settings TOML (default config/settings.toml)")
     ap.add_argument("--out", default=str(ROOT / "output" / "dashboard.html"))
@@ -112,6 +113,12 @@ def main(argv: list[str] | None = None) -> int:
         settings = replace(settings, news=replace(settings.news, fetch_if_5d_drop=a.news_threshold))
     universe = load_universe(a.universe)
     tickers = [s.ticker for s in universe]
+    # Themes must match the universe; with a custom --universe, tickers outside it are dropped from the themes instead of failing
+    themes = load_themes(a.themes, None if a.universe else universe)
+    if a.universe:
+        keep = set(tickers)
+        from dataclasses import replace as _r
+        themes = [x for x in (_r(t, tickers=tuple(k for k in t.tickers if k in keep)) for t in themes) if x.tickers]
 
     today = date.today()
     data_dir = Path(a.data_dir)
@@ -175,7 +182,7 @@ def main(argv: list[str] | None = None) -> int:
             issues += _crosscheck(tickers, prices, today)
 
     payload = build_payload(universe, prices, funds, settings, news_fn=news_fn, demo=a.demo, today=today, fx_to_usd=fx,
-                            indices=indices, issues=issues, index_history=idx_hist, earnings=earnings)
+                            indices=indices, issues=issues, index_history=idx_hist, earnings=earnings, themes=themes)
     for d in payload["data_quality"]:
         print(f"  skipped {d['t']}: {d['detail']}")
     fallers = [r for r in payload["rows"] if needs_news(r, settings.news)]
