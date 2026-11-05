@@ -3,12 +3,12 @@
 
     .venv/Scripts/python.exe scripts/run_feature_experiment.py --raw path/to/2026-11-04.csv.gz
 
-Order: load bars -> compute the split cutoff from dates only -> write spec_features.json (with hash) -> only then build events,
-features, target and correlations. Appends every cell to output/backtests/trials_features.csv (the existing trials.csv layout
-holds mean excess returns with a 'primary' flag and does not fit rank correlations; it is left untouched).
+Order: load bars -> compute the split cutoff from dates only -> freeze the spec and register it (registry.register:
+spec_<hash>.json + a row in output/backtests/registry.csv) and write spec_features.json -> only then build events, features,
+target and correlations. Every cell goes to output/backtests/trials_all.csv through registry.record_trials (the older
+trials_features.csv is frozen; `python -m dipdash.registry backfill` imports it once).
 """
 import argparse
-import csv
 import json
 import sys
 from datetime import date, datetime
@@ -22,14 +22,15 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from dipdash.backtest import Cell, add_events, add_periods, build_days, cell_events, group_of, split_cutoff  # noqa: E402
 from dipdash.backtest_run import clean_bars, sha256  # noqa: E402
+from dipdash import registry  # noqa: E402
 from dipdash.cache import load_raw_prices  # noqa: E402
 from dipdash.config import load_settings, load_universe  # noqa: E402
-from dipdash.feature_experiment import FAMILY, FEATURES, Settings, compute_features, demeaned_target, evaluate_features, freeze_spec, mde  # noqa: E402
+from dipdash.feature_experiment import (FAMILY, FEATURES, Settings, compute_features, demeaned_target, evaluate_features,  # noqa: E402
+                                        freeze_spec, mde, planned_cells)
 
 PARENT_SPEC = "8583ea959c7ce228"
 PARENT_OOS_N = 4409
 H = 21
-TRIAL_COLS = ["run_at", "family_id", "spec_hash", "feature", "stat", "group", "period", "horizon", "n", "estimate", "lo", "hi", "p_raw", "p_holm", "sign_is"]
 
 
 def truncation_check(close: pd.Series, volume, feats: pd.DataFrame, positions: list[int]) -> int:
@@ -43,18 +44,12 @@ def truncation_check(close: pd.Series, volume, feats: pd.DataFrame, positions: l
     return n
 
 
-def write_trials(path: Path, spec: dict, res: pd.DataFrame, run_at: str) -> None:
-    new = not path.exists()
-    if not new and path.read_text(encoding="utf-8").splitlines()[:1] != [",".join(TRIAL_COLS)]:
-        raise SystemExit(f"{path} has a different layout; refusing to mix")
-    with path.open("a", encoding="utf-8", newline="") as fh:
-        w = csv.writer(fh, lineterminator="\n")
-        if new:
-            w.writerow(TRIAL_COLS)
-        for _, r in res.iterrows():
-            f = lambda v: "" if pd.isna(v) else f"{v:.6f}"  # noqa: E731
-            w.writerow([run_at, spec["family_id"], spec["spec_hash"], r["feature"], r["stat"], r["group"], r["period"], H, int(r["n"]),
-                        f(r["est"]), f(r["lo"]), f(r["hi"]), f(r["p"]), f(r["p_holm"]), int(r["sign_is"]) if pd.notna(r["sign_is"]) else ""])
+def trial_rows(res: pd.DataFrame) -> pd.DataFrame:
+    """evaluate_features output in the registry's long schema. The six pooled OOS Spearman rows (the Holm family) are primary."""
+    fam = (res["stat"] == "spearman") & (res["period"] == "OOS") & (res["group"] == "All")
+    return pd.DataFrame({"cell": res["feature"], "stat": res["stat"], "group": res["group"], "period": res["period"], "horizon": H,
+                         "n": res["n"], "estimate": res["est"], "lo": res["lo"], "hi": res["hi"], "p_raw": res["p"],
+                         "p_holm": res["p_holm"], "primary": fam})
 
 
 def forest(res: pd.DataFrame, path: Path) -> None:
@@ -80,7 +75,7 @@ def fmt(v, d=3):
     return "n/a" if pd.isna(v) else f"{v:+.{d}f}"
 
 
-def write_report(path: Path, spec: dict, res: pd.DataFrame, counts: dict, sanity: dict, run_at: str) -> None:
+def write_report(path: Path, spec: dict, res: pd.DataFrame, counts: dict, sanity: dict, run_at: str, reuse: str = "") -> None:
     fam = res[(res["stat"] == "spearman") & (res["period"] == "OOS") & (res["group"] == "All")].set_index("feature")
     isr = res[(res["period"] == "IS")].set_index("feature")
     terc = res[(res["stat"] == "tercile_top_minus_bottom") & (res["group"] == "All")].set_index("feature")
@@ -99,6 +94,7 @@ def write_report(path: Path, spec: dict, res: pd.DataFrame, counts: dict, sanity
           f"Reproduction check: out-of-sample events {sanity['oos_n']:,} vs {PARENT_OOS_N:,} in backtest spec {PARENT_SPEC} "
           f"({'matches' if sanity['oos_n'] == PARENT_OOS_N else 'DOES NOT MATCH'}). Split cutoff {spec['split']['cutoff_last_in_sample_date']}; "
           f"in-sample events used {counts['IS']:,} (purged dropped), out-of-sample {counts['OOS']:,} (US {counts['OOS_US']:,}, Europe+Nordic {counts['OOS_EU']:,}).", "",
+          f"**Out-of-sample period used before:** {reuse or 'not checked (this run was not registered)'}", "",
           "## Out-of-sample Spearman rho (pooled), 90% month-clustered interval", "",
           "| feature | IS rho (sign only) | OOS n | OOS rho | 90% interval | raw p | Holm p | MDE (80% power) | supported |",
           "|---|---|---|---|---|---|---|---|---|"]
@@ -131,16 +127,17 @@ def write_report(path: Path, spec: dict, res: pd.DataFrame, counts: dict, sanity
           "- Overlapping 21-day windows within a month and across nearby months make neighbouring events share returns.",
           "- Six features were tested once each, signs fixed in-sample, one OOS look; no variants and no tuning. The OOS period was used for nothing else in this experiment, but the dip rule itself and the 60/40 split come from earlier work on the same history.",
           "- Prices are dividend-adjusted closes from Yahoo; bad ticks can remain (the backtest removed only zero-volume bars).",
-          f"- Trials: {len(FAMILY)} family tests plus descriptive cells are logged in `output/backtests/trials_features.csv` (family `{spec['family_id']}`).", ""]
+          f"- Trials: {len(FAMILY)} family tests plus descriptive cells ({planned_cells()} cells per run) are logged in `output/backtests/trials_all.csv` "
+          f"(family `{spec['family_id']}`); the registration and its out-of-sample window are in `output/backtests/registry.csv`.", ""]
     path.write_text("\n".join(L), encoding="utf-8")
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--raw", required=True, help="cached history .csv.gz (data/raw/yfinance_backtest/<date>.csv.gz)")
     ap.add_argument("--out-root", default=str(ROOT / "output" / "backtests"))
     ap.add_argument("--draws", type=int, default=None)
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
     raw = Path(a.raw)
     if not raw.exists():
         print(f"history file missing: {raw}")
@@ -165,7 +162,12 @@ def main() -> int:
     parent = {"spec_hash": PARENT_SPEC, "raw_file": raw.name, "raw_sha256": sha256(raw), "settings_sha256": sha256(ROOT / "config" / "settings.toml"),
               "universe_sha256": sha256(ROOT / "config" / "universe.csv"), "n_series": len(prices)}
     spec = freeze_spec(parent, str(cutoff.date()), len(universe), family_id, boot)
-    (out_dir / "spec_features.json").write_text(json.dumps(spec, indent=2, default=str), encoding="utf-8")   # BEFORE any return or correlation
+    oos_dates = [d for d in calendar if d > cutoff]
+    reg = registry.register("features", spec, out_dir, Path(a.out_root),                   # BEFORE any return or correlation
+                            fields={"oos_start": oos_dates[0], "oos_end": oos_dates[-1], "horizons": [H], "planned_cells": planned_cells()})
+    spec["registration"] = registry.registration_block(reg)                                 # not hashed
+    (out_dir / "spec_features.json").write_text(json.dumps(spec, indent=2, default=str), encoding="utf-8")
+    print(reg.reuse_note())
     print(f"spec {spec['spec_hash']} written; cutoff {cutoff.date()}")
 
     dummy = pd.Series(100.0, index=pd.DatetimeIndex(calendar))
@@ -200,11 +202,11 @@ def main() -> int:
     res.to_csv(out_dir / "results.csv", index=False)
     keep = ["ticker", "region", "group", "date", "entry_date", "period", f"fwd{H}", "target", *FAMILY]
     ev[keep].to_csv(out_dir / "events_features.csv", index=False)
-    write_trials(Path(a.out_root) / "trials_features.csv", spec, res, run_at)
+    registry.record_trials(reg, trial_rows(res), run_at)
     counts = {"IS": int((ev.period == "IS").sum()), "OOS": int((ev.period == "OOS").sum()),
               "OOS_US": int(((ev.period == "OOS") & (ev.group == "US")).sum()), "OOS_EU": int(((ev.period == "OOS") & (ev.group == "Europe+Nordic")).sum())}
     forest(res, out_dir / "forest_features.png")
-    write_report(out_dir / "report_features.md", spec, res, counts, sanity, run_at)
+    write_report(out_dir / "report_features.md", spec, res, counts, sanity, run_at, reg.reuse_note())
     print(json.dumps(counts))
     print(res[(res.stat == "spearman") & (res.period == "OOS") & (res.group == "All")][["feature", "n", "est", "lo", "hi", "p", "p_holm", "sign_is", "supported", "mde_80"]].to_string())
     return 0

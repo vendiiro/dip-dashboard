@@ -105,13 +105,14 @@ def chart_forest(res: pd.DataFrame, s: Settings, path: Path) -> None:
 
 # ---------------------------------------------------------------- text
 def earlier_specs_line(hist: list[dict], shash: str) -> str:
-    """One line, derived from trials.csv, saying that runs under other spec hashes exist. Empty if there are none.
+    """One line saying that runs under other spec hashes exist. Empty if there are none. `hist` is the registry ledger
+    (registry.earlier_specs("backtest"), as [{"spec_hash": ...}]), so a run that registered and then crashed still counts.
     Printed whether or not notes exist for the current hash, so the first-look history cannot silently vanish."""
     others = list(dict.fromkeys(h_["spec_hash"] for h_ in hist if h_["spec_hash"] != shash))
     if not others:
         return ""
     names = ", ".join(f"`{o}`" for o in others[:5]) + (f" and {len(others) - 5} more" if len(others) > 5 else "")
-    return (f"`trials.csv` also holds runs under {len(others)} earlier spec hash{'es' if len(others) != 1 else ''} ({names}), so the analysis was revised at least "
+    return (f"`registry.csv` also holds runs under {len(others)} earlier spec hash{'es' if len(others) != 1 else ''} ({names}), so the analysis was revised at least "
             f"{len(others)} time{'s' if len(others) != 1 else ''} after an earlier run. Changes between specs are described below only where they were written into `backtest_notes.py`.")
 
 
@@ -139,7 +140,8 @@ def render_report(run: dict, s: Settings, charts: dict[str, str]) -> str:
       f"on {int(allc['n_stocks'])} stocks, {int(allc['n_months'])} calendar months ({first} to {last}).")
     w(f"- **Universe:** {spec['universe']['n']} current blue chips (US, Europe, Nordic). Survivorship bias applies (see below).")
     w(f"- **Costs:** {bt.cost_roundtrip:.2%} round trip, also shown at 2× and 4×. Entry at the next close, no intraday fills.")
-    w(f"- **Out-of-sample period:** after {cutoff.date()} (the last {bt.oos_fraction:.0%} of trading dates); in-sample events whose window crosses that date are dropped.\n")
+    w(f"- **Out-of-sample period:** after {cutoff.date()} (the last {bt.oos_fraction:.0%} of trading dates); in-sample events whose window crosses that date are dropped.")
+    w(f"- **Out-of-sample period used before:** {run.get('oos_reuse') or 'not checked (this run was not registered)'}\n")
     w("### Pre-registered question\n")
     w(f"> {PRIMARY_TEXT}\n")
     if prim is None:
@@ -256,11 +258,11 @@ def render_report(run: dict, s: Settings, charts: dict[str, str]) -> str:
     # ---- trials
     w("## How many things were tried\n")
     w(f"{spec['headline_trials']} headline tests ({n_variants} variants × {len(bt.horizons)} horizons) were planned, and {spec['cells_computed']} cells were computed (adding {n_groups} region groups and {len(PERIODS)} periods), each with three baselines and a placebo. "
-      "The report prints a subset; `results.csv` has all of them and `output/backtests/trials.csv` logs every one on every run"
+      "The report prints a subset; `results.csv` has all of them and `output/backtests/trials_all.csv` logs every one on every run"
       + (f" ({run['trial_runs']} runs so far; several only reformatted the report)" if run.get("trial_runs") else "") + ". With this many looks, the best-looking cell is a candidate, not a finding.\n")
     w("## Changes after the first look\n")
     revs = spec.get("revisions_after_first_look", [])
-    earlier = earlier_specs_line(run.get("primary_history", []), shash)
+    earlier = earlier_specs_line(run.get("earlier_specs", []), shash)
     if earlier:
         w(earlier + "\n")
     if not revs:
@@ -269,7 +271,7 @@ def render_report(run: dict, s: Settings, charts: dict[str, str]) -> str:
         hist = run.get("primary_history", [])
         same = len(hist) >= 2 and all(h_["n"] == hist[0]["n"] and abs(h_["ex_own"] - hist[0]["ex_own"]) < 5e-7 for h_ in hist)
         if same:
-            ident = f"the primary cell is identical in every logged run ({hist[0]['ex_own']:+.4%}, n = {hist[0]['n']:,}, {len(hist)} runs in trials.csv)"
+            ident = f"the primary cell is identical in every logged run ({hist[0]['ex_own']:+.4%}, n = {hist[0]['n']:,}, {len(hist)} runs in the trial log)"
         elif len(hist) >= 2:
             ident = "the primary cell differs between logged runs: " + "; ".join(f"{h_['ex_own']:+.4%} (n = {h_['n']:,}) in {h_['spec_hash'][:8]}" for h_ in hist[-4:])
         else:
@@ -317,7 +319,7 @@ def render_report(run: dict, s: Settings, charts: dict[str, str]) -> str:
     w("")
     w("## Files\n")
     w("`spec.json` (frozen before the run) · `results.csv` (every cell) · `events.csv` (every event with its returns) · `data_validation.csv` · "
-      "`../trials.csv` (running log) · charts `distribution.png`, `forest.png`. Reproduce: `python scripts/run_backtest.py`.\n")
+      "`../trials_all.csv` (running trial log) · `../registry.csv` (every registration and its out-of-sample window) · charts `distribution.png`, `forest.png`. Reproduce: `python scripts/run_backtest.py`.\n")
     return "\n".join(L)
 
 

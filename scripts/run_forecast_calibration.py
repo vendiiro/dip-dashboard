@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """Walk-forward calibration test of the 21-day volatility range (src/dipdash/forecast.py).
 
-    .venv/Scripts/python.exe scripts/run_forecast_calibration.py [--raw PATH] [--workers 7] [--reuse]
+    .venv/Scripts/python.exe scripts/run_forecast_calibration.py [--raw PATH] [--workers 7] [--reuse] [--out-root DIR]
 
 Pre-stated ship criterion is in the forecast.py docstring (written before any result): overall OOS 80% coverage within 0.80 +/- 0.04
 AND dip-state coverage within 0.80 +/- 0.06; two attempts (raw, then one in-sample-fitted global scale factor), no further tuning.
 Design: per stock, origins every 21 trading days from the 401st close; model refitted on data up to the origin only; outcome = log return
 over the next 21 bars (windows do not overlap within a stock). Split = backtest.split_cutoff(all dates, 0.4); in-sample origins are those
 whose outcome ends on or before the cutoff (purge); out-of-sample origins are after it. Uncertainty: month-clustered bootstrap by origin month.
-Output: output/backtests/<today>_forecast/{results.csv, origins.csv.gz, report_forecast.md, calibration.png}.
+Pre-registration: a frozen spec built from the constants below (forecast_spec) is registered (registry.register: spec_<hash>.json +
+a row in <out-root>/registry.csv) BEFORE any origin is computed; every coverage and pinball cell goes to <out-root>/trials_all.csv.
+Output: <out-root>/<today>_forecast/{spec_forecast.json, results.csv, origins.csv.gz, report_forecast.md, calibration.png}.
 """
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import time
 from concurrent.futures import ProcessPoolExecutor
@@ -26,8 +29,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from dipdash import forecast as fc  # noqa: E402
+from dipdash import registry  # noqa: E402
 from dipdash.backtest import cluster_bootstrap, group_of, split_cutoff  # noqa: E402
-from dipdash.backtest_run import clean_bars  # noqa: E402
+from dipdash.backtest_run import clean_bars, sha256  # noqa: E402
 from dipdash.cache import load_raw_prices  # noqa: E402
 from dipdash.config import load_universe  # noqa: E402
 
@@ -39,6 +43,44 @@ TARGET, TOL_ALL, TOL_DIP = 0.80, 0.04, 0.06
 METHODS = ("garch_t_fhs", "ewma", "naive")
 DEFAULT_RAW = ROOT / "data" / "raw" / "yfinance_backtest" / "2026-11-04.csv.gz"
 DRAWS, LEVEL = 2000, 0.95
+SEEDS = {"coverage": 11, "pinball_minus_naive": 12}
+ATTEMPTS = (1, 2)
+STATS = ("coverage", "pinball")
+GROUPS = ("ALL OOS", "dip state", "no dip", "US", "Europe", "US dip", "Europe dip", "2020 origins", "2022 origins", "other years")
+VERDICT_GROUPS = ("ALL OOS", "dip state")
+PLANNED_CELLS = len(GROUPS) * len(METHODS) * len(ATTEMPTS) * len(STATS)
+CRITERION_TEXT = " ".join(fc.__doc__.split("PRE-STATED SHIP CRITERION", 1)[1].split()).lstrip()   # the docstring, verbatim (whitespace collapsed)
+VERDICT_TEXT = (f"Judged on garch_t_fhs over the out-of-sample origins, on the point estimate: |coverage(ALL OOS) - {TARGET:.2f}| <= {TOL_ALL:.2f} "
+                f"AND |coverage(dip state) - {TARGET:.2f}| <= {TOL_DIP:.2f}. Attempt 1 = the raw model; attempt 2 = one global scale factor k "
+                f"(the in-sample {TARGET:.2f} quantile of the outcome-to-range ratio, in-sample origins only), re-tested once. The range may ship "
+                "if attempt 1 passes, else if attempt 2 passes; otherwise it does not ship. No further attempts.")
+
+
+def forecast_spec(raw: Path, tickers: list[str], cutoff: pd.Timestamp, limit: int, family_id: str) -> dict:
+    """Pre-registration of the calibration test, built from constants, the raw file's hash and dates only (no outcome enters)."""
+    spec = {
+        "family_id": family_id,
+        "question": "Is the 80% range of the 21-day log return calibrated out of sample, overall and in the dip state?",
+        "model": {"primary": "garch_t_fhs", "window": fc.WINDOW, "min_obs": fc.MIN_OBS, "sims": fc.SIMS, "quantiles": list(fc.Q),
+                  "ewma_lambda": fc.EWMA_LAMBDA, "naive_window": fc.NAIVE_WINDOW, "fallback": "ewma when the GARCH fit fails"},
+        "methods": list(METHODS),
+        "design": {"horizons": [H], "step": STEP, "first_origin_bar": START, "refit": "at every origin, on data up to the origin only",
+                   "outcome": "log return from the origin close to the close H bars later",
+                   "dip_state": "5-day return <= -7% or 1-day return <= -4% at the origin"},
+        "split": {"oos_fraction": OOS_FRACTION, "cutoff": str(cutoff.date()),
+                  "purge": "in-sample origins whose outcome ends after the cutoff are dropped; out-of-sample = origins after the cutoff"},
+        "criterion_text": CRITERION_TEXT,
+        "verdict_rule": {"target": TARGET, "tol_all": TOL_ALL, "tol_dip": TOL_DIP, "attempts": list(ATTEMPTS), "groups": list(VERDICT_GROUPS),
+                         "judged_on": "point estimate", "text": VERDICT_TEXT},
+        "groups": list(GROUPS), "stats": list(STATS),
+        "uncertainty": {"method": "bootstrap resampling origin months", "draws": DRAWS, "level": LEVEL, "seeds": SEEDS},
+        "planned_cells": PLANNED_CELLS,
+        "data": {"raw_file": raw.name, "raw_sha256": sha256(raw), "n_stocks": len(tickers), "tickers": sorted(tickers), "limit": limit},
+        "universe": {"bias": "current constituents only: survivorship bias"},
+        "notes": "the criterion was first written in the forecast.py docstring before any calibration result; this spec freezes it as data",
+    }
+    spec["spec_hash"] = registry.hash_for("forecast", spec)
+    return spec
 
 
 def _one_stock(args):
@@ -62,15 +104,24 @@ def _one_stock(args):
 
 
 def build_origins(prices: dict, workers: int) -> tuple[pd.DataFrame, float]:
+    """workers <= 1 runs in this process (tests, small runs); otherwise a process pool."""
     jobs = list(prices.items())
     out, secs, nfits = [], 0.0, 0
-    with ProcessPoolExecutor(workers) as ex:
-        for i, (t, rows, s) in enumerate(ex.map(_one_stock, jobs, chunksize=1), 1):
+    if workers <= 1:
+        results = map(_one_stock, jobs)
+    else:
+        ex = ProcessPoolExecutor(workers)
+        results = ex.map(_one_stock, jobs, chunksize=1)
+    try:
+        for i, (t, rows, s) in enumerate(results, 1):
             out += rows
             secs += s
             nfits += len(rows)
             if i % 20 == 0:
                 print(f"  {i}/{len(jobs)} stocks", flush=True)
+    finally:
+        if workers > 1:
+            ex.shutdown()
     return pd.DataFrame(out), secs / max(nfits, 1)
 
 
@@ -99,6 +150,7 @@ def loss(df: pd.DataFrame, m: str, k: float) -> np.ndarray:
 
 
 def groups(oos: pd.DataFrame) -> dict[str, pd.Series]:
+    """Keys and order equal GROUPS (tested), so the registered cell count is the computed one."""
     yr = oos.origin.dt.year
     return {"ALL OOS": oos.origin.notna(), "dip state": oos.dip, "no dip": ~oos.dip,
             "US": oos.group == "US", "Europe": oos.group != "US", "US dip": oos.dip & (oos.group == "US"),
@@ -114,10 +166,10 @@ def evaluate(oos: pd.DataFrame, ks: dict, attempt: int) -> pd.DataFrame:
         for m in METHODS:
             cov = covered(sub, m, ks[m])
             ls = loss(sub, m, ks[m])
-            mean, lo, hi, ncl = cluster_bootstrap(cov, mo, DRAWS, LEVEL, 11)
+            mean, lo, hi, ncl = cluster_bootstrap(cov, mo, DRAWS, LEVEL, SEEDS["coverage"])
             lmean = float(np.mean(ls)) if len(ls) else np.nan
             dl = ls - loss(sub, "naive", ks["naive"])
-            dm, dlo, dhi, _ = cluster_bootstrap(dl, mo, DRAWS, LEVEL, 12)
+            dm, dlo, dhi, _ = cluster_bootstrap(dl, mo, DRAWS, LEVEL, SEEDS["pinball_minus_naive"])
             rows.append({"attempt": attempt, "scale_k": ks[m], "method": m, "group": gname, "n": len(sub), "n_months": ncl,
                          "coverage": mean, "cov_lo": lo, "cov_hi": hi, "target": TARGET, "pinball": lmean,
                          "pinball_minus_naive": dm, "pm_lo": dlo, "pm_hi": dhi})
@@ -163,6 +215,19 @@ def pct(x):
     return f"{100 * x:.1f}%"
 
 
+def trial_rows(res: pd.DataFrame) -> pd.DataFrame:
+    """evaluate() output in the registry's long schema: a coverage row and a pinball row per group x method x attempt.
+    cell = '<method>|attempt<k>'. Primary = the verdict rows: garch_t_fhs coverage, ALL OOS and dip state, in each attempt."""
+    rows = []
+    for _, r in res.iterrows():
+        cell = f"{r['method']}|attempt{int(r['attempt'])}"
+        base = {"cell": cell, "group": r["group"], "period": "OOS", "horizon": H, "n": int(r["n"])}
+        prim = r["method"] == "garch_t_fhs" and r["group"] in VERDICT_GROUPS
+        rows.append({**base, "stat": "coverage", "estimate": r["coverage"], "lo": r["cov_lo"], "hi": r["cov_hi"], "primary": prim})
+        rows.append({**base, "stat": "pinball", "estimate": r["pinball"], "primary": False})
+    return pd.DataFrame(rows)
+
+
 def write_report(out: Path, res: pd.DataFrame, meta: dict, v1: dict, v2: dict, ship: str) -> None:
     def table(att):
         r = res[res.attempt == att]
@@ -200,6 +265,8 @@ Educational screen output. This tests whether a volatility RANGE is honest. It s
 - {line(v1, 'Attempt 1 (raw GARCH-t FHS)')}
 - {line(v2, f'Attempt 2 (global scale factor k = {k:.3f} fitted in-sample only)')}
 - Criterion (pre-stated in `src/dipdash/forecast.py` before any result): overall OOS coverage 0.80 +/- 0.04 AND dip-state coverage 0.80 +/- 0.06, judged on the point estimate. Two attempts, no further tuning.
+- Registered as spec `{meta['spec_hash']}` before any origin was computed (`spec_forecast.json`, `registry.csv`); {meta['planned_cells']} cells logged in `trials_all.csv`.
+- **Out-of-sample period used before:** {meta['oos_reuse']}
 
 ## Design
 - Universe: {meta['n_stocks']} stocks (current constituents), history {meta['first']} to {meta['last']}. Origins every 21 trading days per stock, model refitted on data up to the origin only (trailing 750 returns, min 400); {meta['n_origins']} origins in total, {meta['n_fallback']} ({pct(meta['fb_rate'])}) used the EWMA fallback because GARCH did not converge.
@@ -240,15 +307,17 @@ Attempt 2:
     (out / "report_forecast.md").write_text(txt, encoding="utf-8")
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--raw", default=str(DEFAULT_RAW))
     ap.add_argument("--workers", type=int, default=7)
     ap.add_argument("--reuse", action="store_true", help="reuse origins.csv.gz in the output folder")
     ap.add_argument("--limit", type=int, default=0, help="only the first N tickers (smoke test)")
-    ap.add_argument("--out", default=str(ROOT / "output" / "backtests" / f"{date.today().isoformat()}_forecast"))
-    a = ap.parse_args()
-    out = Path(a.out)
+    ap.add_argument("--out-root", default=str(ROOT / "output" / "backtests"), help="holds registry.csv and trials_all.csv")
+    ap.add_argument("--out", default=None, help="run folder (default <out-root>/<today>_forecast)")
+    a = ap.parse_args(argv)
+    out_root = Path(a.out_root)
+    out = Path(a.out) if a.out else out_root / f"{date.today().isoformat()}_forecast"
     out.mkdir(parents=True, exist_ok=True)
 
     bars = load_raw_prices(a.raw)
@@ -267,6 +336,12 @@ def main() -> int:
     region = {u.ticker: group_of(u.region) for u in load_universe()}
     all_dates = sorted(set().union(*[set(c.index) for c in prices.values()]))
     cutoff = split_cutoff(all_dates, OOS_FRACTION)
+    spec = forecast_spec(Path(a.raw), list(prices), cutoff, a.limit, f"forecast_{date.today().isoformat()}")
+    oos_dates = [d for d in all_dates if d > cutoff]
+    reg = registry.register("forecast", spec, out, out_root, fields={"oos_start": oos_dates[0], "oos_end": oos_dates[-1]})   # BEFORE any origin
+    spec["registration"] = registry.registration_block(reg)                                                                 # not hashed
+    (out / "spec_forecast.json").write_text(json.dumps(spec, indent=2, default=str), encoding="utf-8")
+    print(f"spec {reg.spec_hash} registered. {reg.reuse_note()}")
 
     p = out / "origins.csv.gz"
     if a.reuse and p.exists():
@@ -298,11 +373,13 @@ def main() -> int:
     else:
         ship = "RANGE DOES NOT SHIP (both attempts fail the pre-stated criterion)"
     res.to_csv(out / "results.csv", index=False)
+    registry.record_trials(reg, trial_rows(res))
     chart(res, out / "calibration.png")
     meta = {"today": date.today().isoformat(), "n_stocks": df.ticker.nunique(), "first": min(all_dates).date(),
             "last": max(all_dates).date(), "n_origins": len(df), "n_fallback": int(df.fallback.sum()), "fb_rate": df.fallback.mean(),
             "cutoff": cutoff.date(), "n_oos": len(oos), "n_is": len(ins), "n_oos_dip": int(oos.dip.sum()),
-            "n_oos_months": oos.origin.dt.strftime("%Y-%m").nunique(), "sec_per_fit": spf, "sec_per_stock_now": sec_now}
+            "n_oos_months": oos.origin.dt.strftime("%Y-%m").nunique(), "sec_per_fit": spf, "sec_per_stock_now": sec_now,
+            "spec_hash": reg.spec_hash, "planned_cells": PLANNED_CELLS, "oos_reuse": reg.reuse_note()}
     write_report(out, res, meta, v1, v2, ship)
     print(ship)
     print(v1)

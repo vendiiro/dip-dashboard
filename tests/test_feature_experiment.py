@@ -1,4 +1,6 @@
 """Feature experiment: causal features, planted effect found OOS, null not found, in-sample only fixes sign and cut points."""
+import json
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -159,3 +161,63 @@ def test_spec_hash_ignores_notes_only():
     b = freeze_spec({"x": 1}, "2020-02-10", 171, "features_t", {"draws": 5})
     c = freeze_spec({"x": 1}, "2020-02-11", 171, "features_t", {"draws": 5})
     assert a["spec_hash"] == b["spec_hash"] != c["spec_hash"]
+
+
+# ---------------------------------------------------------------- RES-4: the runner registers before computing
+def _load_script(name):
+    import importlib.util
+    from pathlib import Path
+    path = Path(__file__).resolve().parents[1] / "scripts" / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _synthetic_raw(tmp_path):
+    from dipdash.cache import save_raw_prices
+    from test_backtest_run import synthetic
+    prices, ix, uni, q, s = synthetic(n_stocks=8)
+    rng = np.random.default_rng(3)
+    bars = {t: (c, pd.Series(rng.integers(1_000, 5_000, len(c)).astype(float), index=c.index)) for t, c in prices.items()}
+    return save_raw_prices(bars, "synthetic", tmp_path / "raw"), uni, s
+
+
+def test_planned_cells_matches_what_evaluate_features_returns():
+    rng = np.random.default_rng(0)
+    n = 240
+    ev = pd.DataFrame({"period": np.where(np.arange(n) < 120, "IS", "OOS"), "month": [f"2020-{1 + i % 12:02d}" for i in range(n)],
+                       "group": np.where(np.arange(n) % 2, "US", "Europe+Nordic"), "target": rng.normal(size=n),
+                       **{f: rng.normal(size=n) for f in FAMILY}})
+    from dipdash.feature_experiment import planned_cells
+    assert len(evaluate_features(ev, Settings(draws=50))) == planned_cells() == 42
+
+
+def test_feature_runner_registers_before_evaluate_features_and_logs_every_cell(tmp_path, monkeypatch):
+    """Guard: move registration after evaluate_features in the script and this test fails."""
+    from dipdash import registry
+    mod = _load_script("run_feature_experiment")
+    raw, uni, s = _synthetic_raw(tmp_path)
+    monkeypatch.setattr(mod, "load_universe", lambda: uni)
+    monkeypatch.setattr(mod, "load_settings", lambda: s)
+    root = tmp_path / "out"
+    real, seen = mod.evaluate_features, []
+
+    def spy(ev, cfg, *a, **k):
+        reg = registry.read_registry(root)
+        assert len(reg) == 1 and reg["kind"].iloc[0] == "features", "evaluate_features called before registration"
+        assert list(root.glob(f"*_features/spec_{reg['spec_hash'].iloc[0]}.json")), "evaluate_features called before the spec file existed"
+        seen.append(1)
+        return real(ev, cfg, *a, **k)
+
+    monkeypatch.setattr(mod, "evaluate_features", spy)
+    assert mod.main(["--raw", str(raw), "--out-root", str(root), "--draws", "50"]) == 0
+    assert seen == [1]
+    log = registry.read_trials(root)
+    reg = registry.read_registry(root)
+    assert len(log) == int(reg["planned_cells"].iloc[0]) == 42 and log["primary"].sum() == len(FAMILY)
+    spec = json.loads(next(root.glob("*_features/spec_features.json")).read_text())
+    assert spec["spec_hash"] == reg["spec_hash"].iloc[0] == registry.hash_for("features", spec)
+    report = next(root.glob("*_features/report_features.md")).read_text(encoding="utf-8")
+    assert "Out-of-sample period used before:" in report and "trials_all.csv" in report
+    assert not (root / "trials_features.csv").exists()

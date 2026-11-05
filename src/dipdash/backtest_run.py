@@ -1,12 +1,12 @@
-"""Run the backtest end to end: freeze the spec, then compute, then write spec / data check / events / results / trial log / report.
+"""Run the backtest end to end: freeze the spec, register it, then compute, then write data check / events / results / trial log.
 
-The order matters (backtest-hygiene rule 1): spec.json is written BEFORE any return is computed, so the rule, the universe,
-the split and the one primary hypothesis cannot be adjusted after seeing results. Every headline cell is appended to
-output/backtests/trials.csv, including runs that repeat an unchanged spec.
+The order matters (backtest-hygiene rule 1): the spec is registered (registry.register: spec_<hash>.json + a row in
+output/backtests/registry.csv) BEFORE any return is computed, so the rule, the universe, the split and the one primary
+hypothesis cannot be adjusted after seeing results. Every computed cell (all of them, empty ones included) is appended to
+output/backtests/trials_all.csv through registry.record_trials, including runs that repeat an unchanged spec.
 """
 from __future__ import annotations
 
-import csv
 import hashlib
 import json
 from dataclasses import asdict, replace
@@ -18,6 +18,7 @@ import pandas as pd
 
 from .backtest import (EU, PERIODS, US, VARIANTS, Cell, add_events, add_peer_returns, add_periods, build_days, run_cells,
                        split_cutoff)
+from . import registry
 from .backtest_notes import revisions_for
 from .config import Settings, Stock
 from .validate import validate_prices
@@ -76,40 +77,30 @@ def freeze_spec(s: Settings, universe: list[Stock], data_meta: dict, calendar) -
         "cells_computed": len(VARIANTS) * len(bt.horizons) * 3 * len(PERIODS),
         "sample_notes": "events touching a >40% one-day move stay in the main numbers and are also reported without them",
     }
-    notes = {"revisions_after_first_look", "sample_notes"}                                 # descriptive text must not change the identity of the analysis
-    spec["spec_hash"] = hashlib.sha256(json.dumps({k: v for k, v in spec.items() if k not in notes}, sort_keys=True, default=str).encode()).hexdigest()[:16]
+    spec["spec_hash"] = registry.hash_for("backtest", spec)                             # notes keys are excluded: text never changes the identity
     spec["revisions_after_first_look"] = revisions_for(spec["spec_hash"])               # notes for exactly this hash; none for a new spec
     return spec
 
 
-def primary_history(path: Path) -> list[dict]:
-    """The primary cell as logged in every run in trials.csv: run_at, spec_hash, n, ex_own. Used so the report only says
+def primary_history(root: Path) -> list[dict]:
+    """The primary cell as logged in every backtest run in trials_all.csv: run_at, spec_hash, n, ex_own. Used so the report only says
     'identical in every run' when the log shows it."""
-    if not path.exists():
-        return []
-    log = pd.read_csv(path)
-    if "primary" not in log.columns:
-        return []
-    prim = log[log["primary"].astype(str).str.lower() == "true"]
-    return [{"run_at": r["run_at"], "spec_hash": r["spec_hash"], "n": int(r["n"]), "ex_own": float(r["ex_own"])} for _, r in prim.iterrows()]
+    log = registry.read_trials(root)
+    prim = log[(log["kind"] == "backtest") & log["primary"]]
+    return [{"run_at": r["run_at"], "spec_hash": r["spec_hash"], "n": int(r["n"]), "ex_own": float(r["estimate"])} for _, r in prim.iterrows()]
 
 
-def append_trials(path: Path, spec: dict, results: pd.DataFrame, run_at: str) -> None:
-    """Append EVERY computed cell (variant x horizon x region x period) to the running trial log, so the log counts what was looked at."""
-    keep = results[results["n"] > 0]
-    cols = ["run_at", "spec_hash", "variant", "horizon", "group", "period", "n", "ex_own", "ex_own_lo", "ex_own_hi", "primary"]
-    if path.exists() and path.read_text(encoding="utf-8").splitlines()[:1] != [",".join(cols)]:
-        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")                           # never mix two column layouts in one file
-        path.rename(path.with_name(f"{path.stem}_older_layout_{stamp}{path.suffix}"))
-    new = not path.exists()
-    with path.open("a", encoding="utf-8", newline="") as fh:
-        w = csv.writer(fh, lineterminator="\n")
-        if new:
-            w.writerow(cols)
-        for _, r in keep.iterrows():
-            prim = all(r[k] == v for k, v in PRIMARY.items() if k in r.index)
-            w.writerow([run_at, spec["spec_hash"], r["variant"], int(r["horizon"]), r["group"], r["period"], int(r["n"]),
-                        *(f"{r[c]:.6f}" for c in ("ex_own", "ex_own_lo", "ex_own_hi")), prim])
+def trial_rows(results: pd.DataFrame) -> pd.DataFrame:
+    """Every computed cell (variant x horizon x region x period) in the registry's long schema, empty cells included, so the log
+    counts what was looked at and matches the planned cell count."""
+    prim = np.ones(len(results), dtype=bool)
+    for k, v in PRIMARY.items():
+        if k in results.columns:
+            prim &= (results[k] == v).to_numpy()
+    return pd.DataFrame({"cell": results["variant"], "stat": "ex_own", "group": results["group"], "period": results["period"],
+                         "horizon": results["horizon"].astype(int), "n": results["n"].fillna(0).astype(int),
+                         "estimate": results["ex_own"].where(results["n"] > 0), "lo": results["ex_own_lo"].where(results["n"] > 0),
+                         "hi": results["ex_own_hi"].where(results["n"] > 0), "primary": prim})
 
 
 def validate_history(prices: dict, today: date, s: Settings, volumes: dict | None = None) -> pd.DataFrame:
@@ -121,16 +112,20 @@ def validate_history(prices: dict, today: date, s: Settings, volumes: dict | Non
 
 
 def run_backtest(prices: dict, index_close: dict, universe: list[Stock], quality: dict, s: Settings, out_dir: Path,
-                 data_meta: dict, trials_path: Path | None = None, today: date | None = None, volumes: dict | None = None) -> dict:
+                 data_meta: dict, root: Path | None = None, today: date | None = None, volumes: dict | None = None) -> dict:
+    """root: folder holding registry.csv and trials_all.csv (default: out_dir's parent, i.e. output/backtests)."""
     out_dir.mkdir(parents=True, exist_ok=True)
+    root = Path(root) if root is not None else out_dir.parent
     today = today or date.today()
     calendar = sorted({d for c in prices.values() for d in c.index if d >= pd.Timestamp(s.backtest.start_date)})
     spec = freeze_spec(s, universe, data_meta, calendar)
-    text = json.dumps(spec, indent=2, default=str)
-    (out_dir / "spec.json").write_text(text, encoding="utf-8")                                    # written before any result exists
-    archived = out_dir / f"spec_{spec['spec_hash']}.json"
-    if not archived.exists():                                                                       # never overwrite an earlier spec
-        archived.write_text(text, encoding="utf-8")
+    cut = pd.Timestamp(spec["split"]["cutoff"])
+    oos = [d for d in calendar if d > cut]
+    reg = registry.register("backtest", spec, out_dir, root,                                       # before any result exists
+                            fields={"family_id": registry.BACKTEST_FAMILY, "oos_start": oos[0], "oos_end": oos[-1]})
+    spec["registration"] = registry.registration_block(reg)                                         # not hashed
+    (out_dir / "spec.json").write_text(json.dumps(spec, indent=2, default=str), encoding="utf-8")   # the latest spec, beside the archive
+    earlier = registry.earlier_specs("backtest", root, exclude=reg.spec_hash, before=reg.registered_at)
     run_at = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     validation = validate_history(prices, today, s, volumes)
@@ -147,8 +142,9 @@ def run_backtest(prices: dict, index_close: dict, universe: list[Stock], quality
     keep = ["ticker", "region", "group", "date", "entry_date", "f1", "f5", "f20", "knife", "q", "stress", *evcols] + \
            [f"{p}{h}" for h in s.backtest.horizons for p in ("fwd", "mae", "idx", "ew", "period", "suspect")]
     ev[keep].to_csv(out_dir / "events.csv", index=False)
-    tpath = trials_path or out_dir.parent / "trials.csv"
-    append_trials(tpath, spec, results, run_at)
-    trial_runs = int(pd.read_csv(tpath)["run_at"].nunique())
+    registry.record_trials(reg, trial_rows(results), run_at)
+    log = registry.read_trials(root)
+    trial_runs = int(log.loc[log["kind"] == "backtest", "run_at"].nunique())
     return {"spec": spec, "days": days, "results": results, "validation": validation, "cutoff": cutoff, "run_at": run_at,
-            "n_series": len(prices), "trial_runs": trial_runs, "primary_history": primary_history(tpath)}
+            "n_series": len(prices), "trial_runs": trial_runs, "primary_history": primary_history(root),
+            "earlier_specs": [{"spec_hash": h} for h in earlier], "oos_reuse": reg.reuse_note(), "registration": reg}

@@ -8,7 +8,8 @@ import pytest
 import dipdash.backtest_run as br
 from dipdash.backtest import EU, US
 from dipdash.backtest_report import md_table, pct, render_report, write_report
-from dipdash.backtest_run import append_trials, freeze_spec, run_backtest
+from dipdash import registry
+from dipdash.backtest_run import freeze_spec, run_backtest
 from test_backtest import S, universe  # synthetic random-walk universe with an optional planted effect
 
 from dipdash.backtest import add_events, add_periods, add_peer_returns, build_days
@@ -55,6 +56,9 @@ def test_spec_is_written_before_any_result_is_computed(tmp_path, monkeypatch):
     spec = json.loads((tmp_path / "run" / "spec.json").read_text())
     assert spec["primary_cell"]["period"] == "OOS" and spec["spec_hash"]
     assert not (tmp_path / "run" / "results.csv").exists()
+    assert (tmp_path / "run" / f"spec_{spec['spec_hash']}.json").exists()                  # registered before compute ...
+    assert list(registry.read_registry(tmp_path)["spec_hash"]) == [spec["spec_hash"]]     # ... and the crashed run is in the ledger
+    assert not (tmp_path / "trials_all.csv").exists()                                     # nothing computed, nothing logged
 
 
 def test_spec_hash_is_stable_and_changes_with_any_frozen_choice():
@@ -74,7 +78,7 @@ def test_full_run_writes_every_artifact_and_a_report_without_banned_wording(tmp_
     report = write_report(run, s, out)
     for f in ("spec.json", "results.csv", "events.csv", "data_validation.csv", "report.md", "distribution.png", "forest.png"):
         assert (out / f).exists() and (out / f).stat().st_size > 0, f
-    assert (tmp_path / "trials.csv").exists()
+    assert (tmp_path / "trials_all.csv").exists() and (tmp_path / "registry.csv").exists()
     text = report.read_text(encoding="utf-8")
     for h in ("Pre-registered question", "How much to trust this", "Survivorship bias", "After costs", "Market-wide selloffs", "How many things were tried"):
         assert h in text
@@ -95,10 +99,10 @@ def test_trial_log_appends_and_marks_the_primary_cell(tmp_path):
     prices, ix, uni, q, s = synthetic()
     run_backtest(prices, ix, uni, q, s, tmp_path / "r1", META)
     run_backtest(prices, ix, uni, q, s, tmp_path / "r2", META)
-    log = pd.read_csv(tmp_path / "trials.csv")
+    log = registry.read_trials(tmp_path)
     assert log["spec_hash"].nunique() == 1 and len(log) % 2 == 0           # the same spec twice: every cell logged twice
     assert log["primary"].sum() == 2 and log[log["primary"]]["period"].eq("OOS").all()
-    assert set(log["variant"]) == set(br.VARIANTS)
+    assert set(log["cell"]) == set(br.VARIANTS) and set(log["kind"]) == {"backtest"}
 
 
 def test_events_file_holds_only_event_days_with_their_forward_returns(tmp_path):
@@ -164,10 +168,13 @@ def test_descriptive_notes_do_not_change_the_spec_hash_but_every_frozen_choice_d
 def test_the_trial_log_records_every_computed_cell_each_run(tmp_path):
     prices, ix, uni, q, s = synthetic(effect=0.006)
     run = run_backtest(prices, ix, uni, q, s, tmp_path / "r", META)
-    log = pd.read_csv(tmp_path / "trials.csv")
-    assert len(log) == int((run["results"]["n"] > 0).sum()) and len(log) > 60
+    log = registry.read_trials(tmp_path)
+    assert len(log) == len(run["results"]) == run["spec"]["cells_computed"] == 108       # every computed cell, empty ones included
     assert set(log["group"]) == {"All", US, EU} and set(log["period"]) == {"ALL", "IS", "OOS", "OOS_exstress"}
-    assert run["spec"]["cells_computed"] == 108
+    empty = log[log["n"] == 0]
+    assert empty["estimate"].isna().all()                                                  # an empty cell has no estimate, but is counted
+    counts = registry.cells_per_run(tmp_path)
+    assert (counts["logged"] == counts["planned_cells"].astype(int)).all()
 
 
 def test_report_has_the_tally_the_review_section_and_visible_signs_near_zero(tmp_path):
@@ -184,14 +191,17 @@ def test_report_has_the_tally_the_review_section_and_visible_signs_near_zero(tmp
 
 
 def test_a_trial_log_with_an_older_column_layout_is_set_aside_not_mixed(tmp_path):
-    old = tmp_path / "trials.csv"
+    old = tmp_path / "trials_all.csv"
     old.write_text("run_at,spec_hash,variant,horizon,period,n,ex_own,ex_own_lo,ex_own_hi,primary\n2026-01-01 00:00,abc,V1_price_only,21,OOS,5,0.1,0.0,0.2,True\n", encoding="utf-8")
+    legacy = tmp_path / "trials.csv"
+    legacy.write_text("frozen old log\n", encoding="utf-8")
     prices, ix, uni, q, s = synthetic()
-    run_backtest(prices, ix, uni, q, s, tmp_path / "r", META, trials_path=old)
+    run_backtest(prices, ix, uni, q, s, tmp_path / "r", META, root=tmp_path)
     fresh = pd.read_csv(old)                                                    # parses: one consistent layout
-    assert "group" in fresh.columns and "abc" not in set(fresh["spec_hash"])
-    older = list(tmp_path.glob("trials_older_layout_*.csv"))
+    assert list(fresh.columns) == registry.TRIAL_COLS and "abc" not in set(fresh["spec_hash"])
+    older = list(tmp_path.glob("trials_all_older_layout_*.csv"))
     assert len(older) == 1 and "abc" in older[0].read_text()                    # the earlier history is kept
+    assert legacy.read_text() == "frozen old log\n"                             # the old per-runner log is never written to
 
 
 # ---------------------------------------------------------------- RES-7: no hand-typed numbers in the report
@@ -272,7 +282,7 @@ def test_earlier_spec_hashes_in_the_trial_log_are_always_mentioned(tmp_path):
     prices, ix, uni, q, s = synthetic()
     run = run_backtest(prices, ix, uni, q, s, tmp_path / "r", META)
     assert run["spec"]["revisions_after_first_look"] == []                              # no notes for this hash
-    run["primary_history"] = [{"run_at": "x", "spec_hash": "oldhash", "n": 3, "ex_own": 0.01}]
+    run["earlier_specs"] = [{"spec_hash": "oldhash"}]
     text = render_report(run, s, CH)
     assert "earlier spec hash" in text and "oldhash" in text                            # shown even without notes for the current hash
     assert "No changes after the first look are recorded" in text
@@ -301,3 +311,74 @@ def test_the_recorded_notes_quote_the_published_sample_run():
     q = NOTES[REVIEWED_SPEC]["quoted"]
     assert int(r["n"]) == q["primary_n"] and r["ex_own"] == pytest.approx(q["primary_ex_own"], abs=5e-7)
     assert f"{q['primary_ex_own']:+.4%}" in NOTES[REVIEWED_SPEC]["review"]
+
+
+# ---------------------------------------------------------------- RES-4: registry, ledger and register-before-compute
+def test_run_cells_is_only_called_after_the_spec_file_and_registry_row_exist(tmp_path, monkeypatch):
+    """Guard: reorder run_backtest so computing comes before registering, and this test fails."""
+    prices, ix, uni, q, s = synthetic()
+    real, seen = br.run_cells, []
+
+    def spy(days, s_):
+        reg = registry.read_registry(tmp_path)
+        assert len(reg) == 1 and reg["source"].iloc[0] == "registered", "run_cells called before registration"
+        assert (tmp_path / "r" / f"spec_{reg['spec_hash'].iloc[0]}.json").exists(), "run_cells called before the spec file was written"
+        seen.append(reg["spec_hash"].iloc[0])
+        return real(days, s_)
+
+    monkeypatch.setattr(br, "run_cells", spy)
+    run = run_backtest(prices, ix, uni, q, s, tmp_path / "r", META)
+    assert seen == [run["spec"]["spec_hash"]]
+
+
+def test_a_crashed_run_still_counts_as_an_earlier_spec_and_the_ledger_is_scoped_by_kind(tmp_path, monkeypatch):
+    prices, ix, uni, q, s = synthetic()
+
+    def boom(*a, **k):
+        raise RuntimeError("crash after registering")
+
+    s_old = replace(s, dip=replace(s.dip, drop_5d=0.06))
+    with monkeypatch.context() as m:
+        m.setattr(br, "build_days", boom)
+        with pytest.raises(RuntimeError):
+            run_backtest(prices, ix, uni, q, s_old, tmp_path / "a", META)
+    crashed = registry.read_registry(tmp_path)["spec_hash"].iloc[0]
+    # a features registration on the same root must never be described as an earlier backtest spec
+    registry._append_registry(tmp_path, {"registered_at": "2026-01-01 00:00:00", "kind": "features", "family_id": "f", "spec_hash": "feat0000",
+                                         "source": "registered", "oos_start": "2001-01-01", "oos_end": "2001-02-01"})
+    run = run_backtest(prices, ix, uni, q, s, tmp_path / "b", META)
+    assert run["earlier_specs"] == [{"spec_hash": crashed}]
+    text = render_report(run, s, CH)
+    assert crashed in text and "feat0000" not in text.split("## Changes after the first look")[1].split("##")[0]
+    assert "`registry.csv` also holds runs under 1 earlier spec hash" in text
+
+
+def test_reusing_the_out_of_sample_period_is_printed_in_the_report_and_never_blocks(tmp_path):
+    prices, ix, uni, q, s = synthetic()
+    first = run_backtest(prices, ix, uni, q, s, tmp_path / "a", META)
+    assert "No earlier registration" in first["oos_reuse"]
+    assert "No earlier registration" in render_report(first, s, CH)
+    s2 = replace(s, dip=replace(s.dip, drop_5d=0.06))                                   # a revised spec on the same window
+    second = run_backtest(prices, ix, uni, q, s2, tmp_path / "b", META)                 # not blocked
+    h1 = first["spec"]["spec_hash"]
+    assert h1 in second["oos_reuse"] and "not untouched" in second["oos_reuse"]
+    text = render_report(second, s2, CH)
+    summary = text.split("### Pre-registered question")[0]
+    assert "Out-of-sample period used before:" in summary and h1 in summary             # in the summary, not behind the notes
+    archived = json.loads((tmp_path / "b" / f"spec_{second['spec']['spec_hash']}.json").read_text())
+    assert any(h1 in line for line in archived["registration"]["oos_reuse"])            # recorded in the spec ...
+    assert archived["spec_hash"] == registry.hash_for("backtest", archived)              # ... without changing its hash
+    third = run_backtest(prices, ix, uni, q, s2, tmp_path / "c", META)                  # an unchanged re-run is noted as such
+    assert "same spec was registered 1 time before" in third["oos_reuse"]
+
+
+def test_editing_a_note_changes_nothing_in_the_registry(tmp_path, monkeypatch):
+    import dipdash.backtest_notes as bn
+    prices, ix, uni, q, s = synthetic()
+    a = run_backtest(prices, ix, uni, q, s, tmp_path / "a", META)
+    h = a["spec"]["spec_hash"]
+    monkeypatch.setattr(bn, "NOTES", {h: {"revisions": ["an edited note"], "review": "changed"}})
+    b = run_backtest(prices, ix, uni, q, s, tmp_path / "b", META)
+    reg = registry.read_registry(tmp_path)
+    assert b["spec"]["spec_hash"] == h and set(reg["spec_hash"]) == {h} and len(reg) == 2
+    assert b["earlier_specs"] == []

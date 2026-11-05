@@ -7,13 +7,13 @@ the out-of-sample events are the one test. Costs do not enter a rank correlation
 """
 from __future__ import annotations
 
-import hashlib
-import json
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
 from scipy.stats import norm, rankdata
+
+from . import registry
 
 FEATURES: dict[str, str] = {
     "f1_volume_ratio": "log(V_t / median(V over the previous 20 bars))",
@@ -26,6 +26,8 @@ FEATURES: dict[str, str] = {
 FAMILY = list(FEATURES)
 ALPHA = 0.10                       # family-wise level, two-sided; matches the project's 90% intervals
 MIN_N = 30
+GROUPS = ("All", "US", "Europe+Nordic")
+OOS_STATS = ("spearman", "tercile_top_minus_bottom")
 
 
 # ---------------------------------------------------------------- features (causal)
@@ -155,7 +157,7 @@ def evaluate_features(ev: pd.DataFrame, cfg: Settings, features: list[str] = FAM
                      "lo": np.nan, "hi": np.nan, "p": np.nan, "n_months": ins.loc[ok_in, "month"].nunique(),
                      "sign_is": sign, "edge1": edges[0], "edge2": edges[1]})
         oos = ev[ev["period"] == "OOS"]
-        for g in ("All", "US", "Europe+Nordic"):
+        for g in GROUPS:
             sub = _split(oos, g)
             x, y, m = sub[f].to_numpy(float), sub["target"].to_numpy(float), sub["month"].to_numpy()
             seed = cfg.seed + 100 * k
@@ -181,9 +183,14 @@ def evaluate_features(ev: pd.DataFrame, cfg: Settings, features: list[str] = FAM
 
 
 # ---------------------------------------------------------------- spec
+def planned_cells(features: list[str] = FAMILY) -> int:
+    """Rows evaluate_features returns: one in-sample row per feature, plus every OOS group x statistic."""
+    return len(features) * (1 + len(GROUPS) * len(OOS_STATS))
+
+
 def spec_hash(spec: dict) -> str:
-    notes = {"notes"}
-    return hashlib.sha256(json.dumps({k: v for k, v in spec.items() if k not in notes}, sort_keys=True, default=str).encode()).hexdigest()[:16]
+    """Delegates to the one canonical hash (registry.spec_hash; 'notes' is descriptive and not hashed)."""
+    return registry.hash_for("features", spec)
 
 
 def freeze_spec(parent: dict, cutoff: str, n_universe: int, family_id: str, boot: dict) -> dict:

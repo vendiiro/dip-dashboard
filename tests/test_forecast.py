@@ -103,3 +103,61 @@ def test_missing_arch_falls_back_to_ewma(monkeypatch):
     assert d["method"] == "ewma_fallback" and d["reason"] is None and d["lo"] < 0 < d["hi"]
     g = fc.all_ranges(const_vol(), 21, seed=0)["garch_t_fhs"]
     assert g["method"] == "ewma_fallback" and g["fit_error"]
+
+
+# ---------------------------------------------------------------- RES-4: frozen spec, register before computing
+def _load_calibration_script():
+    from pathlib import Path
+    path = Path(__file__).resolve().parents[1] / "scripts" / "run_forecast_calibration.py"
+    spec = importlib.util.spec_from_file_location("run_forecast_calibration", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_frozen_forecast_criterion_equals_the_docstring_and_the_constants():
+    mod = _load_calibration_script()
+    doc = " ".join(fc.__doc__.split())
+    assert mod.CRITERION_TEXT and mod.CRITERION_TEXT in doc and mod.CRITERION_TEXT.endswith("relax it).")
+    assert f"within {mod.TARGET:.2f} +/- {mod.TOL_ALL:.2f}" in mod.CRITERION_TEXT and f"within {mod.TARGET:.2f} +/- {mod.TOL_DIP:.2f}" in mod.CRITERION_TEXT
+    assert "Two attempts in total" in mod.CRITERION_TEXT and mod.ATTEMPTS == (1, 2)
+    assert f"<= {mod.TOL_ALL:.2f}" in mod.VERDICT_TEXT and f"<= {mod.TOL_DIP:.2f}" in mod.VERDICT_TEXT
+    oos = pd.DataFrame({"origin": pd.to_datetime(["2020-03-02", "2022-05-02", "2023-01-02"]), "dip": [True, False, True],
+                        "group": ["US", "Other", "US"]})
+    assert tuple(mod.groups(oos)) == mod.GROUPS                                         # the registered cell count is the computed one
+    assert mod.PLANNED_CELLS == len(mod.GROUPS) * len(mod.METHODS) * 2 * 2 == 120
+
+
+def test_calibration_runner_registers_before_any_forecast_and_logs_the_planned_cells(tmp_path, monkeypatch):
+    """Guard: move registration after build_origins in the script and this test fails."""
+    import json
+    from dipdash import registry
+    from dipdash.cache import save_raw_prices
+    mod = _load_calibration_script()
+    rng = np.random.default_rng(5)
+    bars = {f"S{k}": (make_close(rng.normal(0, 0.025, 1000)), None) for k in range(3)}
+    raw = save_raw_prices(bars, "synthetic", tmp_path / "raw")
+    root = tmp_path / "out"
+    real, calls = fc.all_ranges, []
+
+    def spy(close, horizon=21, *, seed=0):
+        if not calls:
+            reg = registry.read_registry(root)
+            assert len(reg) == 1 and reg["kind"].iloc[0] == "forecast", "a forecast was computed before registration"
+            assert (tmp_path / "run" / f"spec_{reg['spec_hash'].iloc[0]}.json").exists(), "a forecast was computed before the spec file existed"
+        calls.append(1)
+        return real(close, horizon, seed=seed)
+
+    monkeypatch.setattr(fc, "all_ranges", spy)
+    assert mod.main(["--raw", str(raw), "--workers", "1", "--out-root", str(root), "--out", str(tmp_path / "run")]) == 0
+    assert calls
+    reg = registry.read_registry(root)
+    log = registry.read_trials(root)
+    assert len(log) == int(reg["planned_cells"].iloc[0]) == mod.PLANNED_CELLS
+    prim = log[log["primary"]]
+    assert len(prim) == 4 and set(prim["group"]) == set(mod.VERDICT_GROUPS) and set(prim["stat"]) == {"coverage"}
+    assert set(prim["cell"]) == {"garch_t_fhs|attempt1", "garch_t_fhs|attempt2"}
+    spec = json.loads((tmp_path / "run" / "spec_forecast.json").read_text())
+    assert spec["criterion_text"] == mod.CRITERION_TEXT and spec["spec_hash"] == registry.hash_for("forecast", spec)
+    report = (tmp_path / "run" / "report_forecast.md").read_text(encoding="utf-8")
+    assert "Out-of-sample period used before:" in report and spec["spec_hash"] in report
