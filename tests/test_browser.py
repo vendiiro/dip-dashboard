@@ -404,6 +404,21 @@ def test_payload_setup_stays_a_string_and_the_view_is_separate(browser, demo_htm
     page.close()
 
 
+def test_detail_chart_draws_when_a_stock_has_a_holiday_gap_in_hist(browser, demo_html, tmp_path):
+    # a null in hist.c/s/h is an axis day without a bar (exchange holiday): the chart skips it, draws every other point and does not fail
+    js = ("{ const r = DATA.rows.find(x => x.dip), h = r.hist, k = 120; "
+          "window.__n = h.c.length; window.__t = r.t; window.__after = DATA.chart_dates[h.o + k + 1]; "
+          "h.c[k] = null; h.s[k] = null; h.h[k] = null; }")
+    page, errors = open_page(browser, variant_html(tmp_path, demo_html, js))
+    t, n = page.evaluate("window.__t"), page.evaluate("window.__n")
+    page.click(f"#body tr.row[data-t='{t}']")
+    assert errors == [] and page.is_hidden("#fail") and page.locator("td.detail svg[role=img]").count() == 1
+    d = page.get_attribute("td.detail svg[role=img] path[stroke-width='1.8']", "d")
+    assert d.count("L") + d.count("M") == n - 1 and d.startswith("M") and d.count("M") == 1      # one unbroken line over the other days
+    assert page.locator("td.detail .enddot").count() == 1
+    page.close()
+
+
 def test_end_dots_are_coloured_by_direction(browser, demo_html):
     page, _ = open_page(browser, demo_html)
     page.click("#show button[data-v=all]")

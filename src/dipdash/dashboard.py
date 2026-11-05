@@ -21,6 +21,7 @@ from .validate import Issue
 
 TEMPLATE = Path(__file__).resolve().parents[1] / "template.html"
 PLACEHOLDER = "__DATA__"
+PRICE_SCALE = 100          # hist and spark prices are integers in 1/PRICE_SCALE of the currency unit
 
 Prices = dict[str, tuple[pd.Series, "pd.Series | None"]]
 
@@ -124,13 +125,43 @@ def build_payload(universe: list[Stock], prices: Prices, funds: dict, settings: 
         with ThreadPoolExecutor(6) as ex:
             for r, n in zip(movers, ex.map(lambda r: news_fn(r["t"]), movers)):
                 r["news"] = n
+    chart_dates = share_chart_axis(rows)
     tz = settings.schedule.timezone
     stamp = (now or datetime.now(ZoneInfo(tz))).strftime("%Y-%m-%d %H:%M")
     return {"generated": stamp, "tz": tz, "demo": demo, "rows": rows, "data_quality": skipped,
+            "chart_dates": chart_dates, "price_scale": PRICE_SCALE,
             "fx_to_usd": fx_to_usd or {}, "indices": indices,
             "issues": [asdict(i) for i in (issues or [])],
             "settings": {"dip": asdict(settings.dip), "quality": asdict(settings.quality),
                          "knife": asdict(settings.falling_knife)}}
+
+
+def _cents(v: float | None) -> int | None:
+    return None if v is None else int(round(v * PRICE_SCALE))
+
+
+def share_chart_axis(rows: list[dict]) -> list[str]:
+    """Move every row's chart dates onto one shared axis and return that axis (ISO dates, oldest first).
+
+    The axis is the sorted union of all rows' bar dates. A row's `hist` then keeps no dates: `hist.o` is the axis index of its
+    first bar and `c`, `s`, `h` run from there, so item i belongs to `chart_dates[o + i]`; a day on the axis where this stock
+    had no bar (an exchange holiday) is null, and the lists stop at the stock's last bar. Prices in `hist` and `spark` become
+    integers in hundredths of the currency unit (`price_scale`), which is exactly the 2-decimal rounding they had before."""
+    axis = sorted({d for r in rows for d in r["hist"]["d"]})
+    pos = {d: i for i, d in enumerate(axis)}
+    for r in rows:
+        h = r["hist"]
+        o = pos[h["d"][0]]
+        n = pos[h["d"][-1]] - o + 1
+        packed = {"o": o}
+        for k in ("c", "s", "h"):
+            out: list[int | None] = [None] * n
+            for day, v in zip(h["d"], h[k]):
+                out[pos[day] - o] = _cents(v)
+            packed[k] = out
+        r["hist"] = packed
+        r["spark"] = [_cents(v) for v in r["spark"]]
+    return axis
 
 
 def _no_index_reason(s: Stock, ix: dict | None, m: dict) -> str:
@@ -156,7 +187,7 @@ def _yesterday(bars: tuple, settings: Settings) -> dict | None:
 def render_html(payload: dict, template_path: Path = TEMPLATE) -> str:
     """Inject the payload as JSON. '</' is escaped so text in a headline cannot close the script tag."""
     html = template_path.read_text(encoding="utf-8")
-    data = json.dumps(payload, ensure_ascii=False, allow_nan=False).replace("<", "\\u003c")
+    data = json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(",", ":")).replace("<", "\\u003c")
     return html.replace(PLACEHOLDER, data)
 
 

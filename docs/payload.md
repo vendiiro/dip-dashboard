@@ -23,6 +23,8 @@ parses the tables below and compares them with a real demo run (`python -m dipda
 | `demo` | bool | no | | true for synthetic demo data |
 | `rows` | list | no | | one row per screened stock (see Row) |
 | `data_quality` | list | no | | stocks left out of the screen (see Left-out item) |
+| `chart_dates` | list | no | `YYYY-MM-DD` | the shared date axis of every row's `hist`: sorted union of the rows' bar dates, oldest first, no duplicates; empty when there are no rows |
+| `price_scale` | int | no | | 100: `hist` and `spark` prices are integers in 1/`price_scale` of the currency unit (hundredths); divide by it to get the price |
 | `fx_to_usd` | dict | no | USD per 1 unit | currency code to rate; empty in the demo |
 | `indices` | list | no | | market-context indices (see Index item) |
 | `issues` | list | no | | data-quality findings (see Issue item) |
@@ -66,7 +68,7 @@ One entry of `rows`. Keys are exactly these.
 | `partial` | bool | no | | last bar is dated today, so the session may still be open |
 | `dip` | bool | no | | meets the dip rule (see `why`) |
 | `why` | list | no | | text reasons the dip rule fired; empty when `dip` is false |
-| `spark` | list | no | local currency | last 90 closes for the small chart |
+| `spark` | list | no | 1/`price_scale` of local currency | last 90 closes for the small chart, oldest first, as integers (12345 = 123.45); no dates, never null |
 | `hist` | dict | no | | longer series for the detail chart (see Hist) |
 | `prev` | dict | yes | | metrics at the previous close (see Prev); null with too little history |
 | `idx` | str | yes | | name of the market-context index used |
@@ -91,12 +93,21 @@ One entry of `rows`. Keys are exactly these.
 
 ## Hist
 
+The detail chart's series. They carry **no dates of their own**: they sit on the top-level shared axis `chart_dates`.
+
+**Mapping rule.** Item `i` of `c`, `s` and `h` belongs to the date `chart_dates[o + i]`. So the first bar is `chart_dates[o]`, and
+the lists end at the stock's last bar, `chart_dates[o + len(c) - 1]`, which equals the row's `asof`. All three lists have the same
+length, and `o + len(c) <= len(chart_dates)` (a stock whose last bar is a few days old ends before the end of the axis). Inside
+that range an entry is null where the axis has a date on which this stock had no bar (an exchange holiday), in `c` and in `s`
+and `h` alike; skip those entries when drawing. Prices are integers in hundredths (see `price_scale`): `c[i] / price_scale` is the
+close, with the same 2-decimal rounding as before. Before this change each row had its own `d` list of dates (252 of them) and floats.
+
 | Field | Type | Null | Unit | Meaning |
 |---|---|---|---|---|
-| `d` | list | no | `YYYY-MM-DD` | bar dates |
-| `c` | list | no | local currency | closes |
-| `s` | list | no | local currency | 200-day average; null entries until it can be computed |
-| `h` | list | no | local currency | rolling 52-week high; null entries until it can be computed |
+| `o` | int | no | index | position in `chart_dates` of this row's first bar (0 or more) |
+| `c` | list | no | 1/`price_scale` of local currency | closes; null on an axis day without a bar for this stock |
+| `s` | list | no | 1/`price_scale` of local currency | 200-day average; null entries until it can be computed, and on days without a bar |
+| `h` | list | no | 1/`price_scale` of local currency | rolling 52-week high; null entries until it can be computed, and on days without a bar |
 
 ## Prev
 

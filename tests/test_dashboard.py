@@ -116,7 +116,7 @@ def test_demo_run_writes_a_dashboard(tmp_path):
     out = tmp_path / "sub" / "demo.html"
     assert main(["--demo", "--out", str(out)]) == 0
     html = out.read_text(encoding="utf-8")
-    assert "__DATA__" not in html and '"demo": true' in html and html.count('"t": "') >= 60
+    assert "__DATA__" not in html and '"demo":true' in html and html.count('"t":"') >= 60
 
 
 def test_legacy_wrapper_still_runs(tmp_path):
@@ -132,7 +132,7 @@ def test_custom_universe_and_settings_flags(tmp_path):
     u.write_text("ticker,name,region\nAAA,Alpha,US\nBBB,Beta,US\n")
     out = tmp_path / "o.html"
     assert main(["--demo", "--universe", str(u), "--out", str(out)]) == 0
-    assert out.read_text(encoding="utf-8").count('"t": "') == 2        # one per stock row
+    assert out.read_text(encoding="utf-8").count('"t":"') == 2        # one per stock row
 
 
 # ---- price pull with fallback + currency-aware payload -----------------------
@@ -182,7 +182,10 @@ IDX = [{"symbol": "^X", "name": "Idx US", "region": "US", "price": 100.0, "r1": 
 
 def test_each_row_carries_chart_history_and_yesterdays_state():
     row = build_payload(UNI, *inputs(), S, today=TODAY)["rows"][0]
-    assert len(row["hist"]["c"]) == 252 and row["hist"]["c"][-1] == row["price"]
+    p = build_payload(UNI, *inputs(), S, today=TODAY)
+    row, scale = p["rows"][0], p["price_scale"]
+    assert len(row["hist"]["c"]) == 252 and row["hist"]["c"][-1] / scale == row["price"] and "d" not in row["hist"]
+    assert p["chart_dates"][row["hist"]["o"] + 251] == row["asof"] and row["spark"][-1] == row["hist"]["c"][-1]
     assert row["prev"]["r5"] > row["r5"]                  # the slide continued on the last day
     assert set(row["prev"]) == {"r1", "r5", "r21", "dd20", "knife", "dip"}
 
@@ -365,3 +368,28 @@ def test_demo_run_has_no_coverage_table_and_no_run_meta(tmp_path):
     assert main(["--demo", "--out", str(out)]) == 0
     assert "Data coverage by exchange" not in (out.parent / "digest.md").read_text(encoding="utf-8")
     assert not (out.parent / "run_meta.json").exists()
+
+
+def test_stocks_on_different_calendars_share_one_axis_with_nulls_on_their_holidays():
+    from dipdash.metrics import history
+    a = geometric(260, 0.0005, end="2026-10-29")
+    b = a.drop(a.index[[-3, -40]])                                  # b had no bar on two days a did
+    uni = [Stock("A", "A", "US", "Tech"), Stock("B", "B", "Europe", "Tech")]
+    p = build_payload(uni, {"A": (a, None), "B": (b, None)}, {}, S, today=TODAY)
+    ra, rb = p["rows"]
+    axis, sc = p["chart_dates"], p["price_scale"]
+    assert axis == sorted(set(axis)) and len(axis) >= 252
+    for r, close in ((ra, a), (rb, b)):
+        h, want = r["hist"], history(close)
+        got = {axis[h["o"] + i]: v / sc for i, v in enumerate(h["c"]) if v is not None}
+        assert got == dict(zip(want["d"], want["c"]))                # same dates, same prices as the old per-stock lists
+        got_s = {axis[h["o"] + i]: None if v is None else v / sc for i, v in enumerate(h["s"]) if h["c"][i] is not None}
+        assert got_s == dict(zip(want["d"], want["s"]))
+    holes = [i for i, v in enumerate(rb["hist"]["c"]) if v is None]
+    assert len(holes) == 2 and all(rb["hist"]["s"][i] is None and rb["hist"]["h"][i] is None for i in holes)
+
+
+def test_the_page_carries_the_shared_axis_as_compact_json():
+    p = build_payload(UNI, *inputs(), S, today=TODAY)
+    html = render_html(p)
+    assert '"chart_dates":["' in html and '"price_scale":100' in html and ", " not in html[html.index('"rows"'):html.index('"rows"') + 40]

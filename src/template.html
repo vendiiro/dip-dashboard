@@ -1082,8 +1082,13 @@ function detail(r) {
   return wrap;
 }
 function priceChart(r) {
-  const H_ = r.hist, W = chartW(620, mq.matches ? 90 : 120), H = mq.matches ? 210 : 260, pl = 8, pr = 52, pt = 22, pb = 22, n = H_.c.length;
-  const c = H_.c, s = H_.s, hi = H_.h, DD = H_.d;
+  // hist has no dates of its own: item i sits on DATA.chart_dates[hist.o + i], prices are integer hundredths (DATA.price_scale).
+  // A null close is an axis day without a bar for this stock (a holiday): it is dropped, so the chart draws the same points as before.
+  const H_ = r.hist, sc = DATA.price_scale || 1, keep = [];
+  H_.c.forEach((v, i) => { if (v != null) keep.push(i); });
+  const pick = a => keep.map(i => a[i] == null ? null : a[i] / sc);
+  const c = pick(H_.c), s = pick(H_.s), hi = pick(H_.h), DD = keep.map(i => DATA.chart_dates[H_.o + i]);
+  const W = chartW(620, mq.matches ? 90 : 120), H = mq.matches ? 210 : 260, pl = 8, pr = 52, pt = 22, pb = 22, n = c.length;
   const all = [...c, ...s.filter(v => v != null), ...hi.filter(v => v != null)], mn = Math.min(...all) * .98, mx = Math.max(...all) * 1.01;
   const X = i => pl + i / (n - 1) * (W - pl - pr), Y = v => pt + (1 - (v - mn) / (mx - mn)) * (H - pt - pb);
   const svg = sv('svg', {viewBox: `0 0 ${W} ${H}`, width: W, role: 'img', 'aria-label': `${r.t} one-year price chart`});

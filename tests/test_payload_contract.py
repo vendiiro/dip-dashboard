@@ -81,6 +81,9 @@ def check_payload(p: dict) -> list[str]:
                 problems.append(f"top-level {k} is missing")
             continue
         check_value(k, p[k], s, problems)
+    axis = p.get("chart_dates")
+    if isinstance(axis, list) and (axis != sorted(set(axis)) or any(not re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(x)) for x in axis)):
+        problems.append("chart_dates must be sorted, unique ISO dates")
     for i, r in enumerate(p.get("rows", [])):
         path = f"rows[{i}]"
         check_dict(path, r, "Row", problems)
@@ -94,6 +97,13 @@ def check_payload(p: dict) -> list[str]:
             lens = {len(v) for v in r["hist"].values() if isinstance(v, list)}
             if len(lens) > 1:
                 problems.append(f"{path}.hist lists have different lengths {sorted(lens)}")
+            axis = p.get("chart_dates")
+            if isinstance(axis, list) and isinstance(r["hist"].get("c"), list) and isinstance(r["hist"].get("o"), int):
+                if r["hist"]["o"] < 0 or r["hist"]["o"] + len(r["hist"]["c"]) > len(axis):
+                    problems.append(f"{path}.hist runs outside chart_dates (o={r['hist']['o']}, len={len(r['hist']['c'])}, axis={len(axis)})")
+                elif r["hist"]["c"] and (r["hist"]["c"][0] is None or r["hist"]["c"][-1] is None
+                                         or axis[r["hist"]["o"] + len(r["hist"]["c"]) - 1] != r.get("asof")):
+                    problems.append(f"{path}.hist must start and end on a bar, and end on asof")
         if r.get("prev") is not None:
             check_dict(f"{path}.prev", r["prev"], "Prev", problems)
         if r.get("earn") is not None:
@@ -242,3 +252,42 @@ def test_setup_text_is_reader_facing_and_never_carries_the_old_wording(demo):
             assert re.fullmatch(r"Dip · passes \d+ of \d+ scored checks( \(\d+ no data\))?", text), text
         if r["setup"] == "Dip, no fundamentals":
             assert text in ("Dip, no fundamentals", "Dip · data looks unreliable")
+
+
+# ---------------------------------------------------------------- the shared chart axis
+def test_every_chart_array_fits_the_shared_axis_in_its_documented_offset_form(demo):
+    p = demo["payload"]
+    axis, n = p["chart_dates"], len(p["chart_dates"])
+    assert n > 0 and p["price_scale"] == 100
+    for r in p["rows"]:
+        h = r["hist"]
+        assert set(h) == {"o", "c", "s", "h"} and len(h["c"]) == len(h["s"]) == len(h["h"])
+        assert 0 <= h["o"] and h["o"] + len(h["c"]) <= n                       # the offset form: item i is chart_dates[o + i]
+        assert axis[h["o"] + len(h["c"]) - 1] == r["asof"]
+        assert h["c"][-1] == round(r["price"] * p["price_scale"]) and len(r["spark"]) == 90
+        assert all(isinstance(v, int) for v in r["spark"])
+
+
+def _old_format_chart_bytes(p: dict) -> int:
+    """What hist and spark cost before the shared axis: a dates list per row, float prices, default JSON separators."""
+    total, sc = 0, p["price_scale"]
+    for r in p["rows"]:
+        h, keep = r["hist"], [i for i, v in enumerate(r["hist"]["c"]) if v is not None]
+        old = {"d": [p["chart_dates"][h["o"] + i] for i in keep]} | {k: [None if h[k][i] is None else h[k][i] / sc for i in keep] for k in "csh"}
+        total += len(json.dumps(old, ensure_ascii=False)) + len(json.dumps([v / sc for v in r["spark"]]))
+    return total
+
+
+def test_the_shared_axis_makes_the_chart_data_at_least_half_smaller(demo):
+    p = demo["payload"]
+    new = sum(len(json.dumps(r["hist"], separators=(",", ":"))) + len(json.dumps(r["spark"], separators=(",", ":"))) for r in p["rows"])
+    old = _old_format_chart_bytes(p)
+    assert new <= 0.5 * old, f"chart data is {new:,} bytes, was {old:,} ({new / old:.0%})"
+
+
+def test_a_broken_axis_is_caught(demo):
+    p = copy.deepcopy(demo["payload"])
+    p["rows"][0]["hist"]["o"] += 3                                             # runs past the end of the axis
+    p["chart_dates"] = list(reversed(p["chart_dates"]))
+    problems = check_payload(p)
+    assert any("outside chart_dates" in x or "must start and end" in x for x in problems) and any("sorted, unique" in x for x in problems)

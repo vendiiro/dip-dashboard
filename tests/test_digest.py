@@ -427,7 +427,7 @@ def test_a_failed_alert_step_is_visible_in_the_digest_and_never_looks_like_a_qui
     assert "could not be evaluated" in text and "No conditions changed state" not in text
     saved = json.loads((tmp_path / "alerts_latest.demo.json").read_text(encoding="utf-8"))
     assert saved["count"] == 0 and "bad config" in saved["error"]               # a stale file never survives a failure
-    assert '"alerts": null' in out.read_text(encoding="utf-8")                  # the dashboard shows 'unavailable'
+    assert '"alerts":null' in out.read_text(encoding="utf-8")                  # the dashboard shows 'unavailable'
 
 
 def test_evaluating_the_same_data_date_twice_gives_the_same_alerts_and_state(tmp_path):
