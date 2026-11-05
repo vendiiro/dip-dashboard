@@ -10,7 +10,7 @@ European blue chips. It flags sharp drops, shows how many of six quality checks 
 falling knives. A pre-registered backtest found **no out-of-sample edge** for the dip rules, so everything on the page
 is a description, not a tested filter. The code, tests and page are in good shape on demo data and synthetic tests. A live
 pull of the original 60 stocks worked on 2026-11-02 (59 had data). **The current code with all 348 names has not been run
-live, and nothing has been run on Iiro's Windows PC.**
+live. The first run on Iiro's PC (2026-11-05: 84 s, 288 of 289 stocks, exit 0) used `main` at the first commit, not this branch.**
 
 ## What exists now
 | Area | State |
@@ -33,7 +33,8 @@ CLAUDE.md. 2026-11-05: the backtest does not get the sector input (disclosed in 
 wording above. Details: `docs/decisions.md` and `docs/plans/decisions.md`.
 
 ## Not verified (needs Iiro's PC or the network)
-- A live Yahoo or OpenBB run of the current code with 348 tickers, and its run time (the 2026-11-02 live run covered 60).
+- A live Yahoo or OpenBB run of the current code with 348 tickers, and its run time. The 2026-11-05 PC run used `main` (289 tickers) and the 2026-11-02 run covered 60.
+- ROG.SW has no Yahoo data (also in `docs/m2-data-verification.md`); its symbol needs a check on the PC. KNEBV.HE showed a +29.6% move that reverted the next day; the new `price_spike_reverted` warning should flag it on the next live run.
 - `run_daily.bat` and the scheduled task on Windows.
 - GitHub Actions (first run may fail the visual job until baselines are regenerated on the runner).
 - 59 US tickers added earlier are unchecked. Run `python scripts/verify_universe.py --limit 10`, then the full run.
@@ -41,7 +42,7 @@ wording above. Details: `docs/decisions.md` and `docs/plans/decisions.md`.
 - The page with real data: the "distorted" and "no fundamentals" states have only been seen through forced test rows.
 
 ## What Iiro does next on his PC
-1. Run the one-line PowerShell check from the DATA-10 note and re-register the task (`scripts\install_task.ps1`).
+1. Check out this branch (`git fetch`, `git checkout dashboard-brief-compact-table`), then re-register the task (`scripts\install_task.ps1`; it is registered for `main` today). `scripts/verify_sources.py` now writes to `output/verification/` by default; use `--out docs/m2-data-verification.md` only to refresh the tracked doc.
 2. `python scripts/verify_universe.py --limit 10`, then the full run. Send back anything flagged.
 3. After a first green CI run, make the "unit" and "browser" checks required in GitHub branch protection.
 4. Decide whether `CLAUDE.md` line 1 ("quality-dip dashboard") and line 45 ("quality score") should be renamed.

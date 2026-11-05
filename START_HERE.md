@@ -71,5 +71,5 @@ Optional: let Claude write a plain-language review. Try `/daily-review` by hand 
 
 ## Reminders
 - Thresholds are untested defaults until the backtest says otherwise.
-- Free data (especially fundamentals) can be stale or wrong. Verify before acting on anything.
+- Free data (especially fundamentals) can be stale or wrong. Verify before acting on anything. Known limits: `README.md`, section "Known data limits".
 - This is an educational tool, not investment advice.
