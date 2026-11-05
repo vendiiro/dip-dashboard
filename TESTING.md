@@ -1,6 +1,6 @@
 # Testing guide
 
-You have the **quality-dip screen**: a daily dashboard that flags sharp price drops in large US, European and Nordic companies,
+You have the **dip screen**: a daily dashboard that flags sharp price drops in large US, European and Nordic companies,
 a backtest of that rule, and the scheduled run that refreshes it. It is an educational research tool. It gives screen results,
 never advice. Please try to break it.
 
@@ -61,7 +61,7 @@ Expected: nearly every stock; a few have no data at the source (for example Roch
 - Roche (`ROG.SW`) returns nothing from Yahoo; `RO.SW` exists but may be a different share line, so it was not swapped in.
 - Headlines come from a free search and are often about the wider market; non-US stocks usually have none.
 - The quality score is a plain share of six checks passed. A company with negative return on equity and margin can still score 67 (Intel did on 2026-11-04).
-- `output/run.log` is never rotated. Market holidays are not modelled.
+- `output/run.log` is rotated by `scripts/run_daily.bat` at about 5 MB (one older copy, `run.log.1`, is kept). Market holidays are not modelled.
 - The backtest universe is today's large companies (survivorship bias), costs are one flat figure, and the index baseline mixes dividend-adjusted stocks with a price-only index (no dividends) instead of a total-return index (dividends included).
 
 ## How to report what you find

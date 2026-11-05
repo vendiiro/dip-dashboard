@@ -1,4 +1,4 @@
-# Build plan: daily quality-dip dashboard
+# Build plan: daily dip dashboard
 
 Status: M0 approved 2026-11-02. M1 approved. M2 approved. M3 approved. M4 approved. M5 done and awaiting Iiro's review. All five milestones are built; Windows scheduling is untested.
 Work after M5 is tracked in `docs/BACKLOG.md`; this file is the original build record.
@@ -6,7 +6,7 @@ Every milestone ends with a stop: I show the result, you give feedback, then I c
 
 ## 1. The idea in one paragraph
 Every night after the US close (00:15 Helsinki, Tue-Sat), a script pulls daily prices for the US, European and
-Nordic blue chips in `config/universe.csv` (about 60 at M0; 348 on 2026-11-04). It flags stocks that fell sharply (1-day, 5-day or from their 20-day high). It then scores each flag with a simple quality score built from fundamentals (ROE, margin, debt, free cash flow, growth, size); flags that pass the quality minimum get the row label "Quality dip". The dashboard lists "Quality dip" rows first and then sorts by the 5-day move, and the digest sorts its candidates by the 5-day move. It also
+Nordic blue chips in `config/universe.csv` (about 60 at M0; 348 on 2026-11-04). It flags stocks that fell sharply (1-day, 5-day or from their 20-day high). It then scores each flag with a simple check score built from fundamentals (ROE, margin, debt, free cash flow, growth, size); flags that pass the check minimum are shown as "Dips meeting the check thresholds" (payload key `Quality dip`, unchanged). The dashboard sorts by size of drop by default, and the digest sorts its candidates by the 5-day move. It also
 warns when a drop looks like a "falling knife" (long downtrend, far below the 52-week high). The result is a single
 self-contained `dashboard.html` plus a short `digest.md`. It answers "what is the situation today, and which names does the screen flag today?" in under 10 seconds. A separate event-study backtest checks how stocks behaved historically after
 the same kind of dip, against baselines and with honest uncertainty, so the thresholds stop being guesses.
@@ -15,7 +15,7 @@ It is a research shortlist, not a signal: no buy/sell wording anywhere.
 ## 2. What the finished product looks like
 | Piece | What you get | Where |
 |---|---|---|
-| Dashboard | Header with data date + data-quality badge, 4 summary tiles (quality dips, new since yesterday, falling knives, market context), live filters, sortable candidate table with sparklines, expandable rows (1-year chart, quality checks, valuation, headlines, falling-knife checklist), context charts (today's move distribution, fallers by sector), definitions footer | `output/dashboard.html` + `output/history/` |
+| Dashboard | Header with data date + data-quality badge, 4 summary tiles (dips meeting the check thresholds, new since yesterday, falling knives, market context), live filters, sortable candidate table with sparklines, expandable rows (1-year chart, quality checks, valuation, headlines, falling-knife checklist), context charts (today's move distribution, fallers by sector), definitions footer | `output/dashboard.html` + `output/history/` |
 | Daily digest | Plain-language markdown: data quality, market context, candidates, new / dropped since yesterday | `output/digest.md` |
 | Data-quality log | Stale / failed / suspicious tickers per run | `output/data_quality.csv` |
 | Backtest report | Event count, costs, baselines, out-of-sample, bootstrap CIs, "How much to trust this" box | `output/backtests/<date>/report.md` + charts |
@@ -55,7 +55,7 @@ tests/            pytest on synthetic series (known answers)
 
 ## 6. Decisions I need from you (answer while reviewing the demo)
 1. **Colour for up/down.** The demo uses blue = up and red = down, always with a +/− sign. That pair is safer for colour-blind readers than red/green. Keep it, or switch to classic green/red?
-2. **Default view.** The demo opens on "All dips", with quality dips sorted to the top and falling knives still visible but badged. Alternative: open on "Quality dips only".
+2. **Default view.** The demo opens on "All dips", sorted by size of drop, with falling knives still visible but badged. Alternative: open on "Dips meeting the check thresholds".
 3. **Market context indices.** The demo shows S&P 500, STOXX 600 and OMX Helsinki 25. Add OMX Stockholm 30 / Copenhagen 25?
 4. **Where it runs.** I build and test in a Linux cloud container. The `.bat` and Task Scheduler parts (M5) can only be dry-run here, so you'll need to test them once on your Windows machine.
 5. **Network.** M2 needs Yahoo/OpenBB reachable from this container. I'll check it at the start of M2; if it's blocked, I'll tell you and we'll decide together.

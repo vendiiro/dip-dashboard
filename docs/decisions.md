@@ -1,7 +1,7 @@
 # Decisions log
 
 Generated file, do not edit by hand. Each decision is its own file in `docs/decisions/`; this page is the topic index,
-oldest first in each table (69 decisions). Source files cite this path, so it must keep existing.
+oldest first in each table (74 decisions). Source files cite this path, so it must keep existing.
 
 ## How to add a decision
 1. Add a new file `docs/decisions/YYYY-MM-DD-NN-<topic>-<slug>.md`: NN is the next free number for that date, topic is one of
@@ -10,7 +10,7 @@ oldest first in each table (69 decisions). Source files cite this path, so it mu
    a blank line, then the decision text (date, options considered, choice and reason).
 3. Rebuild this index: `python tests/test_decisions_index.py --write`. `pytest tests/test_decisions_index.py` fails while it is out of date.
 
-Topics: [Data](#data) (17) · [Screen](#screen) (8) · [Backtest](#backtest) (12) · [Dashboard](#dashboard) (17) · [Alerts](#alerts) (2) · [Ops](#ops) (11) · [Docs](#docs) (2)
+Topics: [Data](#data) (17) · [Screen](#screen) (9) · [Backtest](#backtest) (13) · [Dashboard](#dashboard) (20) · [Alerts](#alerts) (2) · [Ops](#ops) (11) · [Docs](#docs) (2)
 
 ## Data
 
@@ -46,6 +46,7 @@ Topics: [Data](#data) (17) · [Screen](#screen) (8) · [Backtest](#backtest) (12
 | 2026-11-02 | [Observation: plain-share quality score lets INTC score 67](decisions/2026-11-02-28-screen-observation-plain-share-quality-score-lets-intc.md) |
 | 2026-11-04 | [Residual move against the stock's own index (descriptive only)](decisions/2026-11-04-02-screen-residual-move-against-the-stock-s-own-index.md) |
 | 2026-11-04 | [Screener dd52 uses available history; the backtest needs 252 bars](decisions/2026-11-04-14-screen-dd52-uses-available-history.md) |
+| 2026-11-05 | [V3 spec hash excludes must_pass and distorted_roe_above](decisions/2026-11-05-01-screen-v3-spec-hash-excludes-labelling-definitions.md) |
 
 ## Backtest
 
@@ -63,6 +64,7 @@ Topics: [Data](#data) (17) · [Screen](#screen) (8) · [Backtest](#backtest) (12
 | 2026-11-04 | [Review follow-ups: forecast and feature-experiment readings](decisions/2026-11-04-09-backtest-review-follow-ups-forecast-and-feature.md) |
 | 2026-11-04 | [Digest quotes only event backtests and prints a fixed caveat](decisions/2026-11-04-15-backtest-digest-quotes-event-backtests-only.md) |
 | 2026-11-04 | [Holm in numpy; review notes keyed by spec hash](decisions/2026-11-04-17-backtest-holm-in-numpy-notes-by-spec-hash.md) |
+| 2026-11-05 | [Backtest report discloses that V3 ignores net-margin, distorted and sector rules](decisions/2026-11-05-04-backtest-report-discloses-v3-ignores-margin-and-sector-rules.md) |
 
 ## Dashboard
 
@@ -85,6 +87,9 @@ Topics: [Data](#data) (17) · [Screen](#screen) (8) · [Backtest](#backtest) (12
 | 2026-11-04 | [Browser tests read stable hooks and derive counts from DATA](decisions/2026-11-04-10-dashboard-browser-tests-use-stable-hooks.md) |
 | 2026-11-04 | [Payload documented in docs/payload.md and pinned by a test](decisions/2026-11-04-16-dashboard-payload-contract.md) |
 | 2026-11-04 | [Page wrapper is a main landmark; '+N more' has a 32px hit area](decisions/2026-11-04-19-dashboard-main-landmark-more-hit-area.md) |
+| 2026-11-05 | [Setup text counts scored checks; distorted rows read 'Dip · data looks unreliable'](decisions/2026-11-05-02-dashboard-setup-text-counts-scored-checks.md) |
+| 2026-11-05 | [Neutral page and digest wording](decisions/2026-11-05-03-dashboard-neutral-page-and-digest-wording.md) |
+| 2026-11-05 | [Default sort is size of drop](decisions/2026-11-05-05-dashboard-default-sort-is-size-of-drop.md) |
 
 ## Alerts
 

@@ -1,4 +1,4 @@
-# Daily quality-dip screen (long-only research tool, US + Europe)
+# Daily dip screen (long-only research tool, US + Europe)
 
 Screens US and European large caps every night after the close for sharp price drops in otherwise high-quality companies, and writes a dashboard,
 a digest and trigger alerts. **Educational research only: it never gives investment advice.** Wording in all output: "screen results", "candidates",
