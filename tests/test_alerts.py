@@ -343,3 +343,10 @@ def test_ui_text_has_no_advice_words():
     assert tmpl and dig
     for ln in tmpl + dig:
         assert not BANNED.search(ln), ln
+
+
+def test_alert_context_carries_setup_text_next_to_the_enum():
+    r = {**row("AAA"), "setup_text": "Dip · passes 5 of 6 scored checks"}
+    ctx = A._context(r)
+    assert ctx["setup"] == "Quality dip" and ctx["setup_text"] == "Dip · passes 5 of 6 scored checks"
+    assert A._context(row("BBB"))["setup_text"] is None

@@ -38,7 +38,7 @@ NOT = {"dip": False, "knife": False}
 def test_sections_come_in_the_order_the_daily_review_reads_them():
     text = build_digest(payload([row("AAA", QUALITY_DIP, prev=NOT)]), S)
     heads = re.findall(r"^## (.+)$", text, re.M)
-    assert [h.split(" (")[0] for h in heads] == ["Data quality", "Market context", "Quality-dip candidates", "Changes since the previous close",
+    assert [h.split(" (")[0] for h in heads] == ["Data quality", "Market context", "Dip candidates that meet the check thresholds", "Changes since the previous close",
                                                  "Other flagged dips", "Headlines", "How to read this"]
     assert text.startswith("# Daily screen digest · data as of Fri 30 Oct 2026")
 
@@ -80,8 +80,8 @@ def test_new_and_dropped_names_come_from_the_previous_close_not_from_a_stored_fi
             row("GONE", NO_DIP, prev=YES, why=[]),                 # a quality dip yesterday, not today
             row("KN", FALLING_KNIFE, prev={"dip": True, "knife": True})]
     text = build_digest(payload(rows), S)
-    assert "- New quality dips: NEW1." in text and "- No longer flagged: GONE." in text
-    cand = text.split("## Quality-dip candidates")[1].split("## Changes")[0]
+    assert "- Newly meeting the check thresholds: NEW1." in text and "- No longer flagged: GONE." in text
+    cand = text.split("## Dip candidates that meet the check thresholds")[1].split("## Changes")[0]
     assert "NEW1 **NEW**" in cand and "STAY **NEW**" not in cand and "KN" not in cand
 
 
@@ -92,7 +92,7 @@ def test_without_previous_close_data_changes_are_not_invented():
 
 def test_candidates_are_sorted_by_the_five_day_move_and_show_the_reasons():
     rows = [row("MILD", QUALITY_DIP, r5=-0.075), row("DEEP", QUALITY_DIP, r5=-0.20, why=["5-day −20.0% (rule: −7%)", "below 20-day high −25.0% (rule: −12%)"])]
-    cand = build_digest(payload(rows), S).split("## Quality-dip candidates")[1]
+    cand = build_digest(payload(rows), S).split("## Dip candidates that meet the check thresholds")[1]
     assert cand.index("DEEP") < cand.index("MILD")
     assert "5-day −20.0% (rule: −7%); below 20-day high −25.0% (rule: −12%)" in cand
 
@@ -101,11 +101,18 @@ def test_other_flagged_dips_are_grouped_by_setup():
     rows = [row("KN", FALLING_KNIFE, dd52=-0.5), row("LOW", LOW_QUALITY, q=17), row("NOF", NO_FUNDAMENTALS, q=None)]
     other = build_digest(payload(rows), S).split("## Other flagged dips")[1].split("## Headlines")[0]
     assert "Falling-knife flags (1)" in other and "KN (KN Inc): 5-day −8.0%, −50.0% from the 52-week high" in other
-    assert "LOW (q 17)" in other and "Dip, no fundamentals (1):** NOF" in other
+    assert "Dips with fewer checks passed (1):** LOW (q 17)" in other and "Dip, no fundamentals (1):** NOF" in other
+
+
+def test_distorted_no_fundamentals_rows_read_data_looks_unreliable():
+    rows = [row("BAD", NO_FUNDAMENTALS, q=None), row("NOF", NO_FUNDAMENTALS, q=None)]
+    rows[0]["q_status"] = "distorted"
+    other = build_digest(payload(rows), S).split("## Other flagged dips")[1].split("## Headlines")[0]
+    assert "BAD (Dip · data looks unreliable)" in other and "NOF." in other
 
 
 def test_no_candidates_is_stated():
-    assert "No stock is flagged as a quality dip." in build_digest(payload([row("AAA")]), S)
+    assert "No stock is flagged as a dip that meets the check thresholds." in build_digest(payload([row("AAA")]), S)
 
 
 def test_classify_prev_follows_the_same_precedence_as_today():
@@ -145,13 +152,13 @@ def test_company_names_with_table_characters_cannot_break_the_table():
     text = build_digest(payload([row("AAA", QUALITY_DIP, name="Bad | Name <x>")]), S)
     line = next(l for l in text.splitlines() if l.startswith("| AAA"))
     assert line.count("|") == 9                                       # 8 columns, unbroken
-    assert "| Quality dip |" in line                                  # no setup_text on this hand-made row: falls back to the enum
+    assert "| Dip, more checks passed |" in line                      # no setup_text on this hand-made row: falls back to the neutral enum label
 
 
 def test_candidates_show_the_neutral_setup_text():
-    r = {**row("AAA", QUALITY_DIP), "setup_text": "Dip · passes 5 of 6 checks"}
+    r = {**row("AAA", QUALITY_DIP), "setup_text": "Dip · passes 5 of 6 scored checks"}
     text = build_digest(payload([r]), S)
-    assert "| Dip · passes 5 of 6 checks |" in text and "Setup" in text
+    assert "| Dip · passes 5 of 6 scored checks |" in text and "Setup" in text and "Check score" in text
 
 
 # ---------------------------------------------------------------- wording and banners

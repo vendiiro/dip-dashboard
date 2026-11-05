@@ -43,9 +43,10 @@ def is_falling_knife(m: dict, knife: FallingKnifeSettings) -> bool:
 def setup_label(dip: bool, knife: bool, q_score: int | None, settings: Settings, q_ok: bool = True,
                 distorted: bool = False) -> str:
     """The one precedence for the setup label. Not a dip -> No dip; a falling knife outranks quality;
-    missing fundamentals (None) never count as quality; distorted fundamentals -> Dip, no fundamentals
-    (the score is not altered); a failed must-pass rule (q_ok=False) -> Dip, low quality whatever the score;
-    a score of 0 is a real score (low quality). Defaults keep the plain score-only behaviour."""
+    missing fundamentals (None) never count as passing; distorted fundamentals -> NO_FUNDAMENTALS key
+    (shown as "data looks unreliable"; the score is not altered); a failed must-pass rule (q_ok=False) ->
+    LOW_QUALITY key ("Dip, fewer checks passed") whatever the score; a score of 0 is a real score.
+    Defaults keep the plain score-only behaviour."""
     if not dip:
         return NO_DIP
     if knife:
@@ -57,16 +58,38 @@ def setup_label(dip: bool, knife: bool, q_score: int | None, settings: Settings,
     return QUALITY_DIP if q_score >= settings.quality.min_score else LOW_QUALITY
 
 
-def setup_text(setup: str, passed: int | None, applicable: int | None) -> str:
+# Human-readable enum-level labels (neutral wording). The setup values above are the stable payload keys and are
+# not renamed; this map is what a reader-facing list of the enum should show.
+SETUP_LABELS = {
+    NO_DIP: "No dip",
+    FALLING_KNIFE: "Falling knife",
+    NO_FUNDAMENTALS: "Dip, no fundamentals",
+    QUALITY_DIP: "Dip, more checks passed",
+    LOW_QUALITY: "Dip, fewer checks passed",
+}
+UNRELIABLE_TEXT = "Dip · data looks unreliable"
+
+
+def setup_text(setup: str, passed: int | None, applicable: int | None, scored: int | None = None,
+               distorted: bool = False) -> str:
     """Reader-facing text for a setup label; the enum names stay the stable key.
-    The two scored dip labels read "Dip · passes 5 of 6 checks" (no quality verdict in the words).
-    Unknown label -> ValueError; without counts the plain "Dip" is returned."""
-    if setup in (NO_DIP, FALLING_KNIFE, NO_FUNDAMENTALS):
+    The two scored dip labels read "Dip · passes 5 of 6 scored checks" and, when some checks had no data,
+    "Dip · passes 3 of 4 scored checks (2 no data)". `scored` = checks that had data (QualityResult.scored);
+    None means "all applicable were scored". NO_FUNDAMENTALS with distorted=True -> "Dip · data looks unreliable";
+    NO_FUNDAMENTALS otherwise (nothing scored) -> "Dip, no fundamentals". Unknown label -> ValueError;
+    without counts the plain "Dip" is returned."""
+    if setup in (NO_DIP, FALLING_KNIFE):
         return setup
+    if setup == NO_FUNDAMENTALS:
+        return UNRELIABLE_TEXT if distorted else setup
     if setup in (QUALITY_DIP, LOW_QUALITY):
         if passed is None or not applicable:
             return "Dip"
-        return f"Dip · passes {passed} of {applicable} checks"
+        n = applicable if scored is None else scored
+        text = f"Dip · passes {passed} of {n} scored checks"
+        if n < applicable:
+            text += f" ({applicable - n} no data)"
+        return text
     raise ValueError(f"unknown setup label {setup!r}")
 
 

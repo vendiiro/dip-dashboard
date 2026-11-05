@@ -116,7 +116,7 @@ def build_payload(universe: list[Stock], prices: Prices, funds: dict, settings: 
             "dip": bool(dip_reasons(m, settings.dip)), "why": dip_reasons(m, settings.dip),
             "setup": classify(m, q, settings, q_ok=q_ok, distorted=distorted),
         })
-        m["setup_text"] = setup_text(m["setup"], qr.passed, qr.applicable)
+        m["setup_text"] = setup_text(m["setup"], qr.passed, qr.applicable, qr.scored, qr.status == "distorted")
         rows.append(m)
 
     movers = [r for r in rows if needs_news(r, settings.news)]

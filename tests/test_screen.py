@@ -219,10 +219,10 @@ def test_intc_like_end_to_end_label():
 
 # ---- setup_text (RES-11) -----------------------------------------------------------
 @pytest.mark.parametrize("setup, passed, applicable, text", [
-    (QUALITY_DIP, 5, 6, "Dip · passes 5 of 6 checks"),
-    (LOW_QUALITY, 2, 6, "Dip · passes 2 of 6 checks"),
-    (QUALITY_DIP, 3, 4, "Dip · passes 3 of 4 checks"),          # Financials: 4 applicable
-    (LOW_QUALITY, 0, 6, "Dip · passes 0 of 6 checks"),
+    (QUALITY_DIP, 5, 6, "Dip · passes 5 of 6 scored checks"),
+    (LOW_QUALITY, 2, 6, "Dip · passes 2 of 6 scored checks"),
+    (QUALITY_DIP, 3, 4, "Dip · passes 3 of 4 scored checks"),   # Financials: 4 applicable
+    (LOW_QUALITY, 0, 6, "Dip · passes 0 of 6 scored checks"),
     (NO_DIP, 5, 6, "No dip"),
     (FALLING_KNIFE, 5, 6, "Falling knife"),
     (NO_FUNDAMENTALS, None, None, "Dip, no fundamentals"),
@@ -231,6 +231,25 @@ def test_intc_like_end_to_end_label():
 ])
 def test_setup_text(setup, passed, applicable, text):
     assert setup_text(setup, passed, applicable) == text
+
+
+@pytest.mark.parametrize("setup, passed, applicable, scored, distorted, text", [
+    (QUALITY_DIP, 3, 6, 4, False, "Dip · passes 3 of 4 scored checks (2 no data)"),
+    (LOW_QUALITY, 1, 6, 5, False, "Dip · passes 1 of 5 scored checks (1 no data)"),
+    (QUALITY_DIP, 3, 4, 4, False, "Dip · passes 3 of 4 scored checks"),
+    (NO_FUNDAMENTALS, 3, 6, 6, True, "Dip · data looks unreliable"),
+    (NO_FUNDAMENTALS, None, None, 0, False, "Dip, no fundamentals"),
+    (NO_FUNDAMENTALS, 0, 6, 0, False, "Dip, no fundamentals"),
+])
+def test_setup_text_scored_denominator_and_distorted(setup, passed, applicable, scored, distorted, text):
+    assert setup_text(setup, passed, applicable, scored, distorted) == text
+
+
+def test_human_labels_are_neutral_and_low_label_distinguishable():
+    from dipdash.screen import SETUP_LABELS
+    assert SETUP_LABELS[LOW_QUALITY] == "Dip, fewer checks passed"
+    assert set(SETUP_LABELS) == {NO_DIP, FALLING_KNIFE, NO_FUNDAMENTALS, QUALITY_DIP, LOW_QUALITY}
+    assert not any("quality" in v.lower() for v in SETUP_LABELS.values())
 
 
 def test_setup_text_unknown_label_raises_and_words_are_neutral():

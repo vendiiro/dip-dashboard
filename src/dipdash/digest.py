@@ -15,7 +15,7 @@ import numpy as np
 
 from .config import Settings
 from .fmt import bound, interval, md_table, pct
-from .screen import classify_prev
+from .screen import FALLING_KNIFE, LOW_QUALITY, NO_FUNDAMENTALS, QUALITY_DIP, SETUP_LABELS, UNRELIABLE_TEXT, classify_prev
 
 MAX_HEADLINE = 110
 HEADLINES_PER_STOCK = 2
@@ -148,29 +148,29 @@ def build_digest(payload: dict, settings: Settings, *, previous_asof: str | None
     # ---- today vs the previous close
     was = {r["t"]: classify_prev(r.get("prev"), r["q"], settings, q_ok=not r.get("q_must_failed"),
                                  distorted=r.get("q_status") == "distorted") for r in rows}     # the payload rows themselves stay untouched
-    cand = sorted((r for r in rows if r["setup"] == "Quality dip"), key=lambda r: r["r5"])
-    new = [r for r in cand if was[r["t"]] is not None and was[r["t"]] != "Quality dip"]
-    gone = [r for r in rows if was[r["t"]] == "Quality dip" and r["setup"] != "Quality dip"]
+    cand = sorted((r for r in rows if r["setup"] == QUALITY_DIP), key=lambda r: r["r5"])
+    new = [r for r in cand if was[r["t"]] is not None and was[r["t"]] != QUALITY_DIP]
+    gone = [r for r in rows if was[r["t"]] == QUALITY_DIP and r["setup"] != QUALITY_DIP]
     new_t = {r["t"] for r in new}
 
     # ---- 3. candidates
-    w(f"## Quality-dip candidates ({len(cand)})\n")
+    w(f"## Dip candidates that meet the check thresholds ({len(cand)})\n")
     w(f"Flagged by the default rules (1-day ≤ {pct(-settings.dip.drop_1d, 0)}, 5-day ≤ {pct(-settings.dip.drop_5d, 0)}, or ≥ {settings.dip.drawdown_20d:.0%} below the 20-day high) "
-      f"with a quality score of at least {settings.quality.min_score}. Sorted by the 5-day move.\n")
+      f"with a check score of at least {settings.quality.min_score}. Sorted by the 5-day move.\n")
     if cand:
-        w(md_table(["Ticker", "Name", "1 day", "5 days", "5d vs index", "Quality", "Setup", "Flagged because"],
+        w(md_table(["Ticker", "Name", "1 day", "5 days", "5d vs index", "Check score", "Setup", "Flagged because"],
                    [[(r["t"] + (" **NEW**" if r["t"] in new_t else "")), *_row_line(r)[1:6],
-                     clean_text(r.get("setup_text") or r["setup"], 40), _row_line(r)[6]] for r in cand]))
+                     clean_text(r.get("setup_text") or SETUP_LABELS.get(r["setup"], r["setup"]), 40), _row_line(r)[6]] for r in cand]))
         w("")
     else:
-        w("No stock is flagged as a quality dip.\n")
+        w("No stock is flagged as a dip that meets the check thresholds.\n")
 
     # ---- 4. changes
     w("## Changes since the previous close\n")
     if not any(r.get("prev") for r in rows):
         w("No previous-close data, so changes cannot be listed.\n")
     else:
-        w(f"- New quality dips: {', '.join(r['t'] for r in new) or 'none'}.")
+        w(f"- Newly meeting the check thresholds: {', '.join(r['t'] for r in new) or 'none'}.")
         w(f"- No longer flagged: {', '.join(r['t'] for r in gone) or 'none'}.\n")
 
     if alerts_failed:
@@ -181,16 +181,16 @@ def build_digest(payload: dict, settings: Settings, *, previous_asof: str | None
         w(alerts_markdown(alerts))
 
     # ---- 5. others
-    knives = sorted((r for r in rows if r["setup"] == "Falling knife"), key=lambda r: r["dd52"] if r["dd52"] is not None else 0)
-    low = [r for r in rows if r["setup"] == "Dip, low quality"]
-    nofund = [r for r in rows if r["setup"] == "Dip, no fundamentals"]
+    knives = sorted((r for r in rows if r["setup"] == FALLING_KNIFE), key=lambda r: r["dd52"] if r["dd52"] is not None else 0)
+    low = [r for r in rows if r["setup"] == LOW_QUALITY]
+    nofund = [r for r in rows if r["setup"] == NO_FUNDAMENTALS]
     w("## Other flagged dips\n")
     w(f"**Falling-knife flags ({len(knives)}).** A dip inside a long downtrend: below a {'falling ' if settings.falling_knife.below_200d_falling else ''}200-day average and at least "
       f"{settings.falling_knife.drawdown_52w:.0%} under the 52-week high. These are a different situation from a short dip.")
     for r in knives:
         w(f"- {r['t']} ({clean_text(r['name'])}): 5-day {pct(r['r5'])}, {pct(r['dd52'])} from the 52-week high, quality {r['q'] if r['q'] is not None else '–'}.")
-    w(f"\n**Dip, low quality ({len(low)}):** " + (", ".join(f"{r['t']} (q {r['q']})" for r in low) or "none") + ".")
-    w(f"**Dip, no fundamentals ({len(nofund)}):** " + (", ".join(r["t"] for r in nofund) or "none") + ".\n")
+    w(f"\n**Dips with fewer checks passed ({len(low)}):** " + (", ".join(f"{r['t']} (q {r['q']})" for r in low) or "none") + ".")
+    w(f"**{SETUP_LABELS[NO_FUNDAMENTALS]} ({len(nofund)}):** " + (", ".join(r["t"] + (f" ({UNRELIABLE_TEXT})" if r.get("q_status") == "distorted" else "") for r in nofund) or "none") + ".\n")
 
     # ---- 6. headlines (untrusted)
     shown = [r for r in cand + knives if r.get("news")]

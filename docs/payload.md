@@ -87,7 +87,7 @@ One entry of `rows`. Keys are exactly these.
 | `ccy` | str | no | currency code | currency of `price`; empty text if unknown |
 | `news` | list | no | | recent headlines for fallers (see Headline); third-party text |
 | `setup` | str | no | | one of `Quality dip`, `Falling knife`, `Dip, low quality`, `Dip, no fundamentals`, `No dip`; the stable key, never reworded. It can differ for the same `q`: distorted fundamentals give `Dip, no fundamentals`, a failed must-pass rule gives `Dip, low quality` |
-| `setup_text` | str | no | | reader-facing text for `setup`: "Dip · passes N of M checks" for `Quality dip` and `Dip, low quality` (N = `q_passed`, M = `q_applicable`), otherwise the same as `setup`. Show this, key on `setup` |
+| `setup_text` | str | no | | reader-facing text for `setup`; show this, key on `setup`. For `Quality dip` and `Dip, low quality`: "Dip · passes N of M scored checks" (N = `q_passed`, M = `q_scored`), with " (K no data)" appended when K = `q_applicable` − `q_scored` > 0, e.g. "Dip · passes 5 of 6 scored checks" or "Dip · passes 3 of 4 scored checks (2 no data)"; plain "Dip" when no counts exist. `Dip, no fundamentals` reads "Dip, no fundamentals", or "Dip · data looks unreliable" when `q_status` is `distorted`. `Falling knife` and `No dip` are unchanged. Enum-level labels for lists: `Quality dip` = "Dip, more checks passed", `Dip, low quality` = "Dip, fewer checks passed" (`SETUP_LABELS` in `screen.py`) |
 
 ## Hist
 
@@ -190,7 +190,7 @@ One entry of `rows`. Keys are exactly these.
 | `kind` | str | no | | `info` or `caution` |
 | `headline` | str | no | | one-line text |
 | `detail` | str | no | | why it was raised |
-| `context` | dict | no | | a few row values for reference; empty for the summary |
+| `context` | dict | no | | a few row values for reference (`price`, `r1`, `r5`, `res5`, `q`, `setup`, `setup_text`); empty for the summary. `setup` is the stable enum key, `setup_text` the reader-facing text (same as the row field; show it, key on `setup`); null if the row had none |
 | `asof` | str | no | `YYYY-MM-DD` | data date |
 | `note` | str | optional | | extra caveat when there is one |
 

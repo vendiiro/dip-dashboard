@@ -231,3 +231,14 @@ def test_a_failed_alert_step_gives_null_not_an_empty_list(tmp_path, monkeypatch)
     assert "alerts" in seen["p"] and seen["p"]["alerts"] is None
     assert check_payload(seen["p"]) == []
     assert "could not be evaluated" in (tmp_path / "digest.md").read_text(encoding="utf-8")
+
+
+def test_setup_text_is_reader_facing_and_never_carries_the_old_wording(demo):
+    for r in demo["payload"]["rows"]:
+        text = r["setup_text"]
+        assert isinstance(text, str) and text
+        assert "quality" not in text.lower() and "low quality" not in text.lower()
+        if r["setup"] in ("Quality dip", "Dip, low quality") and r["q_applicable"]:
+            assert re.fullmatch(r"Dip · passes \d+ of \d+ scored checks( \(\d+ no data\))?", text), text
+        if r["setup"] == "Dip, no fundamentals":
+            assert text in ("Dip, no fundamentals", "Dip · data looks unreliable")

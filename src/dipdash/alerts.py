@@ -239,7 +239,7 @@ def _earnings(e: dict, d: Defaults):
 
 # ---------------------------------------------------------------- evaluation
 def _context(r: dict) -> dict:
-    return {k: r.get(k) for k in ("price", "r1", "r5", "res5", "q", "setup")}
+    return {k: r.get(k) for k in ("price", "r1", "r5", "res5", "q", "setup", "setup_text")}
 
 
 def rank_alerts(alerts: list[dict]) -> list[dict]:

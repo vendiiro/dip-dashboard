@@ -40,6 +40,7 @@ def test_rows_skips_and_reasons():
 def test_dip_row_is_flagged_with_reasons_and_setup():
     row = build_payload(UNI, *inputs(), S, today=TODAY)["rows"][0]
     assert row["dip"] and row["setup"] == "Quality dip" and row["q"] == 100
+    assert row["setup_text"] == f"Dip · passes {row['q_passed']} of {row['q_scored']} scored checks"
     assert any("5-day" in w for w in row["why"])
     assert row["sector"] == "Tech" and row["fpe"] == 18.0 and row["ccy"] == "EUR"
 
