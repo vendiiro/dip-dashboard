@@ -7,7 +7,8 @@
     python tasks.py test-browser   browser tests (needs Playwright and Chromium)
     python tasks.py all            the whole test suite
     python tasks.py shots          demo, then screenshots at desktop and phone width, light and dark: output/screens/
-    python tasks.py check          wording scan + path guard + unit tests (add --no-tests for the guards only)
+    python tasks.py web            regenerate src/template.html from the parts in src/web/
+    python tasks.py check          generated-template check + wording scan + path guard + unit tests (--no-tests: guards only)
     python tasks.py hooks          install the pre-commit hooks (once per clone)
 
 The Makefile targets call these, so `make unit` and `python tasks.py test` run the same thing.
@@ -64,8 +65,21 @@ def shots() -> int:
     return demo() or run("scripts/screenshots.py", "output/demo.html", "--out", "output/screens")
 
 
+def web() -> int:
+    return run("src/web/assemble.py", "--write")
+
+
+def template_fresh() -> int:
+    """0 if src/template.html matches the parts in src/web/; otherwise say how to fix it."""
+    rc = run("src/web/assemble.py")
+    if rc:
+        print("src/template.html is out of date: run python tasks.py web")
+    return rc
+
+
 def check(no_tests: bool = False) -> int:
-    steps = [("wording scan", lambda: run("scripts/check_wording.py")),
+    steps = [("generated template", template_fresh),
+             ("wording scan", lambda: run("scripts/check_wording.py")),
              ("path guard", lambda: run("scripts/check_wording.py", "--paths"))]
     if not no_tests:
         steps.append(("unit tests", test))
@@ -84,7 +98,7 @@ def hooks() -> int:
 
 
 COMMANDS = {"install": install, "demo": demo, "test": test, "test-browser": test_browser, "all": all_tests,
-            "shots": shots, "check": check, "hooks": hooks}
+            "shots": shots, "web": web, "check": check, "hooks": hooks}
 
 
 def main(argv: list[str] | None = None) -> int:

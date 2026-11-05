@@ -95,6 +95,21 @@ def test_a_planted_phrase_is_reported_with_file_and_line(tmp_path):
     assert r.returncode == 1 and "src/dipdash/digest.py:2:" in r.stdout and "docs/notes.md" not in r.stdout
 
 
+@pytest.mark.parametrize("part", ["footer.js", "layout.css", "body.html"])
+def test_a_planted_phrase_in_a_web_part_is_found(tmp_path, part):
+    root = _web_copy(tmp_path)
+    (root / "src" / "web" / part).open("a", encoding="utf-8").write("\n/* " + BUY_NOW + " */\n")
+    found = CW.wording_findings(None, root)
+    assert len(found) == 1 and found[0].startswith(f"src/web/{part}:") and BUY_NOW in found[0]
+    assert _cli("--root", str(root)).returncode == 1
+
+
+def test_the_real_web_parts_are_in_scope():
+    for rel in sorted(p.relative_to(ROOT).as_posix() for p in (ROOT / "src" / "web").iterdir()
+                      if p.suffix in {".js", ".html", ".css"}):
+        assert CW.in_scope(rel), rel
+
+
 def test_staged_file_list_mode_ignores_out_of_scope_and_missing_files(tmp_path):
     root = _tree(tmp_path, {"docs/x.md": GUAR, "src/a.py": "fine\n"})
     assert CW.wording_findings(["docs/x.md", "src/a.py", "src/deleted.py"], root) == []
@@ -146,10 +161,40 @@ def test_check_runs_every_step_and_fails_if_one_fails(monkeypatch):
     calls = []
     monkeypatch.setattr(TASKS, "run", lambda *a: calls.append(a) or (1 if "--paths" in a else 0))
     assert TASKS.check(no_tests=False) == 1
-    assert len(calls) == 3 and calls[2][:2] == ("-m", "pytest")                                # tests still ran
+    assert len(calls) == 4 and calls[3][:2] == ("-m", "pytest")                                # tests still ran
+    assert calls[0] == ("src/web/assemble.py",)                                                # no --write in check
     calls.clear()
     monkeypatch.setattr(TASKS, "run", lambda *a: calls.append(a) or 0)
-    assert TASKS.check(no_tests=True) == 0 and len(calls) == 2
+    assert TASKS.check(no_tests=True) == 0 and len(calls) == 3
+
+
+def _web_copy(tmp_path: Path) -> Path:
+    import shutil
+    shutil.copytree(ROOT / "src" / "web", tmp_path / "src" / "web", ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copy(ROOT / "src" / "template.html", tmp_path / "src" / "template.html")
+    return tmp_path
+
+
+def test_web_command_runs_the_assembler_with_write(monkeypatch):
+    calls = []
+    monkeypatch.setattr(TASKS, "run", lambda *a: calls.append(a) or 0)
+    assert TASKS.COMMANDS["web"]() == 0 and calls == [("src/web/assemble.py", "--write")]
+    assert "python tasks.py web" in TASKS.__doc__
+
+
+def test_check_fails_early_on_a_stale_template_and_web_fixes_it(tmp_path, monkeypatch, capsys):
+    root = _web_copy(tmp_path)
+    monkeypatch.setattr(TASKS, "ROOT", root)
+    monkeypatch.setattr(TASKS, "test", lambda: 0)
+    monkeypatch.setattr(TASKS, "run", lambda *a: 0 if a[0] != "src/web/assemble.py" else
+                        subprocess.run([sys.executable, str(root / a[0]), *a[1:]], cwd=root).returncode)
+    assert TASKS.template_fresh() == 0                                           # fresh copy passes
+    tpl = root / "src" / "template.html"
+    tpl.write_bytes(tpl.read_bytes() + b"<!-- stale -->\n")
+    assert TASKS.check(no_tests=True) == 1
+    out = capsys.readouterr().out
+    assert "src/template.html is out of date: run python tasks.py web" in out and "FAILED generated template" in out
+    assert TASKS.web() == 0 and TASKS.check(no_tests=True) == 0                  # `web` regenerates it
 
 
 def test_task_runner_sets_src_path_and_utf8():
