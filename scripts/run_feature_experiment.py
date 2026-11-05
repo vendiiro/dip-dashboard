@@ -11,6 +11,7 @@ trials_features.csv is frozen; `python -m dipdash.registry backfill` imports it 
 import argparse
 import json
 import sys
+from dataclasses import asdict
 from datetime import date, datetime
 from pathlib import Path
 
@@ -176,7 +177,9 @@ def main(argv: list[str] | None = None) -> int:
             "draws": a.draws or s.backtest.bootstrap_draws, "level": s.backtest.ci_level, "seed": s.backtest.seed + 2100}
     parent = {"spec_hash": PARENT_SPEC, "raw_file": raw.name, "raw_sha256": sha256(raw),
               "universe_sha256": sha256(ROOT / "config" / "universe.csv"), "n_series": len(prices)}
-    spec = freeze_spec(parent, str(cutoff.date()), len(universe), family_id, boot)
+    rule = {"dip": asdict(s.dip), "falling_knife": asdict(s.falling_knife), "cooldown_days": s.backtest.cooldown_days,
+            "start_date": s.backtest.start_date, "horizons": list(s.backtest.horizons)}      # used by build_event_table; was only in the file hash
+    spec = freeze_spec(parent, str(cutoff.date()), len(universe), family_id, boot, rule)
     oos_dates = [d for d in calendar if d > cutoff]
     spec["provenance"] = build_provenance(s, ROOT / "src" / "dipdash")                      # not hashed; set before register so the archive holds it
     reg = registry.register("features", spec, out_dir, Path(a.out_root),                   # BEFORE any return or correlation

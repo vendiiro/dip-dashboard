@@ -119,3 +119,100 @@ def test_forecast_spec_gets_provenance_before_registration(tmp_path):
                             fields={"oos_start": "2022-02-01", "oos_end": "2022-12-30"})
     archived = json.loads(reg.spec_file.read_text())
     assert archived["provenance"] == spec["provenance"]
+
+
+# ---------------------------------------------------------------- converse: every setting a runner uses moves the spec hash
+class _Stop(Exception):
+    pass
+
+
+def _stop(*a, **k):
+    raise _Stop()
+
+
+def _bump(v):
+    if isinstance(v, tuple):
+        return v + (v[-1] + 1,)
+    return v + 1 if isinstance(v, int) else v * 1.5 + 0.01
+
+
+BACKTEST_FIELDS = {"dip": ["drop_1d", "drop_5d", "drawdown_20d"],
+                   "backtest": ["horizons", "cooldown_days", "cost_roundtrip", "oos_fraction", "stress_drawdown", "stress_window",
+                                "bootstrap_draws", "ci_level", "placebo_draws", "seed"]}
+
+
+def test_every_backtest_setting_the_computation_uses_moves_the_spec_hash():
+    from test_backtest_run import META, synthetic
+    from dataclasses import fields
+    from dipdash.backtest_run import freeze_spec
+    prices, ix, uni, q, s = synthetic(n_stocks=4)
+    cal = sorted({d for c in prices.values() for d in c.index if d >= pd.Timestamp(s.backtest.start_date)})
+    h = freeze_spec(s, uni, META, cal)["spec_hash"]
+    names = {"dip": BACKTEST_FIELDS["dip"], "falling_knife": [f.name for f in fields(s.falling_knife)], "backtest": BACKTEST_FIELDS["backtest"]}
+    for sec, flds in names.items():
+        for f in flds:
+            sub = getattr(s, sec)
+            s2 = replace(s, **{sec: replace(sub, **{f: _bump(getattr(sub, f))})})
+            assert freeze_spec(s2, uni, META, cal)["spec_hash"] != h, f"{sec}.{f} does not move the backtest spec hash"
+
+
+def test_backtest_start_date_moves_the_hash_through_history_from(tmp_path):
+    mod = _load_script("run_backtest")
+    raw = tmp_path / "raw.csv.gz"
+    raw.write_bytes(b"x")
+    c = pd.Series([1.0, 2.0], index=pd.to_datetime(["2024-01-02", "2024-01-03"]))
+    a = mod.build_data_meta(raw, "2023-01-01", {"A": c}, {}, [], {"US": c})
+    b = mod.build_data_meta(raw, "2022-01-01", {"A": c}, {}, [], {"US": c})
+    assert registry.spec_hash({"data": a}) != registry.spec_hash({"data": b})
+
+
+def test_data_meta_records_the_fundamentals_file_hash(tmp_path):
+    mod = _load_script("run_backtest")
+    raw, fund = tmp_path / "raw.csv.gz", tmp_path / "fundamentals.json"
+    raw.write_bytes(b"x")
+    fund.write_text("{}")
+    c = pd.Series([1.0], index=pd.to_datetime(["2024-01-02"]))
+    m = mod.build_data_meta(raw, "2023-01-01", {"A": c}, {}, [], {"US": c}, fund)
+    assert len(m["fundamentals_sha256"]) == 64
+
+
+def test_provenance_records_the_python_version():
+    import platform
+    assert build_provenance(S, SRC)["python"] == platform.python_version()
+
+
+def test_every_features_setting_the_computation_uses_moves_the_spec_hash(tmp_path, monkeypatch):
+    from dataclasses import fields
+    from test_feature_experiment import _synthetic_raw
+    mod = _load_script("run_feature_experiment")
+    raw, uni, s = _synthetic_raw(tmp_path)
+    monkeypatch.setattr(mod, "load_universe", lambda: uni)
+    n = [0]
+
+    def run(s2):
+        n[0] += 1
+        monkeypatch.setattr(mod, "load_settings", lambda: s2)
+        monkeypatch.setattr(mod, "build_event_table", _stop)   # spec only, no compute
+        root = tmp_path / f"o{n[0]}"
+        try:
+            mod.main(["--raw", str(raw), "--out-root", str(root)])
+        except _Stop:
+            pass
+        return json.loads(next(root.glob("*_features/spec_features.json")).read_text())["spec_hash"]
+
+    h = run(s)
+    start = str((pd.Timestamp(s.backtest.start_date) + pd.Timedelta(days=30)).date())
+    cases = [("dip", f) for f in ("drop_1d", "drop_5d", "drawdown_20d")] + [("falling_knife", f.name) for f in fields(s.falling_knife)]
+    cases += [("backtest", f) for f in ("horizons", "cooldown_days", "oos_fraction", "bootstrap_draws", "ci_level", "seed")]
+    for sec, f in cases:
+        sub = getattr(s, sec)
+        s2 = replace(s, **{sec: replace(sub, **{f: _bump(getattr(sub, f))})})
+        assert run(s2) != h, f"{sec}.{f} does not move the features spec hash"
+    assert run(replace(s, backtest=replace(s.backtest, start_date=start))) != h, "backtest.start_date does not move the features spec hash"
+
+
+def test_features_freeze_spec_without_a_rule_keeps_its_hash():
+    from dipdash.feature_experiment import freeze_spec as ff
+    base = ff({"spec_hash": "p"}, "2024-01-01", 5, "f", {"draws": 1})
+    assert ff({"spec_hash": "p"}, "2024-01-01", 5, "f", {"draws": 1}, None)["spec_hash"] == base["spec_hash"]
+    assert ff({"spec_hash": "p"}, "2024-01-01", 5, "f", {"draws": 1}, {"dip": {}})["spec_hash"] != base["spec_hash"]

@@ -2,12 +2,15 @@
 
 It is written into the spec but never hashed (`registry.ALWAYS_EXCLUDED`), so a new commit or an edit to an unused settings
 section does not give an analysis a new identity. Every setting a test uses is already in the spec by value.
+`registry.register` never overwrites `spec_<hash>.json`, so a rerun of the same hash keeps the FIRST run's provenance in the archive;
+the latest run's provenance is in the run folder's own spec file (spec.json / spec_<kind>.json).
 stdlib only.
 """
 from __future__ import annotations
 
 import hashlib
 import json
+import platform
 from dataclasses import asdict, fields, is_dataclass
 from importlib import metadata
 from pathlib import Path
@@ -58,4 +61,4 @@ def settings_section_hashes(s) -> dict[str, str]:
 
 
 def build_provenance(s, src_dir: Path) -> dict:
-    return {"code_sha256": code_hash(src_dir), "packages": package_versions(), "settings_sections": settings_section_hashes(s)}
+    return {"code_sha256": code_hash(src_dir), "python": platform.python_version(), "packages": package_versions(), "settings_sections": settings_section_hashes(s)}

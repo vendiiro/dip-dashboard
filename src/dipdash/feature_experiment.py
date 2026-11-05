@@ -193,8 +193,11 @@ def spec_hash(spec: dict) -> str:
     return registry.hash_for("features", spec)
 
 
-def freeze_spec(parent: dict, cutoff: str, n_universe: int, family_id: str, boot: dict) -> dict:
-    """Pre-registration. Built from inputs only (dates, settings, definitions); no return enters it."""
+def freeze_spec(parent: dict, cutoff: str, n_universe: int, family_id: str, boot: dict, rule: dict | None = None) -> dict:
+    """Pre-registration. Built from inputs only (dates, settings, definitions); no return enters it.
+
+    rule: the event rule's settings by value (dip, falling_knife, cooldown_days, start_date, horizons). Added only when given, so
+    specs frozen without it keep their hash."""
     spec = {
         "family_id": family_id,
         "parent_backtest_spec": parent,
@@ -219,5 +222,7 @@ def freeze_spec(parent: dict, cutoff: str, n_universe: int, family_id: str, boot
         "universe": {"n": n_universe, "bias": "current constituents only: survivorship bias"},
         "notes": "events cluster in market-wide selloffs; months are the resampling unit; the date-demeaned target removes market and period effects only",
     }
+    if rule is not None:
+        spec["event_rule_settings"] = rule
     spec["spec_hash"] = spec_hash(spec)
     return spec
