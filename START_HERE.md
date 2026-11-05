@@ -1,5 +1,13 @@
 # Start here
 
+**Where things stand (2026-11-05, see `docs/STATUS.md`).** The universe has 348 tickers (`config/universe.csv`). A live run on 2026-11-02 covered the original 60 tickers (59 had data). The current code with all 348 names has not run live, and nothing has been run on Iiro's Windows PC yet. The last full test suite run: 907 passed, 3 skipped.
+
+**Next steps for Iiro on Windows (none done yet):**
+1. Re-register the scheduled task: `powershell -ExecutionPolicy Bypass -File scripts\install_task.ps1` (not done).
+2. `python scripts/verify_universe.py --limit 10` to check the 59 US tickers added earlier (not done).
+3. Full live run of all 348 names: `python src/dip_screener.py --out output/dashboard.html --open`; read `output/data_quality.csv` first and send back anything flagged (not done).
+4. `python -m dipdash.registry backfill --root output/backtests` (not done).
+
 ## 1. Set up (about 10 minutes)
 1. Unzip this folder somewhere permanent, for example `C:\Users\<you>\Documents\dip-dashboard`.
 2. Install Python 3.11+ and Claude Code if you have not already.
