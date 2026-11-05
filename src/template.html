@@ -292,7 +292,7 @@ footer dd{margin:0}
     <label class="ctl" for="drop" id="droplab">Minimum drop <span class="v" id="dropv"></span>
       <input type="range" id="drop" min="1" max="30" step="1" value="7"></label>
     <div class="dropnote" id="dropnote" hidden></div>
-    <label class="ctl" for="qmin">Minimum quality <span class="v" id="qv"></span>
+    <label class="ctl" for="qmin">Minimum quality score <span class="v" id="qv"></span>
       <input type="range" id="qmin" min="0" max="100" step="10" value="60"></label>
     <div class="ctl">Region
       <div class="seg" id="region"></div>
@@ -310,7 +310,7 @@ footer dd{margin:0}
       <thead><tr id="head"></tr></thead>
       <tbody id="body"></tbody>
     </table></div>
-    <div class="empty" id="empty" hidden>No stocks match. Lower the minimum drop, lower the minimum quality, or switch “Show” to All dips. <button type="button" class="resetbtn" id="resetbtn">Reset filters</button></div>
+    <div class="empty" id="empty" hidden>No stocks match. Lower the minimum drop, lower the minimum quality score, or switch “Show” to All dips. <button type="button" class="resetbtn" id="resetbtn">Reset filters</button></div>
   </div>
 
   <section class="alerts" id="alerts" aria-labelledby="alerts-h"></section>
@@ -525,7 +525,7 @@ const hideTip = () => { tip.hidden = true; };
 // ---------- setup label under the current controls ----------
 // The key (`label`) stays the stable enum the nightly screen uses; the words a reader sees come from `text` (setup_text in the payload).
 const SETUP_TIP = {
-  'Quality dip': 'Dip, more checks passed. Fell past the drop rule; score is at or above the minimum (net margin above 0). A candidate to research, not a signal. The checks are definitions, not tested filters.',
+  'Quality dip': 'Dip, more checks passed. Fell past the drop rule; quality score is at or above the minimum (net margin above 0). A candidate to research, not a signal. The checks are definitions, not tested filters.',
   'Falling knife': 'Dipping inside a long downtrend: below a falling 200-day average and far under the 52-week high.',
   'Dip, low quality': 'Dip, fewer checks passed. Fell past the drop rule; fewer checks passed than the minimum score, or net margin is 0 or below. This describes check results, not the company.',
   'Dip, no fundamentals': 'Fell past the drop rule, but the fundamentals are missing or too thin to score, so no score-based label is shown.',
@@ -622,7 +622,7 @@ function alertsPanel() {
     const li = el('li'); li.append(el('span', 'k ' + (a.kind === 'caution' ? 'caution' : 'info'), a.kind === 'caution' ? 'Caution' : 'Info'), el('span', null, a.headline || ''));
     const c = a.context || {}, bits = [];
     if (c.r5 != null) bits.push('5d ' + pct(c.r5));
-    if (c.q != null) bits.push('quality ' + c.q);
+    if (c.q != null) bits.push('quality score ' + c.q);
     if (a.detail || bits.length) li.append(el('span', 'd', [a.detail, bits.join(' · ')].filter(Boolean).join(' — ')));
     if (c.setup && c.setup_text) {                       // keyed on the enum, worded from setup_text
       const cls = {'Quality dip': 'b-good', 'Falling knife': 'b-crit', 'Dip, low quality': 'b-serious', 'Dip, no fundamentals': 'b-warn', 'No dip': 'b-none'}[c.setup] || 'b-none';
@@ -733,7 +733,7 @@ const COLS = [
   {k: 'dd52', l: 'vs 52w high', dir: 1, cell: pctCell('dd52')}, {k: 'vs200', l: 'vs 200d avg', dir: 1, more: true, cell: pctCell('vs200')},
   {k: 'rsi', l: 'RSI', dir: 1, cell: r => el('td', 'n ' + (r.rsi != null && r.rsi < 30 ? 'down' : ''), r.rsi == null ? '–' : r.rsi.toFixed(0))},
   {k: 'volx', l: 'Vol ×', dir: -1, more: true, tip: 'Latest volume divided by the average of the previous 20 days', cell: r => el('td', 'n ' + (r.volx != null && r.volx >= 2 ? '' : 'muted'), r.volx == null ? '–' : r.volx.toFixed(1) + '×')},
-  {k: 'q', l: 'Quality', cls: 'l', dir: -1, tip: 'Share of quality checks passed. The bars show each check: filled = passed, hatched = no data.', cell: r => {
+  {k: 'q', l: 'Quality score', cls: 'l', dir: -1, tip: 'Share of the scored checks that passed (see Definitions). Bars: filled = passed, hatched = no data.', cell: r => {
     const tq = el('td', 'l n'); tq.append(document.createTextNode(r.q == null ? '–' : String(r.q)), qnote(r), qmeter(r)); return tq; }},
   {k: 'setup', l: 'Setup', cls: 'l', dir: -1, cell: r => {
     const tb = el('td', 'l'); tb.append(badge(r)); return tb; }},
