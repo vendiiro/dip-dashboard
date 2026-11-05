@@ -582,6 +582,41 @@ def test_alert_badge_shows_setup_text_keyed_on_the_enum(browser, demo_html):
     page.close()
 
 
+def test_alerts_empty_state_does_not_inherit_the_generic_empty_rule(browser, demo_html, tmp_path):
+    """`.empty` (centred "no stocks" box) and the alerts' quiet state are separate components: `.alerts-empty`."""
+    for js in ("DATA.alerts = [];", "DATA.alerts = null;"):
+        page, errors = open_page(browser, variant_html(tmp_path, demo_html, js), w=390, h=844)
+        assert page.locator("#alerts.alerts-empty").count() == 1 and page.locator("#alerts.empty").count() == 0
+        align = page.evaluate("""() => { const b = document.getElementById('alerts');
+            return [b, ...b.querySelectorAll('h2, .sub')].map(e => getComputedStyle(e).textAlign); }""")
+        assert "center" not in align, align
+        assert errors == []
+        page.close()
+
+
+def test_alerts_more_hover_does_not_take_the_more_context_button_style(browser, demo_html, tmp_path):
+    js = "DATA.alerts = DATA.alerts || []; while (DATA.alerts.length && DATA.alerts.length < 12) DATA.alerts = DATA.alerts.concat(DATA.alerts.map(a => Object.assign({}, a)));"
+    page, errors = open_page(browser, variant_html(tmp_path, demo_html, js))
+    btn = page.locator("#alerts button.alerts-more")
+    assert btn.count() == 1 and page.locator("#alerts button.more").count() == 0
+    css = "e => { const c = getComputedStyle(e); return [c.backgroundColor, c.borderTopLeftRadius, c.alignSelf]; }"
+    rest = btn.evaluate(css)
+    btn.hover()
+    hover = btn.evaluate(css)
+    assert hover == rest == ["rgba(0, 0, 0, 0)", "0px", "auto"], (rest, hover)
+    # the "More context" button in the detail keeps its own hover background
+    page.locator("#body tr.row").first.click()
+    mc = page.locator("td.detail button.more").first
+    mc_rest = mc.evaluate(css)[0]
+    mc.hover()
+    assert mc.evaluate(css)[0] != mc_rest and mc.evaluate(css)[0] != "rgba(0, 0, 0, 0)"
+    # the alerts control still opens and closes (JS finds the renamed class)
+    btn.click()
+    assert page.locator("#alerts button.alerts-more").get_attribute("aria-expanded") == "true"
+    assert errors == []
+    page.close()
+
+
 def test_hide_knives_label_is_a_40px_target(browser, demo_html):
     page, _ = open_page(browser, demo_html)
     assert page.locator("label[for=hideknife]").bounding_box()["height"] >= 40

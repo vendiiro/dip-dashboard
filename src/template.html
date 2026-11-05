@@ -70,9 +70,9 @@ header.top{display:flex;flex-direction:column;gap:4px}
 
 .alerts{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
 .alerts h2{font-size:14px;font-weight:600;margin:0 0 2px}
-.alerts.empty{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 12px;padding:10px 14px}
-.alerts.empty .sub{margin:0}
-@media (max-width:480px){.alerts.empty{padding:8px 12px}.alerts.empty .sub{display:none}}
+.alerts.alerts-empty{color:var(--ink-2);display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 12px;padding:10px 14px}
+.alerts.alerts-empty .sub{margin:0}
+@media (max-width:480px){.alerts.alerts-empty{padding:8px 12px}.alerts.alerts-empty .sub{display:none}}
 .alerts .sub{font-size:12.5px;color:var(--ink-3);margin:0 0 8px}
 .alerts ul{list-style:none;margin:0;padding:0;display:grid;gap:6px}
 .alerts li{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:baseline;font-size:13.5px}
@@ -80,7 +80,7 @@ header.top{display:flex;flex-direction:column;gap:4px}
 .alerts .k.info{color:var(--accent);background:var(--accent-soft)}
 .alerts .k.caution{color:var(--warn);background:var(--warn-bg)}
 .alerts .d{grid-column:2;font-size:12.5px;color:var(--ink-3)}
-.alerts .more{margin-top:8px;font:inherit;font-size:12.5px;background:none;border:0;padding:4px 0;color:var(--accent);cursor:pointer;text-decoration:underline;min-height:40px}
+.alerts .alerts-more{margin-top:8px;font:inherit;font-size:12.5px;background:none;border:0;padding:4px 0;color:var(--accent);cursor:pointer;text-decoration:underline;min-height:40px}
 .tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 .tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;min-width:0}
 .tile .lab{font-size:12.5px;color:var(--ink-2)}
@@ -264,7 +264,7 @@ footer dd.hit,footer dt.hit{background:var(--line);border-radius:4px}
   .meta{gap:6px 12px}
   .dq{min-height:40px}
   .controls .sortctl{display:flex}
-  .alerts.empty.unavail .sub{display:block}
+  .alerts.alerts-empty.unavail .sub{display:block}
   .ctltoggle{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;min-height:44px;text-align:left;font:inherit;font-size:14px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 14px;cursor:pointer}
   .ctltoggle .sum{font-size:12.5px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
   .controls:not(.open){display:none}
@@ -668,12 +668,12 @@ function alertsPanel() {
   if (DATA.alerts === undefined) { box.hidden = true; return; }
   box.hidden = false;
   if (DATA.alerts === null) {          // the alert step failed: say so, never show it as a quiet day
-    box.classList.add('empty', 'unavail'); const h0 = el('h2', null, '⚠ Trigger alerts · unavailable'); h0.id = 'alerts-h';
+    box.classList.add('alerts-empty', 'unavail'); const h0 = el('h2', null, '⚠ Trigger alerts · unavailable'); h0.id = 'alerts-h';
     box.append(h0, el('p', 'sub', 'Alerts could not be evaluated for this run (see output/run.log). This is not the same as no alerts.')); return;
   }
   const h = el('h2', null, 'Trigger alerts · ' + (list.length || 'none at the latest close')); h.id = 'alerts-h';
-  if (!list.length) { box.classList.add('empty'); box.append(h, el('p', 'sub', 'No research conditions changed state at the latest close. Informational only, not advice.')); return; }
-  box.classList.remove('empty');
+  if (!list.length) { box.classList.add('alerts-empty'); box.append(h, el('p', 'sub', 'No research conditions changed state at the latest close. Informational only, not advice.')); return; }
+  box.classList.remove('alerts-empty');
   box.append(h, el('p', 'sub', 'Research conditions that became true at the latest close. Informational only, not advice.'));
   const CAP = window.matchMedia('(max-width:480px)').matches ? 3 : 5, ul = el('ul');
   (alertsOpen ? list : list.slice(0, CAP)).forEach(a => {
@@ -689,7 +689,7 @@ function alertsPanel() {
     ul.append(li);
   });
   box.append(ul);
-  if (list.length > CAP) { const b = el('button', 'more', alertsOpen ? 'Show fewer' : 'Show all ' + list.length + ' alerts'); b.type = 'button'; b.setAttribute('aria-expanded', String(alertsOpen)); b.setAttribute('aria-controls', 'alerts'); b.onclick = () => { alertsOpen = !alertsOpen; alertsPanel(); const nb = $('alerts').querySelector('.more'); if (nb) nb.focus(); }; box.append(b); }
+  if (list.length > CAP) { const b = el('button', 'alerts-more', alertsOpen ? 'Show fewer' : 'Show all ' + list.length + ' alerts'); b.type = 'button'; b.setAttribute('aria-expanded', String(alertsOpen)); b.setAttribute('aria-controls', 'alerts'); b.onclick = () => { alertsOpen = !alertsOpen; alertsPanel(); const nb = $('alerts').querySelector('.alerts-more'); if (nb) nb.focus(); }; box.append(b); }
 }
 
 // ---------- filters toggle (phone) ----------
