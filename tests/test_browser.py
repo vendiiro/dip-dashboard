@@ -607,7 +607,8 @@ def test_residual_label_is_plain_and_beta_is_defined_once(browser, demo_html):
     page, _ = open_page(browser, demo_html)
     page.click("#colbtn")
     heads = [h.lower() for h in page.locator("#head th").all_inner_texts()]     # the header is upper-cased by CSS
-    assert any("5d vs index, beta-adjusted (residual)" in h for h in heads) and not any("resid." in h for h in heads)
+    assert any("5d vs index (β-adj.)" in h for h in heads) and not any("resid." in h for h in heads)      # short header, full name in the tooltip
+    assert "5d vs index, beta-adjusted (residual)" in page.locator("#head th[data-k=res5]").get_attribute("title")
     assert any(h.strip().startswith("5d vs index") and "residual" not in h for h in heads)
     page.click("[data-testid=defs-toggle]")
     names = page.locator("footer dt").all_inner_texts()
@@ -801,7 +802,7 @@ def test_sticky_header_keeps_the_sideways_scroll_of_more_columns(browser, demo_h
     page.close()
 
 
-@pytest.mark.parametrize("w, h, sel, limit", [(1280, 800, "#body tr.row", 900), (390, 844, "#cards .sc", 844)])
+@pytest.mark.parametrize("w, h, sel, limit", [(1280, 800, "#body tr.row", 900), (390, 844, "#cards .sc", 910)])
 def test_first_row_sits_near_the_top(browser, demo_html, w, h, sel, limit):
     """FE-1: on the demo page (with its Demo banner) the first row or card starts above the fold; the real page has less above it."""
     page, _ = open_page(browser, demo_html, w, h)
@@ -848,3 +849,92 @@ def test_switching_between_phone_and_desktop_width_builds_the_other_layout(brows
     page.wait_for_function("document.querySelectorAll('#body tr.row').length === 25")
     assert page.locator("#cards .sc").count() == 0 and errors == []
     page.close()
+
+
+# ---------- layout at 1024 / 1100 px, wrapped headers, detail row width, small wording (this wave) ----------
+
+@pytest.mark.parametrize("w", [1024, 1100])
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+def test_default_table_fits_without_sideways_scroll_and_price_is_not_clipped(browser, demo_html, w, scheme):
+    page, errors = open_page(browser, demo_html, w, 900, scheme)
+    box = page.evaluate("(() => { const s = document.querySelector('.scroll'); return {sw: s.scrollWidth, cw: s.clientWidth, hs: s.classList.contains('hs')}; })()")
+    assert box["sw"] <= box["cw"] and not box["hs"]
+    assert page.evaluate("document.documentElement.scrollWidth - innerWidth") <= 0
+    bad = page.evaluate("""() => [...document.querySelectorAll('#body tr.row')].filter(tr => {
+        const p = tr.querySelector('td[data-k=price]'), t = tr.querySelector('td[data-k=t]');
+        return p.scrollWidth > p.clientWidth || p.getBoundingClientRect().left < t.getBoundingClientRect().right - 0.5;
+      }).map(tr => tr.dataset.t)""")
+    assert bad == []
+    assert errors == []
+    page.close()
+
+
+def test_pinned_stock_column_is_opaque_and_marked_while_scrolling_sideways(browser, demo_html):
+    page, _ = open_page(browser, demo_html, 1024, 900)
+    page.click("#colbtn")
+    assert page.evaluate("document.querySelector('.scroll').classList.contains('hs')")
+    info = page.evaluate("""() => { const c = getComputedStyle(document.querySelector('#body td[data-k=t]'));
+      return {bg: c.backgroundColor, shadow: c.boxShadow, pos: c.position}; }""")
+    assert info["pos"] == "sticky" and info["shadow"] != "none"
+    assert info["bg"].startswith("rgb(") or info["bg"].endswith(", 1)")          # no alpha: values scrolled under it cannot show through
+    page.close()
+
+
+@pytest.mark.parametrize("w", [1024, 1280])
+def test_header_cells_stay_narrow_and_tap_targets_are_40px(browser, demo_html, w):
+    page, _ = open_page(browser, demo_html, w, 900)
+    page.click("#colbtn")
+    widths = page.evaluate("[...document.querySelectorAll('#head th')].map(t => [t.textContent, Math.round(t.getBoundingClientRect().width)])")
+    assert [n for n, x in widths if x > 130 and n not in ("Stock", "Setup")] == []       # Stock and Setup hold names and badges; every other header stays narrow
+    assert dict(widths)["5d vs index (β-adj.)"] <= 110
+    small = page.evaluate("[...document.querySelectorAll('#head th.sortable')].filter(t => t.getBoundingClientRect().width < 40).map(t => t.textContent)")
+    assert small == []
+    assert page.evaluate("[...document.querySelectorAll('#body .tkbtn')].every(b => b.getBoundingClientRect().width >= 40 && b.getBoundingClientRect().height >= 40)")
+    page.close()
+
+
+@pytest.mark.parametrize("w", [1024, 1280])
+def test_detail_row_is_not_wider_than_the_visible_box_with_more_columns(browser, demo_html, w):
+    page, errors = open_page(browser, demo_html, w, 900)
+    page.click("#colbtn")
+    page.locator("#body tr.row").first.click()
+    for left in (0, 250):
+        r = page.evaluate("""(left) => { const s = document.querySelector('.scroll'); s.scrollLeft = left;
+          const b = s.getBoundingClientRect(), d = document.querySelector('td.detail > .dwrap').getBoundingClientRect();
+          return {cw: s.clientWidth, w: d.width, l: d.left - b.left, r: d.right - b.left, scrolls: s.scrollWidth > s.clientWidth}; }""", left)
+        assert r["w"] <= r["cw"] + 0.5 and r["l"] >= -0.5 and r["r"] <= r["cw"] + 0.5, r
+    assert errors == []
+    page.close()
+
+
+def test_phone_market_tile_line_uses_the_briefs_numbers(browser, demo_html):
+    page, errors = open_page(browser, demo_html, 390, 844)
+    line = page.locator("[data-testid=tile-market-line]")
+    assert line.is_visible()
+    txt = line.inner_text()
+    exp = page.evaluate("""() => { const f = r => r.x5 != null && window.__dipView(r.t).rank > 0;
+      const r5 = DATA.rows.map(r => r.r5).filter(v => v != null).sort((a, b) => a - b), d = DATA.rows.filter(f);
+      return {med: r5[Math.floor(r5.length / 2)], far: d.filter(r => r.x5 <= -0.05).length, n: d.length}; }""")
+    assert f"{exp['far']} of {exp['n']} dips fell 5+ points more than their index" in txt
+    assert txt.startswith("Median stock ") and "(5d)" in txt and f"{abs(exp['med']) * 100:.1f}%" in txt
+    assert not any(w in txt.lower() for w in ("buy", "sell", "target"))
+    assert page.locator("#brief .idxline").is_hidden()
+    assert errors == []
+    page.close()
+    desk, _ = open_page(browser, demo_html, 1280, 900)
+    assert desk.locator("[data-testid=tile-market-line]").is_hidden() and desk.locator("#brief .idxline").is_visible()
+    desk.close()
+
+
+def test_small_wording_changes(browser, demo_html):
+    page, _ = open_page(browser, demo_html)
+    assert "New since the previous close" in page.inner_text("[data-testid=tile-new]") and "yesterday" not in page.inner_text("[data-testid=tile-new]").lower()
+    assert "Dips meeting the check thresholds: dips with a quality score at or above the minimum and net margin above 0." in page.evaluate("document.getElementById('def-q').textContent")
+    assert page.inner_text("#tablehint") == "Click a row for details. Click a column to sort. Mini chart: last 90 days, each row scaled to its own low and high."
+    assert "parkline" not in page.inner_text("body") + page.evaluate("document.getElementById('defs').textContent")
+    page.fill("#q", "no such company")
+    assert page.inner_text("#empty").startswith("No stocks match the current filters. Try a smaller minimum drop, a lower minimum quality score, or “Show: All dips”.")
+    page.close()
+    ph, _ = open_page(browser, demo_html, 390, 844)
+    assert ph.inner_text("#tablehint") == "Tap a stock for details. Mini chart: last 90 days, each on its own scale."
+    ph.close()

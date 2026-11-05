@@ -27,6 +27,7 @@ The "Used by" column says which file would break: `browser` = `tests/test_browse
 | `id:empty` | browser, visual | Written empty state ("No stocks match ...") |
 | `id:resetbtn` | browser | "Reset filters" button inside the empty state |
 | `id:activebar` | browser | Chips for filters that differ from the default |
+| `id:tablehint` | browser | Hint line beside the table title: how to open a row and sort, and the mini chart (90-day, own low and high) wording; shorter on a phone |
 | `id:tabletitle` | browser | Table heading, changes with the filters |
 | `id:sortnote` | browser | "Sorted by size of drop" beside the table title; visible only while no column is chosen (`S.sortKey` null) |
 | `id:alerts` | browser | Trigger alerts section; each alert shows a badge worded from `context.setup_text` |
@@ -60,9 +61,10 @@ The "Used by" column says which file would break: `browser` = `tests/test_browse
 | `testid:stale` | browser | The stale banner, visible only when prices are over 2 weekdays old on a non-demo page |
 | `testid:fail` | browser | The failure alert |
 | `testid:tile-quality` | browser | Dips-meeting-the-check-thresholds tile; its `.big` equals the rows ranked `Quality dip` (shown as "Dips meeting the check thresholds"); its `.foot` reads "N of M dips have quality score ≥ Q and net margin above 0 · drop window: default" (or "chosen window"), where M is the "All dips" count |
-| `testid:tile-new` | browser | New-since-yesterday tile; chips equal the rows marked new |
+| `testid:tile-new` | browser | New-since-the-previous-close tile (label "New since the previous close"); chips equal the rows marked new |
 | `testid:tile-knife` | browser | Falling-knife tile |
 | `testid:tile-market` | browser | Market-context tile |
+| `testid:tile-market-line` | browser | One line in the Market tile, shown at 480 px and below only (where the brief's `.idxline` is hidden): "Median stock −0.7% (5d) · 52 of 55 dips fell 5+ points more than their index", built by the same `mktFacts` as the brief |
 | `testid:tile-chip` | browser | One ticker chip inside a tile |
 | `testid:tile-chip-more` | browser | The "+N more" button of a tile |
 | `testid:new-badge` | browser | The NEW badge in a row or card |
@@ -89,9 +91,11 @@ The "Used by" column says which file would break: `browser` = `tests/test_browse
 | `class:row` | browser, visual | A table row for one stock (`tr.row`); `open` is added while its detail is shown |
 | `class:open` | browser, visual | The expanded row or card |
 | `class:detail` | browser, visual | The detail cell under an open row (`td.detail`) |
+| `class:dwrap` | browser | Wrapper inside `td.detail`. While the table scrolls sideways (`.hs`) it is sticky at the left edge and as wide as the scroll box (`--boxw`), so an open detail never exceeds the visible box |
 | `class:tkbtn` | browser | The ticker button in a row (tap target of at least 40 px) |
 | `class:sc` | browser, visual | One phone card |
 | `class:scroll` | browser | Wrapper of the table. While the table fits the card it is not a scroller and the header is plain CSS `position: sticky; top: 0` on the page scroll |
+| `class:hw` | browser | Header cell whose name wraps (max 110 px): the residual column shows "5d vs index (β-adj.)", the full name is in its tooltip, the definitions footer and the detail row |
 | `class:hs` | browser | Added to `.scroll` when the table is wider than the card (More columns, narrow windows): it scrolls sideways and the header is pinned by JS (`--pin`) instead |
 | `class:schead` | visual | The tappable head of a phone card |
 | `class:tile` | browser, shots | A summary tile |
@@ -134,10 +138,14 @@ Meaning and types are in `docs/payload.md`; only the integrator renames them.
 ## Layout limits the browser tests pin (FE-1, FE-2)
 
 - 1280 x 800, demo page: the first table row starts below 900 px from the page top (755 px now; 707 px on the 4 Nov snapshot data); the filters take two rows (`#controls` under 130 px tall).
-- 390 x 844, demo page with its Demo banner: the first card starts below 844 px from the top (831 px now; 808 px on the snapshot data).
+- 390 x 844, demo page with its Demo banner: the first card starts less than 910 px from the top (903 px now; it was 831 px before the Market tile line was added, so on the demo page it is now just below the 844 px fold).
 - The header row `#head th` stays at the top of the viewport while the page scrolls, light and dark, also with More columns.
 - Only the layout in use is built: desktop has `tr.row` and no `.sc`, phone has `.sc` and no `tr.row`; `#head` is built on both.
 - Tests that read every row on desktop press `rows-more` first (helper `expand_rows` in `tests/test_browser.py`).
+
+- 1024 and 1100 px, demo page: the default table (10 columns) fits the card without sideways scroll (`.scroll` has no `.hs`), and a price cell is never clipped or covered by the pinned Stock column. Below 1100 px cells use 5 px side padding and the Setup badge may wrap to two lines.
+- With More columns the table scrolls inside its box; the pinned Stock column is opaque and has an edge line and shadow; no header cell except Stock and Setup is wider than 130 px; sortable headers and `.tkbtn` are at least 40 px wide.
+- At 390 px the Market tile ends with the `tile-market-line` sentence; it is hidden on desktop, where the brief says the same.
 
 ## Visual baselines
 

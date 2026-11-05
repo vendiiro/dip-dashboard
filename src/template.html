@@ -107,6 +107,7 @@ header.top{display:flex;flex-direction:column;gap:4px}
 .mkt{display:grid;grid-template-columns:1fr auto auto;gap:2px 10px;font-size:13px;align-items:baseline}
 .mkt .h{font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em}
 .mkt .num{text-align:right}
+.mktline{display:none;font-size:12px;line-height:1.3;color:var(--ink-3)}   /* phone only: the brief's index line is hidden there */
 
 /* Desktop: labels sit beside their control, so the filters fit in two short rows (Show, Region, Search, Hide falling knives / window, minimum drop, quality). Phone: stacked, inside the Filters panel. */
 .controls{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 14px}
@@ -152,7 +153,7 @@ table.wide{min-width:1120px}
 .fchip .x{font-size:15px;line-height:1;color:var(--ink-2);width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center}
 .resetbtn{font:inherit;font-size:12.5px;background:none;border:0;color:var(--accent);text-decoration:underline;cursor:pointer;min-height:40px;padding:0 6px}
 /* 40 px tap target; the negative block margin keeps the row as short as before (the name line under it is part of the row's click area anyway). */
-.tkbtn{font:inherit;background:none;border:0;padding:10px 6px 10px 0;margin:-10px 0;min-height:40px;color:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:6px;text-align:left}
+.tkbtn{font:inherit;background:none;border:0;padding:10px 6px 10px 0;margin:-10px 0;min-height:40px;min-width:40px;color:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:6px;text-align:left}
 .tkbtn:focus-visible{outline-offset:3px;border-radius:3px}
 .whystrip{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:13.5px;display:flex;flex-wrap:wrap;gap:2px 10px;align-items:baseline}
 .whystrip b{font-family:var(--f-display);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)}
@@ -162,9 +163,13 @@ th,td{padding:8px 7px;border-bottom:1px solid var(--line);white-space:nowrap;tex
 td.n{font-family:var(--f-data);font-variant-numeric:tabular-nums}
 th{font-size:11.5px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;background:var(--surface);user-select:none}
 th{padding-top:11px;padding-bottom:11px}
-th.sortable{cursor:pointer} th.sortable:hover{color:var(--ink)}
+th.sortable{cursor:pointer;min-width:40px} th.sortable:hover{color:var(--ink)}
+th.hw{white-space:normal;min-width:84px;max-width:110px;line-height:1.25}   /* long header names wrap instead of widening the column */
 th .arr{color:var(--accent)}
 th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--surface);z-index:1}
+/* While the table scrolls sideways, an edge line and a soft shadow on the pinned Stock column show that other values slide under it. */
+.scroll.hs td:first-child:not(.detail),.scroll.hs th:first-child{box-shadow:inset -1px 0 0 var(--line-strong),6px 0 8px -6px rgba(20,24,33,.28)}
+.scroll.hs thead th:first-child{box-shadow:inset -1px 0 0 var(--line-strong),inset 0 -1px 0 var(--line),6px 0 8px -6px rgba(20,24,33,.28)}
 th.l,td.l{text-align:left}
 tbody tr.row{cursor:pointer}
 tbody tr.row:hover td{background:var(--sunken)}
@@ -184,6 +189,8 @@ tr.open .caret{transform:rotate(90deg)}
 .qm i.ok{background:var(--good)} .qm i.na{background:repeating-linear-gradient(45deg,var(--line-strong) 0 2px,transparent 2px 4px)}
 .empty{padding:28px;text-align:center;color:var(--ink-2)}
 td.detail{white-space:normal;text-align:left;padding:14px;position:static;background:var(--sunken)}
+/* In a sideways-scrolling table the detail is as wide as the visible box and stays at its left edge (--boxw is set by fitScroll). */
+.scroll.hs td.detail>.dwrap{position:sticky;left:14px;width:calc(var(--boxw,100%) - 28px)}
 .dgrid{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;min-width:0}
 .checks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:13px}
@@ -243,6 +250,10 @@ footer .defgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,
 footer .endgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
 footer dd.hit,footer dt.hit{background:var(--line);border-radius:4px}
 
+@media (max-width:1100px){
+  th,td{padding-left:5px;padding-right:5px}
+  td .badge{white-space:normal;min-width:150px;max-width:200px;text-align:left}   /* the longest setup text wraps to two lines instead of widening the table */
+}
 @media (max-width:900px){
   .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
   .ctx,.dgrid{grid-template-columns:minmax(0,1fr)}
@@ -278,6 +289,7 @@ footer dd.hit,footer dt.hit{background:var(--line);border-radius:4px}
   .brief .sub{display:block;margin-top:2px}
   .brief .sub .subrest,.brief .sub .dot{display:none}
   .tile .big{font-size:24px}
+  .mktline{display:block}
   .brief .idxline{display:none}   /* the index moves are in the Market context tile; the phone brief keeps the first sentence */
   .wrap{padding:12px 12px 32px;gap:12px}
   .demo{display:block;padding:6px 10px;font-size:12px;line-height:1.4}
@@ -334,7 +346,7 @@ footer dd.hit,footer dt.hit{background:var(--line);border-radius:4px}
   </div>
 
   <div class="tablecard">
-    <div class="tablehead"><div class="ttl"><h2 id="tabletitle">Candidates</h2><span class="muted sortnote" id="sortnote">Sorted by size of drop</span></div><div class="tools"><span class="muted" id="tablehint">Click a row for details. Click a column to sort. Sparkline: 90 days, each row scaled to its own min–max.</span><button type="button" class="colbtn" id="colbtn" aria-pressed="false">More columns</button></div></div>
+    <div class="tablehead"><div class="ttl"><h2 id="tabletitle">Candidates</h2><span class="muted sortnote" id="sortnote">Sorted by size of drop</span></div><div class="tools"><span class="muted" id="tablehint">Click a row for details. Click a column to sort. Mini chart: last 90 days, each row scaled to its own low and high.</span><button type="button" class="colbtn" id="colbtn" aria-pressed="false">More columns</button></div></div>
     <div class="activebar" id="activebar" hidden></div>
     <div class="cards" id="cards"></div>
     <div class="scroll"><table>
@@ -342,7 +354,7 @@ footer dd.hit,footer dt.hit{background:var(--line);border-radius:4px}
       <tbody id="body"></tbody>
     </table></div>
     <div class="rowsmore" id="rowsmore" hidden></div>
-    <div class="empty" id="empty" hidden>No stocks match. Lower the minimum drop, lower the minimum quality score, or switch “Show” to All dips. <button type="button" class="resetbtn" id="resetbtn">Reset filters</button></div>
+    <div class="empty" id="empty" hidden>No stocks match the current filters. Try a smaller minimum drop, a lower minimum quality score, or “Show: All dips”. <button type="button" class="resetbtn" id="resetbtn">Reset filters</button></div>
   </div>
 
   <section class="alerts" id="alerts" aria-labelledby="alerts-h"></section>
@@ -549,7 +561,7 @@ guard('the data-quality badge', function dataQuality() {
 // ---------- footer definitions from the settings actually used ----------
 guard('the footer definitions', () => {
 $('def-dip').textContent = `Fell at least the minimum drop over the chosen window. Defaults: 1 day ≤ ${MINUS}${(ST.dip.drop_1d * 100).toFixed(0)}%, 5 days ≤ ${MINUS}${(ST.dip.drop_5d * 100).toFixed(0)}%, or ≥ ${(ST.dip.drawdown_20d * 100).toFixed(0)}% below the 20-day high. Untested defaults.`;
-$('def-q').textContent = `Share of the checks that apply and have data (six in total) that passed: ROE (return on equity) ≥ ${(ST.quality.roe_min * 100).toFixed(0)}%, net margin ≥ ${(ST.quality.margin_min * 100).toFixed(0)}%, debt/equity (debt divided by shareholders’ equity) ≤ ${ST.quality.debt_to_equity_max}%, positive free cash flow, positive revenue growth, market cap ≥ ${(ST.quality.market_cap_min / 1e9).toFixed(0)}B USD. Needs at least three checks with data; each stock shows how many it was scored on. Banks and insurers skip the debt and free-cash-flow checks, and utilities and real-estate companies use a debt/equity limit of 300%. Free fundamentals can be stale or wrong.`;
+$('def-q').textContent = `Share of the checks that apply and have data (six in total) that passed: ROE (return on equity) ≥ ${(ST.quality.roe_min * 100).toFixed(0)}%, net margin ≥ ${(ST.quality.margin_min * 100).toFixed(0)}%, debt/equity (debt divided by shareholders’ equity) ≤ ${ST.quality.debt_to_equity_max}%, positive free cash flow, positive revenue growth, market cap ≥ ${(ST.quality.market_cap_min / 1e9).toFixed(0)}B USD. Needs at least three checks with data; each stock shows how many it was scored on. Banks and insurers skip the debt and free-cash-flow checks, and utilities and real-estate companies use a debt/equity limit of 300%. Free fundamentals can be stale or wrong. Dips meeting the check thresholds: dips with a quality score at or above the minimum and net margin above 0.`;
 $('def-knife').textContent = `Price below a ${ST.knife.below_200d_falling ? 'falling ' : ''}200-day average and at least ${(ST.knife.drawdown_52w * 100).toFixed(0)}% under the 52-week high. A long slide, not a one-off drop.`;
 $('def-src').textContent = DATA.demo ? 'Synthetic demo data.' : 'Daily adjusted prices and fundamentals from Yahoo Finance via yfinance. Random tickers are cross-checked against Nasdaq and Nasdaq Nordic through OpenBB (see the data-quality badge). Fundamentals are cached for 7 days.';
 });
@@ -637,6 +649,13 @@ function badge(r) {
 }
 
 // ---------- today in brief: a plain-language read of the current screen ----------
+// The numbers behind the brief's index sentence and the phone Market tile line: median 5-day move of all screened stocks, and how many
+// flagged dips (with an index comparison) fell at least 5 points more than their own index.
+function mktFacts(all, dips) {
+  const r5s = all.map(r => r.r5).filter(v => v != null).sort((a, b) => a - b);
+  const withIdx = dips.filter(r => r.x5 != null);
+  return {med: r5s.length ? r5s[Math.floor(r5s.length / 2)] : null, far: withIdx.filter(r => r.x5 <= -0.05).length, n: withIdx.length};
+}
 function brief(all) {
   const box = $('brief'); box.replaceChildren();
   const dips = all.filter(r => vw(r).rank > 0), qd = dips.filter(r => vw(r).rank === 4);
@@ -648,15 +667,14 @@ function brief(all) {
   p1.append(`${dips.length} of ${all.length} screened stocks are flagged as dips; ${qd.length} of them meet the check thresholds (see `, dl, `)${newQ.length ? ' and ' + newQ.length + ' ' + (newQ.length === 1 ? 'is' : 'are') + ' new since the previous close' : ''}.`);
   const p2 = el('p', 'idxline');
   const ix = (DATA.indices || []).slice(0, 2).filter(i => i.r1 != null);
-  const r5s = all.map(r => r.r5).filter(v => v != null).sort((a, b) => a - b);
+  const {med, far, n: nIdx} = mktFacts(all, dips);
   if (ix.length) {
     p2.append('Index moves at the latest close: ');
     ix.forEach((i, k) => { if (k) p2.append(', '); p2.append(i.name + ' '); p2.append(el('span', 'num ' + sgnCls(i.r1), pct(i.r1))); });
     p2.append(' (1 day). ');
   }
-  if (r5s.length) { p2.append('The median screened stock moved '); p2.append(el('span', 'num ' + sgnCls(r5s[Math.floor(r5s.length / 2)]), pct(r5s[Math.floor(r5s.length / 2)]))); p2.append(' over 5 days. '); }
-  const withIdx = dips.filter(r => r.x5 != null), far = withIdx.filter(r => r.x5 <= -0.05).length;
-  if (withIdx.length) p2.append(`${far} of ${withIdx.length} flagged dips fell at least 5 points more than their own index.`);
+  if (med != null) { p2.append('The median screened stock moved '); p2.append(el('span', 'num ' + sgnCls(med), pct(med))); p2.append(' over 5 days. '); }
+  if (nIdx) p2.append(`${far} of ${nIdx} flagged dips fell at least 5 points more than their own index.`);
   box.append(h, p1);
   if (p2.childNodes.length) box.append(p2);
 }
@@ -720,7 +738,7 @@ function tiles(all) {
     if (foot) t.append(el('div', 'foot', foot)); box.append(t);
   };
   mk('tile-quality', 'Dips meeting the check thresholds', qd.length, `${qd.length} of ${dipsN} dips have quality score ≥ ${$('qmin').value} and net margin above 0 · drop window: ${$('win').value === 'any' ? 'default' : 'chosen window'}`, qd.map(r => r.t));
-  mk('tile-new', 'New since yesterday', newQ.length, newQ.length ? 'Started meeting the check thresholds with the latest close' : 'Same dips meeting the check thresholds as the previous close', newQ.map(r => r.t));
+  mk('tile-new', 'New since the previous close', newQ.length, newQ.length ? 'Started meeting the check thresholds with the latest close' : 'Same dips meeting the check thresholds as the previous close', newQ.map(r => r.t));
   mk('tile-knife', 'Falling-knife flags', kn.length, 'Dipping inside a long downtrend', kn.map(r => r.t));
   const t = el('div', 'tile'); t.dataset.testid = 'tile-market'; t.append(el('div', 'lab', 'Market context'));
   if (DATA.indices && DATA.indices.length) {
@@ -740,6 +758,10 @@ function tiles(all) {
       t.append(b);
     }
     t.append(el('div', 'foot', 'A broad selloff lifts every stock’s drop. Compare with “5d vs index”.'));
+    const mf = mktFacts(all, all.filter(r => vw(r).rank > 0)), bits = [];
+    if (mf.med != null) bits.push(`Median stock ${pct(mf.med)} (5d)`);
+    if (mf.n) bits.push(`${mf.far} of ${mf.n} dips fell 5+ points more than their index`);
+    if (bits.length) { const ml = el('div', 'mktline', bits.join(' · ')); ml.dataset.testid = 'tile-market-line'; t.append(ml); }
   } else t.append(el('div', 'foot', 'Index data was not available for this run, so market-wide moves cannot be separated from stock-specific ones.'));
   box.append(t);
 }
@@ -787,7 +809,7 @@ const COLS = [
   {k: 'price', l: 'Price', dir: -1, cell: r => { const td = el('td', 'n', r.price == null ? '–' : r.price.toFixed(2)); if (r.ccy) td.append(el('span', 'nm', ' ' + r.ccy)); return td; }},
   {k: 'r1', l: '1d', dir: 1, cell: pctCell('r1')}, {k: 'r5', l: '5d', dir: 1, cell: pctCell('r5')},
   {k: 'x5', l: '5d vs index', dir: 1, cell: pctCell('x5'), tip: 'The stock’s 5-day move minus its own country’s (or region’s) index move'},
-  {k: 'res5', l: '5d vs index, beta-adjusted (residual)', dir: 1, more: true, cell: pctCell('res5'), tip: 'The 5-day move left over after removing the index move, scaled by the stock’s usual sensitivity to it (beta). Beta is estimated from the previous year, excluding the last 5 days.'},
+  {k: 'res5', l: '5d vs index, beta-adjusted (residual)', h: '5d vs index (β-adj.)', wrap: true, dir: 1, more: true, cell: pctCell('res5'), tip: 'The 5-day move left over after removing the index move, scaled by the stock’s usual sensitivity to it (beta). Beta is estimated from the previous year, excluding the last 5 days.'},
   {k: 'r21', l: '1m', dir: 1, more: true, cell: pctCell('r21')},
   {k: 'dd52', l: 'vs 52w high', dir: 1, cell: pctCell('dd52')}, {k: 'vs200', l: 'vs 200d avg', dir: 1, more: true, cell: pctCell('vs200')},
   {k: 'rsi', l: 'RSI', dir: 1, cell: r => el('td', 'n ' + (r.rsi != null && r.rsi < 30 ? 'down' : ''), r.rsi == null ? '–' : r.rsi.toFixed(0))},
@@ -886,8 +908,8 @@ function render() {
   $('body').parentElement.classList.toggle('wide', S.more);
   $('colbtn').setAttribute('aria-pressed', String(S.more)); $('colbtn').textContent = S.more ? 'Fewer columns' : 'More columns';
   visCols().forEach(c => {
-    const th = el('th', (c.cls || '') + (c.nosort ? '' : ' sortable'), c.l);
-    if (c.tip) th.title = c.tip;
+    const th = el('th', (c.cls || '') + (c.nosort ? '' : ' sortable') + (c.wrap ? ' hw' : ''), c.h || c.l);
+    if (c.tip) th.title = (c.tip || '') + (c.h ? (c.tip ? ' ' : '') + 'Full name: ' + c.l + '.' : '');
     if (S.sortKey === c.k) th.append(el('span', 'arr', S.sortDir > 0 ? ' ▲' : ' ▼'));
     if (!c.nosort) {
       th.tabIndex = 0;
@@ -904,14 +926,14 @@ function render() {
     visCols().forEach(c => { const td = c.cell(r); td.dataset.k = c.k; tr.append(td); });
     tr.onclick = () => { S.open = S.open === r.t ? null : r.t; S.focus = 'tr.row[data-t="' + r.t + '"] .tkbtn'; render(); };
     body.append(tr);
-    if (S.open === r.t && !mq.matches) { const d = el('tr'); const td = el('td', 'detail'); td.colSpan = visCols().length; td.append(safeDetail(r)); d.append(td); body.append(d); }
+    if (S.open === r.t && !mq.matches) { const d = el('tr'); const td = el('td', 'detail'); td.colSpan = visCols().length; const dw = el('div', 'dwrap'); dw.append(safeDetail(r)); td.append(dw); d.append(td); body.append(d); }
   }, r.t));
   guard('the phone cards', () => renderCards(list));
   guard('the show-all button', () => renderRowsMore(list));
   fitScroll();
   syncSort();
   if (S.focus) { const f = document.querySelector(S.focus); S.focus = null; if (f) f.focus(); }
-  $('tablehint').textContent = mq.matches ? 'Tap a stock for details. Sparkline: 90 days, own scale.' : 'Click a row for details. Click a column to sort. Sparkline: 90 days, each row scaled to its own min–max.';
+  $('tablehint').textContent = mq.matches ? 'Tap a stock for details. Mini chart: last 90 days, each on its own scale.' : 'Click a row for details. Click a column to sort. Mini chart: last 90 days, each row scaled to its own low and high.';
   guard('the distribution chart', () => hist(all)); guard('the sector chart', () => sectors(all));
 }
 // Sticky header. While the table fits the card it is not a scroller and `position: sticky` follows the page scroll.
@@ -924,6 +946,7 @@ function pinHead() {
 }
 function fitScroll() {
   scrollBox.classList.remove('hs');
+  scrollBox.style.setProperty('--boxw', scrollBox.clientWidth + 'px');
   if (!mq.matches && scrollBox.querySelector('table').getBoundingClientRect().width > scrollBox.parentElement.clientWidth + 1) scrollBox.classList.add('hs');
   pinHead();
 }
