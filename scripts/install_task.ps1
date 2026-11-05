@@ -10,6 +10,7 @@ Why Tuesday to Saturday at 00:15: US stocks close at 16:00 New York and Europe a
 and a run after midnight Tuesday to Saturday covers the Monday to Friday sessions. The time is the PC's LOCAL time.
 The task runs only while you are logged in (it needs your user's Python environment). If the PC was off at the start time,
 Windows runs it as soon as possible after the next start (StartWhenAvailable). Not tested on Windows by the author.
+Time limit 2 hours: a run, a 20-minute wait and one retry after exit code 2 (see run_daily.bat) can take longer than 1 hour.
 #>
 param(
     [string]$Time = "00:15",
@@ -32,7 +33,7 @@ if (-not (Test-Path (Join-Path $root ".venv\Scripts\python.exe"))) {
 $action   = New-ScheduledTaskAction -Execute $bat -WorkingDirectory $root
 $trigger  = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Tuesday,Wednesday,Thursday,Friday,Saturday -At $Time
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -RunOnlyIfNetworkAvailable `
-            -ExecutionTimeLimit (New-TimeSpan -Hours 1) -MultipleInstances IgnoreNew
+            -ExecutionTimeLimit (New-TimeSpan -Hours 2) -MultipleInstances IgnoreNew
 if ($WakeToRun) { $settings.WakeToRun = $true }
 Register-ScheduledTask -TaskName $name -Action $action -Trigger $trigger -Settings $settings `
     -Description "Quality-dip screen: refresh dashboard and digest after the market close" -Force | Out-Null
