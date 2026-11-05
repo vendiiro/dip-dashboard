@@ -1,3 +1,6 @@
+import tomllib
+from pathlib import Path
+
 import pytest
 
 from dipdash.config import Settings, load_settings, load_universe
@@ -13,6 +16,29 @@ def test_real_settings_file_loads_with_expected_values():
 
 def test_code_defaults_match_the_settings_file():
     assert Settings() == load_settings()
+
+
+def test_run_health_thresholds_in_toml_equal_dataclass_defaults():
+    from dipdash.config import DataSettings
+    raw = tomllib.loads((Path(__file__).resolve().parents[1] / "config" / "settings.toml").read_text(encoding="utf-8"))["data"]
+    d = DataSettings()
+    for k in ("min_fundamentals_share", "min_bars_share", "min_earnings_share"):
+        assert k in raw, k
+        assert raw[k] == getattr(d, k) == getattr(load_settings().data, k)
+    assert (d.min_fundamentals_share, d.min_bars_share, d.min_earnings_share) == (0.8, 0.8, 0.5)
+
+
+def test_run_health_thresholds_do_not_change_the_backtest_spec_hash():
+    import dataclasses
+    from datetime import date
+    import pandas as pd
+    from dipdash.backtest_run import freeze_spec
+    base = Settings()
+    other = dataclasses.replace(base, data=dataclasses.replace(base.data, min_fundamentals_share=0.1, min_bars_share=0.1, min_earnings_share=0.1))
+    cal = pd.bdate_range("2015-01-01", "2024-12-31")
+    a = freeze_spec(base, [], {}, cal)
+    b = freeze_spec(other, [], {}, cal)
+    assert a == b
 
 
 def test_partial_file_falls_back_to_defaults(tmp_path):

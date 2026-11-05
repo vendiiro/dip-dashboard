@@ -41,6 +41,10 @@ run_time = "00:15"      # after the US close
 [data]
 max_stale_trading_days = 4   # skip a ticker whose last bar is older than this
 min_screened_fraction = 0.9   # a run that screens fewer than this share of the universe fails and keeps yesterday's files (a normal night screens 59 of 60)
+# The next three are run-health thresholds (when to report a data problem), not screening rules; they never change which stocks are flagged.
+min_fundamentals_share = 0.8  # run-health: below this share of screened stocks with fundamentals, the run reports an error (it still publishes)
+min_bars_share = 0.8          # run-health: an exchange with bars for fewer than this share of its tickers gets a warning
+min_earnings_share = 0.5      # run-health: earnings dates known for fewer than this share of an exchange gets an info line
 
 [earnings]
 recent_days = 5     # "reported recently" = last report within this many trading days up to the data date
