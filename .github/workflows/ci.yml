@@ -32,6 +32,9 @@ jobs:
       - run: python -m pytest -q --ignore=tests/test_browser.py
         env:
           DIP_REQUIRE_BROWSER: "0"
+      - name: Guards (wording scan, no data/ output/ .env), also when a hook was skipped
+        if: always()
+        run: python tasks.py check --no-tests     # the unit tests already ran in the step above
   browser:
     runs-on: ubuntu-24.04
     timeout-minutes: 15

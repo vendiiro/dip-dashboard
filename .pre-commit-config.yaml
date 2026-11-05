@@ -1,0 +1,16 @@
+# Two local guards (OPS-7). Install once per clone: python tasks.py hooks
+# The logic lives in scripts/check_wording.py, so CI and `python tasks.py check` run the same checks without pre-commit.
+repos:
+  - repo: local
+    hooks:
+      - id: wording-scan
+        name: advice phrases in user-visible sources
+        entry: python scripts/check_wording.py
+        language: system
+        require_serial: true     # one run over all staged files, so the summary line is one line
+        types: [text]            # the script itself picks the in-scope files (src/, config/, scripts/*.ps1|bat|cmd, README, START_HERE)
+      - id: path-guard
+        name: no data/, output/ or .env in a commit
+        entry: python scripts/check_wording.py --paths
+        language: system         # gets every staged file, also ones added with git add -f
+        require_serial: true

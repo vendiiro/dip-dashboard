@@ -9,3 +9,4 @@ arch==8.0.0
 matplotlib==3.11.2
 pytest==9.1.1
 playwright==1.63.0
+pre-commit==4.7.0   # runs the two guards before a commit, the same on Windows and Linux (OPS-7)

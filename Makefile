@@ -1,16 +1,27 @@
-# One command per check. On Windows without make: run the python lines directly.
+# Thin wrapper: every target calls tasks.py, which holds the logic. On Windows (no make): python tasks.py <command>.
 PY ?= python
 
-.PHONY: install test unit browser
+.PHONY: install unit browser test demo shots check hooks
 install:
-	$(PY) -m pip install -r requirements-dev.txt
-	$(PY) -m playwright install chromium
+	$(PY) tasks.py install
 
 unit:
-	$(PY) -m pytest -q --ignore=tests/test_browser.py
+	$(PY) tasks.py test
 
 browser:
-	$(PY) -m pytest -q -rs tests/test_browser.py
+	$(PY) tasks.py test-browser
 
 test:
-	$(PY) -m pytest -q -rs
+	$(PY) tasks.py all
+
+demo:
+	$(PY) tasks.py demo
+
+shots:
+	$(PY) tasks.py shots
+
+check:
+	$(PY) tasks.py check
+
+hooks:
+	$(PY) tasks.py hooks
