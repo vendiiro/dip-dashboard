@@ -94,7 +94,8 @@ def _row_line(r: dict) -> list:
 
 
 def build_digest(payload: dict, settings: Settings, *, previous_asof: str | None = None, backtest_line: str | None = None,
-                 repeat: bool = False, alerts: list[dict] | None = None, alerts_failed: bool = False) -> str:
+                 repeat: bool = False, alerts: list[dict] | None = None, alerts_failed: bool = False,
+                 coverage_rows: list[dict] | None = None, coverage_summary: str = "") -> str:
     rows = payload["rows"]
     demo = payload.get("demo", False)
     asof = max((r["asof"] for r in rows), default=None)
@@ -105,6 +106,8 @@ def build_digest(payload: dict, settings: Settings, *, previous_asof: str | None
       "This is an educational research tool. It lists screen results (candidates to research), not advice. "
       "A price drop alone does not show that a company is in good shape. "
       "Read the news and filings to judge whether the cause is temporary.\n")
+    if coverage_summary:
+        w(f"{clean_text(coverage_summary, 400)}\n")
     if demo:
         w("> **DEMO DATA.** Synthetic prices and fundamentals. None of this is market data.\n")
     if repeat:
@@ -129,6 +132,12 @@ def build_digest(payload: dict, settings: Settings, *, previous_asof: str | None
     else:
         w("- No cross-check against a second source was run.")
     w("- Fundamentals come from a free source and can be stale or wrong; Europe's continental lines have no independent price check.\n")
+    if coverage_rows:
+        w("### Data coverage by exchange\n")
+        w(md_table(["Exchange", "Expected", "With prices", "Stale", "Lagging", "Fundamentals", "Earnings dates"],
+                   [[clean_text(f"{r['label']} {r['exchange']}", 50), r["expected"], r["with_bars"], r["stale"], r["lagging"],
+                     r["fundamentals"], r["earnings"]] for r in coverage_rows]))
+        w("")
 
     # ---- 2. market context
     w("## Market context\n")

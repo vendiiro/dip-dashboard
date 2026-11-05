@@ -142,14 +142,14 @@ def test_pull_prices_uses_the_fallback_only_for_missing_or_empty_tickers():
     primary = lambda ts: {"A": good, "B": (geometric(5, 0.0).iloc[0:0], None), "C": None}
     asked = []
     fallback = lambda t: asked.append(t) or ((good if t != "D" else None))
-    prices, source = pull_prices(["A", "B", "C", "D"], primary, fallback)
+    prices, source = pull_prices(["A", "B", "C", "D"], primary, fallback, sleep=lambda s: None)
     assert asked == ["B", "C", "D"]
     assert source == {"A": "primary", "B": "fallback", "C": "fallback"} and set(prices) == {"A", "B", "C"}
 
 
 def test_pull_prices_without_a_fallback_returns_what_the_primary_gave():
     from dipdash.data import pull_prices
-    prices, source = pull_prices(["A", "B"], lambda ts: {"A": (geometric(60, 0.001), None)})
+    prices, source = pull_prices(["A", "B"], lambda ts: {"A": (geometric(60, 0.001), None)}, sleep=lambda s: None)
     assert list(prices) == ["A"] and source == {"A": "primary"}
 
 
@@ -263,3 +263,105 @@ def test_rows_with_a_partial_bar_issue_are_marked_partial():
     issues = [Issue("DIP", "partial_bar", "warn", "last bar is dated today")]
     rows = {r["t"]: r for r in build_payload(UNI, prices, funds, S, today=TODAY, issues=issues)["rows"]}
     assert rows["DIP"]["partial"] is True and rows["CALM"]["partial"] is False
+
+
+# ---- data guards wired into the live run (offline, FakeYahoo) -------------------------------------------------------
+import csv as _csv
+import json as _json
+import sys as _sys
+from datetime import date as _date
+
+import pytest as _pytest
+
+_GUARD_TODAY = _date(2026, 10, 30)
+_GUARD_US = [f"US{i}" for i in range(28)]
+_GUARD_ST = ["A1.ST", "A2.ST", "A3.ST"]
+_GUARD_HE = ["B1.HE", "B2.HE", "B3.HE"]
+_GUARD_ALL = _GUARD_US + _GUARD_ST + _GUARD_HE
+
+
+@_pytest.fixture
+def live_env(tmp_path, monkeypatch):
+    from dipdash import cli
+
+    class _Date(_date):
+        @classmethod
+        def today(cls):
+            return _GUARD_TODAY
+
+    monkeypatch.setattr(cli, "date", _Date)
+    monkeypatch.setitem(_sys.modules, "yfinance", None)
+    monkeypatch.setitem(_sys.modules, "openbb", None)
+    uni = tmp_path / "universe.csv"
+    rows = [(t, t, "US") for t in _GUARD_US] + [(t, t, "Europe") for t in _GUARD_ST + _GUARD_HE]
+    uni.write_text("ticker,name,region\n" + "\n".join(",".join(r) for r in rows) + "\n", encoding="utf-8")
+    return tmp_path, uni
+
+
+def _live_run(env, fake, *extra):
+    from dipdash import cli
+    tmp, uni = env
+    argv = ["--universe", str(uni), "--out", str(tmp / "output" / "dashboard.html"), "--data-dir", str(tmp / "data"),
+            "--no-crosscheck", *extra]
+    return cli.main(argv, sources=fake.sources())
+
+
+def _fake(drop=(), fx=None):
+    from dipdash.config import load_settings
+    from fakes import FakeYahoo
+    prices = {t: geometric(300, 0.0005 + 0.0001 * i) for i, t in enumerate(_GUARD_ALL)}
+    idx = {i.symbol: geometric(300, 0.0003) for i in load_settings().all_indices}
+    return FakeYahoo(prices, fail=set(drop), fx={"SEK": 0.095, "EUR": 1.08} if fx is None else fx, index=idx)
+
+
+def _quality_rows(tmp):
+    with (tmp / "output" / "data_quality.csv").open(encoding="utf-8", newline="") as fh:
+        return list(_csv.DictReader(fh))
+
+
+def test_live_run_with_a_dropped_exchange_shows_an_error_and_still_publishes(live_env):
+    tmp, _ = live_env
+    assert _live_run(live_env, _fake(drop=_GUARD_ST)) == 0                    # 31 of 34 screened: above the 90% minimum
+    got = {(r["ticker"], r["check"]): r for r in _quality_rows(tmp)}
+    assert got[(".ST", "exchange_missing")]["severity"] == "error"
+    assert (tmp / "output" / "dashboard.html").stat().st_size > 0
+    page = (tmp / "output" / "dashboard.html").read_text(encoding="utf-8")
+    assert "exchange_missing" in page                                          # the payload's issues reach the page badge
+    digest = (tmp / "output" / "digest.md").read_text(encoding="utf-8")
+    assert "exchange missing" in digest and "**Error:**" in digest
+
+
+def test_live_run_with_a_missing_fx_rate_shows_an_error_and_still_publishes(live_env):
+    tmp, _ = live_env
+    assert _live_run(live_env, _fake(fx={"SEK": 0.095})) == 0                  # no EUR rate
+    got = {(r["ticker"], r["check"]): r for r in _quality_rows(tmp)}
+    assert got[("EUR", "fx_missing")]["severity"] == "error"
+    assert (tmp / "output" / "dashboard.html").exists()
+
+
+def test_live_run_still_exits_2_when_too_few_stocks_are_screened(live_env):
+    tmp, _ = live_env
+    assert _live_run(live_env, _fake(drop=_GUARD_US[:12])) == 2
+    assert (tmp / "output" / "data_quality.failed.csv").exists() and not (tmp / "output" / "dashboard.html").exists()
+
+
+def test_live_run_writes_the_coverage_table_to_the_digest_and_run_meta(live_env):
+    tmp, _ = live_env
+    assert _live_run(live_env, _fake(drop=_GUARD_ST)) == 0
+    digest = (tmp / "output" / "digest.md").read_text(encoding="utf-8")
+    assert "Coverage: bars 31/34" in digest.split("## Data quality")[0]        # one-line summary in the header
+    assert "### Data coverage by exchange" in digest
+    table = digest.split("### Data coverage by exchange")[1].split("\n## ")[0]
+    assert "| Exchange | Expected | With prices | Stale | Lagging | Fundamentals | Earnings dates |" in table
+    assert "| .ST Nasdaq Stockholm | 3 | 0 |" in table and "| US NYSE/Nasdaq | 28 | 28 |" in table
+    meta = _json.loads((tmp / "output" / "run_meta.json").read_text(encoding="utf-8"))
+    by = {r["label"]: r for r in meta["coverage"]["rows"]}
+    assert by[".ST"]["expected"] == 3 and by[".ST"]["with_bars"] == 0 and by["US"]["with_bars"] == 28
+    assert meta["coverage"]["summary"].startswith("Coverage:") and meta["screened"] == 31 and meta["issue_counts"]["error"] >= 1
+
+
+def test_demo_run_has_no_coverage_table_and_no_run_meta(tmp_path):
+    out = tmp_path / "o" / "dashboard.html"
+    assert main(["--demo", "--out", str(out)]) == 0
+    assert "Data coverage by exchange" not in (out.parent / "digest.md").read_text(encoding="utf-8")
+    assert not (out.parent / "run_meta.json").exists()

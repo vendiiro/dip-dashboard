@@ -7,7 +7,7 @@ import sys
 import warnings
 import webbrowser
 from dataclasses import asdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from .config import ROOT, load_settings, load_universe
@@ -105,6 +105,20 @@ def _alerts(payload: dict, prices: dict, asof: str, out_path: Path, data_dir: Pa
         return None
 
 
+def _fundamentals(bundle: Sources, tickers: list[str], cache_path: Path, status: dict) -> dict:
+    """Call the bundle's fundamentals source. `status` (per-ticker age and errors) is passed only when the callable accepts a
+    `status` keyword, so bundles written against the older two-argument protocol (FakeYahoo) keep working; then status stays empty."""
+    import inspect
+
+    fn = bundle.fundamentals
+    try:
+        params = inspect.signature(fn).parameters
+        takes_status = "status" in params or any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values())
+    except (TypeError, ValueError):
+        takes_status = False
+    return fn(tickers, cache_path, status=status) if takes_status else fn(tickers, cache_path)
+
+
 def main(argv: list[str] | None = None, sources: Sources | None = None) -> int:
     a = make_parser().parse_args(argv)
     settings = load_settings(a.settings)
@@ -119,6 +133,8 @@ def main(argv: list[str] | None = None, sources: Sources | None = None) -> int:
     fx = None
     idx_hist: dict = {}      # full index close series for the beta fit; empty in demo mode
     earnings: dict = {}
+    reasons: dict[str, str] = {}      # why a price fetch failed or needed a rescue (filled by pull_prices)
+    fund_status: dict = {}            # per-ticker fundamentals age and errors (filled by fetch_fundamentals)
     if a.demo:
         from .demo import demo_indices, demo_inputs, demo_news
         prices, funds = demo_inputs(universe)
@@ -142,7 +158,8 @@ def main(argv: list[str] | None = None, sources: Sources | None = None) -> int:
         print(f"Downloading 2y daily prices for {len(tickers)} tickers...")
         start = str(today - timedelta(days=730))
         try:
-            prices, source = pull_prices(tickers, bundle.prices, lambda t: bundle.fallback_bars(t, start, str(today)))
+            prices, source = pull_prices(tickers, bundle.prices, lambda t: bundle.fallback_bars(t, start, str(today)),
+                                         reasons=reasons)
         except Exception as exc:
             # The batch call itself raised (network down, library error), so there is nothing to screen. This is the same kind of
             # failure as a half-empty pull: keep yesterday's files, say why, and exit 2 so the batch file retries later.
@@ -157,7 +174,7 @@ def main(argv: list[str] | None = None, sources: Sources | None = None) -> int:
             if part:
                 path = save_raw_prices(part, "yfinance" if kind == "primary" else "openbb_fallback", data_dir / "raw")
                 print(f"  raw pull saved: {path}")
-        funds = bundle.fundamentals(list(prices), data_dir / "fundamentals.json")
+        funds = _fundamentals(bundle, list(prices), data_dir / "fundamentals.json", fund_status)
         fx = fetch_fx_to_usd((f.get("currency") for f in funds.values()), fetch_last=bundle.fx)
         indices = fetch_indices(settings.all_indices, fetch_close=bundle.index, history=idx_hist)
         from .earnings import load_earnings
@@ -178,10 +195,21 @@ def main(argv: list[str] | None = None, sources: Sources | None = None) -> int:
         news_fn = bundle.news
 
     from .validate import Issue, validate_run, write_quality_log
-    issues = validate_run(universe, prices, funds, settings, today)
+    coverage_rows: list[dict] | None = None
+    coverage_summary = ""
+    if a.demo:
+        issues = validate_run(universe, prices, funds, settings, today)
+    else:
+        issues = validate_run(universe, prices, funds, settings, today, now=datetime.now(timezone.utc), fx_rates=fx)
     issues += [Issue(t, "price_source", "warn", "Yahoo had no data; used unadjusted OpenBB bars (dividends not adjusted)")
                for t, s in source.items() if s == "fallback"]
     if not a.demo:
+        from .coverage import build_coverage, coverage_issues
+        from .validate import fetch_issues
+        issues += fetch_issues(reasons, prices, fund_status)
+        coverage_rows, coverage_summary = build_coverage(universe, prices, funds, earnings, today, settings.data.max_stale_trading_days,
+                                                         reasons=reasons, status=fund_status)
+        issues += coverage_issues(coverage_rows, settings.data.min_bars_share, settings.data.min_earnings_share)
         issues += [Issue(i.name, "index_missing", "warn", f"no data for {i.symbol}; no market context from it for region {i.region}")
                    for i in settings.all_indices if i.symbol not in {x["symbol"] for x in indices}]
         if not a.no_crosscheck:
@@ -213,9 +241,17 @@ def main(argv: list[str] | None = None, sources: Sources | None = None) -> int:
     out = write_dashboard(payload, out_path)
     print(f"Wrote {out} ({len(payload['rows'])} stocks)")
     digest_text = build_digest(payload, settings, backtest_line=latest_backtest_line(out_path.parent), repeat=repeat,
-                               alerts=alerts, alerts_failed=alerts is None)
+                               alerts=alerts, alerts_failed=alerts is None,
+                               coverage_rows=coverage_rows, coverage_summary=coverage_summary)
     digest_path = atomic_write_text(a.digest or out_path.parent / "digest.md", digest_text)
     print(f"Wrote {digest_path}")
+    if coverage_rows is not None:
+        import json
+        meta = {"asof": asof, "generated": payload["generated"], "universe": len(universe), "screened": len(payload["rows"]),
+                "issue_counts": {k: sum(i.severity == k for i in issues) for k in ("error", "warn", "info")},
+                "coverage": {"summary": coverage_summary, "rows": coverage_rows}}
+        atomic_write_text(out_path.parent / "run_meta.json", json.dumps(meta, indent=2, ensure_ascii=False) + "\n")
+        print(coverage_summary)
     log = write_quality_log(issues, out_path.parent / ("data_quality.demo.csv" if a.demo else "data_quality.csv"))   # a demo run must not replace a real log
     n = {k: sum(i.severity == k for i in issues) for k in ("error", "warn", "info")}
     print(f"Data quality: {n['error']} error(s), {n['warn']} warning(s) -> {log}")

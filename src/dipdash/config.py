@@ -64,6 +64,9 @@ class ScheduleSettings:
 class DataSettings:
     max_stale_trading_days: int = 4
     min_screened_fraction: float = 0.9       # a run that screens fewer stocks than this share of the universe fails and keeps yesterday's files
+    min_fundamentals_share: float = 0.8      # share of screened stocks with usable fundamentals; below it the run reports an error (the run still publishes)
+    min_bars_share: float = 0.8              # an exchange with bars for fewer than this share of its tickers gets a warning
+    min_earnings_share: float = 0.5          # earnings dates known for fewer than this share of an exchange gets an info line
 
 
 @dataclass(frozen=True)

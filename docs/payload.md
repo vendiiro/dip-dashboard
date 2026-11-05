@@ -163,6 +163,17 @@ One entry of `rows`. Keys are exactly these.
 | `severity` | str | no | | `error`, `warn` or `info` |
 | `detail` | str | no | | plain-language detail |
 
+Since the data-guard wiring the live run adds these `check` values to `issues` (no new field; the page's data-quality badge counts them
+like any other issue). They never stop the run; exit code 2 is kept for "too few stocks screened" only.
+`exchange_missing` (error, ticker is the suffix label such as `.ST`), `fx_missing` (error, ticker is the currency),
+`fundamentals_coverage` (error overall, warn for one exchange), `lagging_vs_peers`, `partial_bar` (judged by each exchange's close time),
+`fetch_failed` (error if the ticker has no bars, else warn), `fundamentals_stale`, `fundamentals_missing`, `exchange_thin` (warn),
+`earnings_coverage` (info). Demo runs carry none of the live-only ones (FX, fetch, coverage).
+
+**Not in the payload:** the coverage table. A live run writes it to `output/run_meta.json`
+(`asof`, `generated`, `universe`, `screened`, `issue_counts`, `coverage.summary`, `coverage.rows`; row keys are `coverage.COLUMNS`)
+and to the digest ("Data coverage by exchange"). A demo run writes neither.
+
 ## Left-out item
 
 | Field | Type | Null | Unit | Meaning |
