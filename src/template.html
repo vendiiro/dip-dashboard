@@ -218,7 +218,10 @@ svg .tick{stroke:var(--line)} svg .axis{stroke:var(--line-strong)}
 footer{color:var(--ink-2);font-size:13px;border-top:1px solid var(--line);padding-top:16px;display:grid;gap:16px}
 footer dl{margin:0;display:grid;gap:6px;align-content:start}
 footer dt{font-weight:600;color:var(--ink)}
-footer dd{margin:0;scroll-margin-top:12px}
+footer dd{margin:0}
+footer dt,footer dd{scroll-margin-top:12px}
+footer dd:focus{outline:none}
+.brief p a{padding:12px 4px;margin:-12px -4px}
 footer .defs>summary{display:flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;border:1px solid var(--line-strong);border-radius:8px;cursor:pointer;font-weight:600;color:var(--ink);list-style:none;width:max-content;max-width:100%}
 footer .defs>summary::-webkit-details-marker{display:none}
 footer .defs>summary::before{content:'›';display:inline-block;transition:transform .15s}
@@ -226,7 +229,7 @@ footer .defs[open]>summary::before{transform:rotate(90deg)}
 footer .defs>summary:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 footer .defgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:16px}
 footer .endgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
-footer dd.hit{background:var(--line);border-radius:4px}
+footer dd.hit,footer dt.hit{background:var(--line);border-radius:4px}
 
 @media (max-width:900px){
   .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -354,10 +357,10 @@ footer dd.hit{background:var(--line);border-radius:4px}
       <dt>RSI</dt><dd>14-day Relative Strength Index, 0–100. Under 30 means the stock has fallen fast relative to its recent moves.</dd>
       <dt>Vol ×</dt><dd>Today’s volume divided by the average of the previous 20 days.</dd>
       <dt>Trigger alerts</dt><dd>Plain notices that a research condition turned true at the latest close, for example the close moving back above its 20-day average, RSI(14) moving back above 30, a new 60-day low, or an earnings date coming up. Each fires once, when the condition changes from false to true. They use daily closes only, the thresholds are untested defaults you can change in config/alerts.toml, and nothing here predicts returns or suggests an action.</dd>
-      <dt>5d move vs index (residual)</dt><dd id="def-res">The part of the stock’s 5-day move that its index does not explain. In plain words: the index move is taken out first, scaled by the stock’s usual sensitivity to it (beta, defined next), and what is left is shown. A large negative number means the stock fell by more than the index and its usual sensitivity would explain. The “in std devs” figure expresses it in units of the stock’s own normal daily noise. It describes today’s move only; it has not been backtested and is not a signal. Not the same as “5d vs index”, which is the plain difference without the beta adjustment.</dd>
-      <dt>Beta</dt><dd id="def-beta">How strongly a stock usually moves with its index: 1.0 means about the same size of move, 1.5 means about one and a half times as large, 0 means no link. It is estimated from the previous year of daily moves, excluding the last 5 days, so it is noisy (about ±0.2–0.3). Values are kept between 0 and 3: a negative estimate is floored at 0, so that stock gets no index adjustment.</dd>
+      <dt>5d vs index</dt><dd id="def-idx">The stock’s 5-day move minus the move of its own country’s index where one is configured (matched by ticker suffix), otherwise its regional index, otherwise STOXX 600. Index types are mixed: the DAX is a total-return index (it includes dividends) and the Stockholm and Oslo indices are all-share, not large-cap. A big negative number means the drop is not just the market.</dd>
+      <dt>5d vs index, beta-adjusted (residual)</dt><dd id="def-res">The part of the stock’s 5-day move left over after removing the index move, scaled by the stock’s usual sensitivity to it (beta, defined next). A large negative number means the stock fell by more than the index move and the stock’s usual sensitivity to it would account for. The “in standard deviations” figure expresses it in units of the stock’s typical daily variation (standard deviation). It describes today’s move only; it has not been backtested and is not a signal. Not the same as “5d vs index”, which is the plain difference without the beta adjustment.</dd>
+      <dt>Beta</dt><dd id="def-beta">How strongly a stock usually moves with its index: 1.0 means about the same size of move, 1.5 means about one and a half times as large, 0 means no link. It is estimated from the previous year of daily moves, excluding the last 5 days, so it is noisy: a different year of data can give a clearly different value. Values are kept between 0 and 3: a negative estimate is floored at 0, so that stock gets no index adjustment.</dd>
       <dt>Earnings tag</dt><dd>Shown when a company reported within the last 5 trading days or reports within the next 10. A drop right after a report is a different situation from a drop with no news. Dates come from a free source, can be missing or off by a day, and are not point-in-time, so they are never used in the backtest.</dd>
-      <dt>5d vs index</dt><dd>The stock’s 5-day move minus the move of its own country’s index where one is configured (matched by ticker suffix), otherwise its regional index, otherwise STOXX 600. Index types are mixed: the DAX is a total-return index (it includes dividends) and the Stockholm and Oslo indices are all-share, not large-cap. A big negative number means the drop is not just the market.</dd>
     </dl>
     </div>
     </details>
@@ -538,8 +541,11 @@ const defs = $('defs');
 function openDef(id) {
   const t = id && document.getElementById(id); if (!t || !defs.contains(t)) return false;
   defs.open = true;
-  document.querySelectorAll('footer dd.hit').forEach(x => x.classList.remove('hit')); t.classList.add('hit');
-  t.scrollIntoView({block: 'start'}); return true;
+  document.querySelectorAll('footer .hit').forEach(x => x.classList.remove('hit')); t.classList.add('hit');
+  const h = t.previousElementSibling && t.previousElementSibling.tagName === 'DT' ? t.previousElementSibling : null;   // the term heading
+  if (h) h.classList.add('hit');
+  (h || t).scrollIntoView({block: 'start'});
+  t.tabIndex = -1; t.focus({preventScroll: true}); return true;
 }
 document.addEventListener('click', e => {
   const a = e.target.closest && e.target.closest('a[href^="#def-"]'); if (!a) return;
@@ -669,7 +675,7 @@ function alertsPanel() {
 // ---------- filters toggle (phone) ----------
 function ctlSummary() {
   const pressed = id => { const b = document.querySelector('#' + id + ' [aria-pressed="true"]'); return b ? (b.dataset.label || b.textContent).trim() : ''; };
-  $('ctlsum').textContent = [pressed('show'), pressed('region'), 'quality score ≥ ' + $('qmin').value].filter(Boolean).join(' · ');
+  $('ctlsum').textContent = [pressed('show'), pressed('region'), 'Quality score ≥ ' + $('qmin').value].filter(Boolean).join(' · ');
 }
 $('ctltoggle').addEventListener('click', () => {
   const open = $('controls').classList.toggle('open'); $('ctltoggle').setAttribute('aria-expanded', String(open));
@@ -692,7 +698,7 @@ function tiles(all) {
     }
     if (foot) t.append(el('div', 'foot', foot)); box.append(t);
   };
-  mk('tile-quality', 'Dips meeting the check thresholds', qd.length, `${qd.length} of ${dipsN} dips · ${$('win').value === 'any' ? 'default rules' : 'chosen window'}, quality score ≥ ${$('qmin').value}, net margin above 0`, qd.map(r => r.t));
+  mk('tile-quality', 'Dips meeting the check thresholds', qd.length, `${qd.length} of ${dipsN} dips have quality score ≥ ${$('qmin').value} and net margin above 0 · drop window: ${$('win').value === 'any' ? 'default' : 'chosen window'}`, qd.map(r => r.t));
   mk('tile-new', 'New since yesterday', newQ.length, newQ.length ? 'Started meeting the check thresholds with the latest close' : 'Same dips meeting the check thresholds as the previous close', newQ.map(r => r.t));
   mk('tile-knife', 'Falling-knife flags', kn.length, 'Dipping inside a long downtrend', kn.map(r => r.t));
   const t = el('div', 'tile'); t.dataset.testid = 'tile-market'; t.append(el('div', 'lab', 'Market context'));
@@ -760,7 +766,7 @@ const COLS = [
   {k: 'price', l: 'Price', dir: -1, cell: r => { const td = el('td', 'n', r.price == null ? '–' : r.price.toFixed(2)); if (r.ccy) td.append(el('span', 'nm', ' ' + r.ccy)); return td; }},
   {k: 'r1', l: '1d', dir: 1, cell: pctCell('r1')}, {k: 'r5', l: '5d', dir: 1, cell: pctCell('r5')},
   {k: 'x5', l: '5d vs index', dir: 1, cell: pctCell('x5'), tip: 'The stock’s 5-day move minus its own country’s (or region’s) index move'},
-  {k: 'res5', l: '5d move vs index (residual)', dir: 1, more: true, cell: pctCell('res5'), tip: 'The part of the 5-day move the index does not explain: the index move, scaled by the stock’s usual sensitivity to it (beta), is taken out first. Beta is estimated from the previous year, excluding the last 5 days.'},
+  {k: 'res5', l: '5d vs index, beta-adjusted (residual)', dir: 1, more: true, cell: pctCell('res5'), tip: 'The 5-day move left over after removing the index move, scaled by the stock’s usual sensitivity to it (beta). Beta is estimated from the previous year, excluding the last 5 days.'},
   {k: 'r21', l: '1m', dir: 1, more: true, cell: pctCell('r21')},
   {k: 'dd52', l: 'vs 52w high', dir: 1, cell: pctCell('dd52')}, {k: 'vs200', l: 'vs 200d avg', dir: 1, more: true, cell: pctCell('vs200')},
   {k: 'rsi', l: 'RSI', dir: 1, cell: r => el('td', 'n ' + (r.rsi != null && r.rsi < 30 ? 'down' : ''), r.rsi == null ? '–' : r.rsi.toFixed(0))},
@@ -963,10 +969,10 @@ function detail(r) {
 
   const p3 = el('div', 'panel'); p3.append(el('h3', null, 'Key numbers'));
   const kv = el('div', 'kv'); const mc = r.qchecks.find(c => c.key === 'marketCap');
-  const KEY = ['5d move vs', 'Forward P/E', 'Trailing P/E', 'Market cap (USD)', 'Sector', 'Next earnings'];   // the rest sits behind "More context"
-  [[r.idx ? '5d move vs ' + r.idx : '5d move vs index' + (r.x5 == null && r.idx_why ? ' (' + r.idx_why + ')' : ''), r.x5 == null ? '–' : pct(r.x5)], ['Forward P/E', r.fpe == null ? '–' : r.fpe.toFixed(1)], ['Trailing P/E', r.tpe == null ? '–' : r.tpe.toFixed(1)],
-   ['Market cap (USD)', mc && mc.value != null ? big(mc.value) : '–'], ['Sector', r.sector || '–'], ['From 20-day high', pct(r.dd20)], ['5d move in std devs', r.z5 == null ? '–' : r.z5.toFixed(1)],
-   ['5d move vs index (residual)', r.res5 == null ? '–' : pct(r.res5)], ['5d move vs index (residual), in std devs', r.res5z == null ? '–' : r.res5z.toFixed(1)],
+  const KEY = ['5d vs index','Forward P/E', 'Trailing P/E', 'Market cap (USD)', 'Sector', 'Next earnings'];   // the rest sits behind "More context"
+  [['5d vs index' + (r.idx ? ' (' + r.idx + ')' : r.x5 == null && r.idx_why ? ' (' + r.idx_why + ')' : ''), r.x5 == null ? '–' : pct(r.x5)], ['Forward P/E', r.fpe == null ? '–' : r.fpe.toFixed(1)], ['Trailing P/E', r.tpe == null ? '–' : r.tpe.toFixed(1)],
+   ['Market cap (USD)', mc && mc.value != null ? big(mc.value) : '–'], ['Sector', r.sector || '–'], ['From 20-day high', pct(r.dd20)], ['5d move in standard deviations', r.z5 == null ? '–' : r.z5.toFixed(1)],
+   ['5d vs index, beta-adjusted (residual)', r.res5 == null ? '–' : pct(r.res5)], ['5d vs index, beta-adjusted (residual), in standard deviations', r.res5z == null ? '–' : r.res5z.toFixed(1)],
    ['Beta' + (r.beta_side === 'cap' ? ' (capped at 3)' : r.beta_side === 'floor' ? ' (floored at 0)' : ''), r.beta == null ? '–' : r.beta.toFixed(2) + (r.beta_side && r.beta_raw != null ? ' (est. ' + r.beta_raw.toFixed(2) + ')' : '')],
    ['Last earnings', earnText(r, 'last')], ['Next earnings', earnText(r, 'next')]]
     .forEach(([a, b]) => { const keep = KEY.some(k => a.startsWith(k)) && !a.includes('(residual)'); const row = el('div', keep ? 'kvx' : 'kvx extra'); row.append(el('span', null, a), el('span', null, b)); if (!keep) row.hidden = true; kv.append(row); });

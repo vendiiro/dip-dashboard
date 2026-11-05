@@ -591,15 +591,59 @@ def test_residual_label_is_plain_and_beta_is_defined_once(browser, demo_html):
     page, _ = open_page(browser, demo_html)
     page.click("#colbtn")
     heads = [h.lower() for h in page.locator("#head th").all_inner_texts()]     # the header is upper-cased by CSS
-    assert any("5d move vs index (residual)" in h for h in heads) and not any("resid." in h for h in heads)
+    assert any("5d vs index, beta-adjusted (residual)" in h for h in heads) and not any("resid." in h for h in heads)
+    assert any(h.strip().startswith("5d vs index") and "residual" not in h for h in heads)
     page.click("[data-testid=defs-toggle]")
     names = page.locator("footer dt").all_inner_texts()
-    assert "5d move vs index (residual)" in names and names.count("Beta") == 1 and "5d resid." not in names
-    assert "In plain words" in page.inner_text("#def-res") and "moves with its index" in page.inner_text("#def-beta")
+    assert "5d vs index, beta-adjusted (residual)" in names and "5d vs index" in names
+    assert names.index("5d vs index") == names.index("5d vs index, beta-adjusted (residual)") - 1   # plain first, adjusted second
+    assert names.count("Beta") == 1 and "5d resid." not in names
+    res, beta = page.inner_text("#def-res"), page.inner_text("#def-beta")
+    assert "left over after removing the index move" in res and "standard deviation" in res and "does not explain" not in res
+    assert "moves with its index" in beta and "±0.2" not in beta and "different year of data" in beta
     page.locator("#body tr.row").first.click()
     page.click("td.detail button.more")
     detail = page.inner_text("td.detail")
-    assert "5d move vs index (residual)" in detail and "Resid. in std devs" not in detail and "5d resid." not in detail
+    assert "5d vs index, beta-adjusted (residual)" in detail and "in standard deviations" in detail and "std devs" not in detail
+    assert "5d move vs" not in detail and "Resid. in std devs" not in detail and "5d resid." not in detail
+    assert "±0.2" not in page.inner_text("body")
+    page.close()
+
+
+def test_5d_vs_index_naming_in_tooltips_and_tile_foot(browser, demo_html):
+    page, _ = open_page(browser, demo_html)
+    page.click("#colbtn")
+    tips = page.evaluate("[...document.querySelectorAll('#head th')].map(t => t.title || '')")
+    assert not any("does not explain" in t for t in tips)
+    assert any(t.startswith("The 5-day move left over after removing the index move") and "(beta). Beta is estimated" in t for t in tips)
+    market = page.locator("[data-testid=tile-market]").inner_text()
+    assert "5d move vs" not in market
+    page.close()
+
+
+def test_definition_link_scrolls_the_heading_into_view_and_moves_focus(browser, demo_html):
+    page, errors = open_page(browser, demo_html, 390, 844)
+    page.click("#brief a[href='#def-q']")
+    info = page.evaluate("""() => { const dd = document.getElementById('def-q'), dt = dd.previousElementSibling;
+        return {tag: dt.tagName, dtTop: dt.getBoundingClientRect().top, vh: innerHeight, dtHit: dt.classList.contains('hit'),
+                ddHit: dd.classList.contains('hit'), focus: document.activeElement === dd}; }""")
+    assert info["tag"] == "DT" and 0 <= info["dtTop"] < info["vh"]                  # the heading itself is on screen
+    assert info["dtHit"] and info["ddHit"] and info["focus"]                        # both highlighted, focus on the entry
+    page.close()
+    page, _ = open_page(browser, demo_html + "#def-res", 1280, 900)
+    top = page.evaluate("document.getElementById('def-res').previousElementSibling.getBoundingClientRect().top")
+    assert 0 <= top < 900 and page.evaluate("document.activeElement.id") == "def-res"
+    assert errors == []
+    page.close()
+
+
+def test_brief_definitions_link_has_a_40px_tap_area_without_changing_the_line(browser, demo_html):
+    page, _ = open_page(browser, demo_html, 390, 844)
+    link = page.locator("#brief a[href='#def-q']")
+    assert link.bounding_box()["height"] >= 40
+    h = page.evaluate("document.querySelector('#brief p').getBoundingClientRect().height")
+    page.add_style_tag(content="#brief p a{padding:0 !important;margin:0 !important}")
+    assert abs(page.evaluate("document.querySelector('#brief p').getBoundingClientRect().height") - h) < 1
     page.close()
 
 
@@ -608,7 +652,7 @@ def test_quality_tile_reconciles_with_the_all_dips_count(browser, demo_html):
     dips = page.evaluate("DATA.rows.filter(r => __dipView(r.t).rank > 0).length")
     big = page.locator("[data-testid=tile-quality] .big").inner_text()
     foot = page.locator("[data-testid=tile-quality] .foot").inner_text()
-    assert foot.startswith(f"{big} of {dips} dips")
+    assert foot.startswith(f"{big} of {dips} dips have quality score ≥ ") and "net margin above 0 · drop window: default" in foot
     page.click("#show button[data-v=dips]")
     assert page.inner_text("#tabletitle") == f"All dips · {dips}"
     page.close()
@@ -616,6 +660,6 @@ def test_quality_tile_reconciles_with_the_all_dips_count(browser, demo_html):
 
 def test_phone_filters_summary_says_quality_score(browser, demo_html):
     page, _ = open_page(browser, demo_html, 390, 844)
-    assert "quality score ≥ " in page.inner_text("#ctlsum") or "quality score ≥ " in page.text_content("#ctlsum")
-    assert "quality ≥" not in page.text_content("#ctlsum")
+    assert "Quality score ≥ " in page.text_content("#ctlsum")
+    assert "quality ≥" not in page.text_content("#ctlsum").lower()
     page.close()
