@@ -5,7 +5,7 @@ import math
 from dataclasses import dataclass, replace
 from typing import Callable
 
-from .config import QualitySettings
+from .config import QualitySettings, Stock
 from .fx import usd_value
 
 MIN_CHECKS_WITH_DATA = 3
@@ -27,16 +27,6 @@ def build_checks(q: QualitySettings) -> list[Check]:
         Check("Revenue growth positive", "revenueGrowth", lambda v: v > 0),
         Check(f"Market cap >= {q.market_cap_min / 1e9:g}B USD", "marketCap", lambda v: v >= q.market_cap_min),
     ]
-
-
-# Sector adjustments. Leverage is the business model of a bank or insurer, and free cash flow is not a
-# meaningful figure for them, so those checks do not apply (left out of the score, not failed).
-# Utilities and real-estate companies carry high debt by design, so their debt/equity limit is relaxed. These are judgement calls,
-# untested like every other threshold until a backtest supports them.
-NOT_APPLICABLE: dict[str, frozenset[str]] = {   # keys lower-case: sectors are matched case-insensitively
-    "financials": frozenset({"debtToEquity", "freeCashflow"}),
-}
-DEBT_TO_EQUITY_MAX_BY_SECTOR: dict[str, float] = {"utilities": 300.0, "real estate": 300.0}
 
 
 def _number(v) -> float | None:
@@ -125,8 +115,8 @@ def quality(fund: dict, q: QualitySettings, fx_to_usd: dict[str, float] | None =
             sector: str | None = None) -> tuple[int | None, list[dict]]:
     """Return (score 0-100 or None, per-check results).
 
-    With a sector, checks that do not apply to it (see NOT_APPLICABLE) get ok=None and na=True and are
-    left out of the score, and the debt/equity limit can be relaxed (DEBT_TO_EQUITY_MAX_BY_SECTOR).
+    With a sector, checks that do not apply to it (q.not_applicable) get ok=None and na=True and are
+    left out of the score, and the debt/equity limit can be relaxed (q.debt_to_equity_max_by_sector).
 
     The market-cap check is in USD. With fx_to_usd, the value is converted from the stock's own
     currency (fund["currency"]); if that currency or its rate is unknown the check has no data,
@@ -139,8 +129,8 @@ def quality(fund: dict, q: QualitySettings, fx_to_usd: dict[str, float] | None =
     if fx_to_usd is not None and fund.get("marketCap") is not None:
         fund["marketCap"] = usd_value(fund["marketCap"], fund.get("currency"), fx_to_usd)
     key = (sector or "").strip().casefold()
-    skip = NOT_APPLICABLE.get(key, frozenset())
-    de_max = DEBT_TO_EQUITY_MAX_BY_SECTOR.get(key)
+    skip = {k.casefold(): set(v) for k, v in q.not_applicable.items()}.get(key, set())
+    de_max = {k.casefold(): v for k, v in q.debt_to_equity_max_by_sector.items()}.get(key)
     if de_max is not None and de_max > q.debt_to_equity_max:
         q = replace(q, debt_to_equity_max=de_max)
     results, passed, avail = [], 0, 0
@@ -158,3 +148,16 @@ def quality(fund: dict, q: QualitySettings, fx_to_usd: dict[str, float] | None =
         results.append({"label": c.label, "key": c.key, "ok": ok, "value": v})
     score = round(100 * passed / avail) if avail >= MIN_CHECKS_WITH_DATA else None
     return score, results
+
+
+def score_universe(funds: dict[str, dict], universe: list[Stock], q: QualitySettings,
+                   fx_to_usd: dict[str, float] | None, *, use_sector: bool) -> dict[str, QualityResult]:
+    """One quality result per universe stock; the single scoring path for the dashboard and the backtest.
+
+    use_sector=True applies the sector rules in settings (dashboard). use_sector=False scores every stock with
+    the same six checks (backtest V3, Iiro's decision 2026-11-05: the backtest gets no sector input).
+    """
+    return {s.ticker: quality_detail(funds.get(s.ticker, {}), q, fx_to_usd,
+                                     sector=s.sector if use_sector else None,
+                                     must_pass=q.must_pass, distorted_roe_above=q.distorted_roe_above)
+            for s in universe}

@@ -22,7 +22,7 @@ from dipdash.backtest_report import write_report  # noqa: E402
 from dipdash.backtest_run import INDEX_SYMBOLS, clean_bars, run_backtest, sha256  # noqa: E402
 from dipdash.cache import list_raw, load_raw_prices, save_raw_prices  # noqa: E402
 from dipdash.config import load_settings, load_universe  # noqa: E402
-from dipdash.quality import quality  # noqa: E402
+from dipdash.quality import score_universe  # noqa: E402
 
 
 def main() -> int:
@@ -66,7 +66,9 @@ def main() -> int:
     from dipdash.fx import fetch_fx_to_usd
     funds = {t: v.get("d", {}) for t, v in json.loads((data_dir / "fundamentals.json").read_text()).items()}
     fx = fetch_fx_to_usd(f.get("currency") for f in funds.values())
-    q = {t: quality(funds.get(t, {}), s.quality, fx)[0] for t in prices}
+    # use_sector=False: Iiro's decision 2026-11-05 (docs/decisions/2026-11-05-04-*.md): the backtest gets no sector input.
+    scored = score_universe(funds, [u for u in universe if u.ticker in prices], s.quality, fx, use_sector=False)
+    q = {t: r.score for t, r in scored.items()}
 
     meta = {"source": "yfinance, dividend-adjusted daily closes", "raw_file": raw.name, "raw_sha256": sha256(raw),
             "history_from": start, "n_series": len(prices), "last_bar": str(max(c.index[-1] for c in prices.values()).date()),

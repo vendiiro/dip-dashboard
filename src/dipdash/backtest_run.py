@@ -50,7 +50,7 @@ def clean_bars(close: pd.Series, volume: pd.Series | None) -> tuple[pd.Series, i
 
 # NOTE: if the backtest ever starts using these keys, remove them from this exclusion first, or the spec hash will not change
 # and the frozen spec would silently misdescribe the test.
-QUALITY_LABEL_KEYS = ("must_pass", "distorted_roe_above")
+QUALITY_LABEL_KEYS = ("must_pass", "distorted_roe_above", "not_applicable", "debt_to_equity_max_by_sector")
 
 
 def freeze_spec(s: Settings, universe: list[Stock], data_meta: dict, calendar) -> dict:

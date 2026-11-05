@@ -106,3 +106,18 @@ def test_a_file_without_indices_uses_the_defaults_and_a_typo_is_an_error(tmp_pat
         load_settings(p)
     p.write_text('[[indices]]\nsymbol = "^X"\nname = "X"\nregion = "US"\n')
     assert [i.symbol for i in load_settings(p).indices] == ["^X"]
+
+
+def test_unknown_check_key_fails_at_load(tmp_path):
+    p = tmp_path / "s.toml"
+    p.write_text('[quality.not_applicable]\nfinancials = ["debtToEquity", "freeCashFlow"]\n', encoding="utf-8")
+    with pytest.raises(ValueError, match="freeCashFlow"):
+        load_settings(p)
+
+
+def test_sector_rules_load_as_tuples_and_floats(tmp_path):
+    p = tmp_path / "s.toml"
+    p.write_text('[quality.not_applicable]\nbanks = ["debtToEquity"]\n[quality.debt_to_equity_max_by_sector]\n"real estate" = 400\n',
+                 encoding="utf-8")
+    q = load_settings(p).quality
+    assert q.not_applicable == {"banks": ("debtToEquity",)} and q.debt_to_equity_max_by_sector == {"real estate": 400.0}

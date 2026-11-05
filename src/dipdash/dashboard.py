@@ -14,7 +14,7 @@ import pandas as pd
 from .config import Settings, Stock
 from .fsio import atomic_write_text
 from .metrics import clean, compute_metrics, history
-from .quality import quality_detail
+from .quality import score_universe
 from .residual import residual_move
 from .screen import classify, dip_reasons, is_falling_knife, is_stale, needs_news, setup_text
 from .validate import Issue
@@ -56,6 +56,9 @@ def index_r5_on(ix: dict, day: str) -> float | None:
         return None
     return clean(closes[day] / closes[days[days.index(day) - 5]] - 1)
 
+# Sector rules are settings, not payload: the page gets the per-stock result, so the payload shape is unchanged.
+SECTOR_RULE_KEYS = ("not_applicable", "debt_to_equity_max_by_sector")
+
 
 def build_payload(universe: list[Stock], prices: Prices, funds: dict, settings: Settings, *,
                   news_fn: Callable[[str], list[dict]] | None = None, demo: bool = False,
@@ -70,6 +73,7 @@ def build_payload(universe: list[Stock], prices: Prices, funds: dict, settings: 
     index_history = index_history or {}
     earnings = earnings or {}
     rows, skipped = [], []
+    scored = score_universe(funds, universe, settings.quality, fx_to_usd, use_sector=True)
     for s in universe:
         if s.ticker not in prices:
             skipped.append({"t": s.ticker, "reason": "no_price_data", "detail": "no price data returned"})
@@ -83,8 +87,7 @@ def build_payload(universe: list[Stock], prices: Prices, funds: dict, settings: 
             skipped.append({"t": s.ticker, "reason": "stale", "detail": f"last bar {m['asof']}"})
             continue
         f = funds.get(s.ticker, {})
-        qr = quality_detail(f, settings.quality, fx_to_usd, sector=s.sector, must_pass=settings.quality.must_pass,
-                            distorted_roe_above=settings.quality.distorted_roe_above)
+        qr = scored[s.ticker]
         q, checks = qr.score, qr.checks
         q_ok, distorted = not qr.must_failed, qr.status == "distorted"
         m["knife"] = is_falling_knife(m, settings.falling_knife)
@@ -132,7 +135,7 @@ def build_payload(universe: list[Stock], prices: Prices, funds: dict, settings: 
             "chart_dates": chart_dates, "price_scale": PRICE_SCALE,
             "fx_to_usd": fx_to_usd or {}, "indices": indices,
             "issues": [asdict(i) for i in (issues or [])],
-            "settings": {"dip": asdict(settings.dip), "quality": asdict(settings.quality),
+            "settings": {"dip": asdict(settings.dip), "quality": {k: v for k, v in asdict(settings.quality).items() if k not in SECTOR_RULE_KEYS},
                          "knife": asdict(settings.falling_knife)}}
 
 

@@ -14,6 +14,16 @@ market_cap_min = 20_000_000_000   # in USD; other currencies are converted
 must_pass = ["net_margin_positive"]   # named rules; a failure blocks the "Quality dip" label (definition, not a tested filter)
 distorted_roe_above = 1.0             # ROE above 100% is flagged as distorted
 
+# Sector rules (sector names matched case-insensitively). Judgement calls, untested until a backtest supports them.
+# Leverage is the business model of a bank or insurer and free cash flow is not meaningful for them, so those
+# checks are left out of the score (not failed). Utilities and real estate carry high debt by design.
+[quality.not_applicable]
+financials = ["debtToEquity", "freeCashflow"]
+
+[quality.debt_to_equity_max_by_sector]
+utilities = 300.0
+"real estate" = 300.0
+
 [falling_knife]
 below_200d_falling = true
 drawdown_52w = 0.35

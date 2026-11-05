@@ -17,6 +17,19 @@ class DipSettings:
     drawdown_20d: float = 0.12
 
 
+# Keys of the six scored checks (quality.build_checks); a test keeps this equal to build_checks' keys.
+# Kept here, not imported from quality.py, because quality imports config.
+CHECK_KEYS = ("returnOnEquity", "profitMargins", "debtToEquity", "freeCashflow", "revenueGrowth", "marketCap")
+
+
+def _default_not_applicable() -> dict[str, tuple[str, ...]]:
+    return {"financials": ("debtToEquity", "freeCashflow")}
+
+
+def _default_de_max_by_sector() -> dict[str, float]:
+    return {"utilities": 300.0, "real estate": 300.0}
+
+
 @dataclass(frozen=True)
 class QualitySettings:
     min_score: int = 60
@@ -26,6 +39,9 @@ class QualitySettings:
     market_cap_min: float = 20_000_000_000
     must_pass: tuple[str, ...] = ("net_margin_positive",)    # named rules (quality.py); a failure blocks the "Quality dip" label
     distorted_roe_above: float = 1.0                          # ROE above this (1.0 = 100%) is flagged as distorted
+    # Sector rules (sector names matched case-insensitively). Judgement calls, untested until a backtest supports them.
+    not_applicable: dict[str, tuple[str, ...]] = field(default_factory=_default_not_applicable)    # checks left out of the score
+    debt_to_equity_max_by_sector: dict[str, float] = field(default_factory=_default_de_max_by_sector)
 
 
 @dataclass(frozen=True)
@@ -137,7 +153,27 @@ def _section(cls, raw: dict, name: str):
     if unknown:
         raise ValueError(f"settings.toml [{name}]: unknown key(s) {sorted(unknown)}; expected {sorted(known)}")
     kw = {k: tuple(v) if isinstance(v, list) else v for k, v in raw.items()}
+    if cls is QualitySettings:
+        _check_sector_rules(kw)
     return cls(**kw)
+
+
+def _check_sector_rules(kw: dict) -> None:
+    """Make the nested sector tables well formed; a bad check name fails at load, naming the key."""
+    na = kw.get("not_applicable")
+    if na is not None:
+        out = {}
+        for sector, keys in na.items():
+            keys = tuple(keys) if isinstance(keys, (list, tuple)) else (keys,)
+            bad = [k for k in keys if k not in CHECK_KEYS]
+            if bad:
+                raise ValueError(f"settings.toml [quality.not_applicable] {sector!r}: unknown check key(s) {bad}; "
+                                 f"expected {list(CHECK_KEYS)}")
+            out[sector] = keys
+        kw["not_applicable"] = out
+    de = kw.get("debt_to_equity_max_by_sector")
+    if de is not None:
+        kw["debt_to_equity_max_by_sector"] = {k: float(v) for k, v in de.items()}
 
 
 def load_settings(path: Path | str | None = None) -> Settings:

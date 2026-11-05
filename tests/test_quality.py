@@ -283,3 +283,54 @@ def test_backtest_v3_input_is_unchanged_by_the_new_rules():
     # the labels DO differ: that is the point of the new rule, and it is invisible to the backtest
     labels = {t: quality_detail(f, s.quality) for t, f in funds.items()}
     assert labels["B"].status == "distorted" and labels["C"].must_failed
+
+
+# --- score_universe: one scoring path, sector rules from settings -------------------------------------
+from dataclasses import replace  # noqa: E402
+
+from dipdash.config import CHECK_KEYS, Stock, load_settings  # noqa: E402
+from dipdash.quality import score_universe  # noqa: E402
+
+BANK_FUND = {"returnOnEquity": .2, "profitMargins": .2, "debtToEquity": 900, "freeCashflow": -1,
+             "revenueGrowth": .1, "marketCap": 3e10}
+
+
+def test_financials_differ_only_through_use_sector():
+    bank = Stock("B", "Bank", "US", "Financials")
+    assert score_universe({"B": BANK_FUND}, [bank], Q, None, use_sector=True)["B"].score == 100
+    assert score_universe({"B": BANK_FUND}, [bank], Q, None, use_sector=False)["B"].score == round(100 * 4 / 6)
+
+
+def test_backtest_scores_are_unchanged():
+    uni = [Stock("B", "Bank", "US", "Financials"), Stock("U", "Util", "US", "Utilities"), Stock("X", "X", "US", "")]
+    funds = {"B": BANK_FUND, "U": {**GOOD, "debtToEquity": 250}}
+    out = score_universe(funds, uni, Q, None, use_sector=False)
+    for s in uni:
+        assert out[s.ticker].score == quality(funds.get(s.ticker, {}), Q, None)[0]
+
+
+def test_dashboard_scores_equal_quality_detail():
+    uni = [Stock("B", "Bank", "US", "financials"), Stock("U", "Util", "US", "Utilities"), Stock("R", "RE", "US", "Real Estate")]
+    funds = {"B": BANK_FUND, "U": {**GOOD, "debtToEquity": 250}, "R": {**GOOD, "debtToEquity": 250}}
+    out = score_universe(funds, uni, Q, None, use_sector=True)
+    for s in uni:
+        want = quality_detail(funds[s.ticker], Q, None, sector=s.sector, must_pass=Q.must_pass,
+                              distorted_roe_above=Q.distorted_roe_above)
+        assert out[s.ticker] == want
+    assert out["U"].score == 100 and out["R"].score == 100
+
+
+def test_rules_come_from_settings():
+    bank = Stock("B", "Bank", "US", "Financials")
+    q = replace(Q, not_applicable={}, debt_to_equity_max_by_sector={"financials": 1000.0})
+    assert score_universe({"B": BANK_FUND}, [bank], q, None, use_sector=True)["B"].score == round(100 * 5 / 6)
+    q2 = replace(Q, not_applicable={}, debt_to_equity_max_by_sector={"financials": 500.0})
+    assert score_universe({"B": BANK_FUND}, [bank], q2, None, use_sector=True)["B"].score == round(100 * 4 / 6)
+
+
+def test_check_keys_match_build_checks():
+    assert CHECK_KEYS == tuple(c.key for c in build_checks(Q))
+
+
+def test_shipped_settings_equal_defaults():
+    assert load_settings().quality == Q
