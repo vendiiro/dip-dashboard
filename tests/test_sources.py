@@ -13,7 +13,7 @@ import pytest
 
 from dipdash import data, earnings, fx, openbb_source
 from dipdash.config import IndexSpec, Settings, Stock
-from dipdash.data import fetch_fundamentals, fetch_indices, fetch_prices, pull_prices
+from dipdash.data import fetch_fundamentals, fetch_indices, fetch_prices, lagging_tickers, pull_prices
 from dipdash.earnings import load_earnings
 from dipdash.fx import fetch_fx_to_usd
 from dipdash.sources import Sources, live_sources
@@ -22,6 +22,10 @@ from fakes import FakeYahoo, yf_download_frame
 from synth import END, flat, geometric
 
 TODAY = date(2026, 10, 30)          # the Friday after synth.END
+
+
+def nosleep(_seconds):              # injected wherever backoff or pacing would otherwise wait for real
+    pass
 SRC = Path(__file__).resolve().parents[1] / "src"
 
 
@@ -71,30 +75,31 @@ def test_primary_failure_uses_fallback_and_tags_it():
     fb = series(300, 0.002)
     y = fake(fail={"BBB.ST", "CCC"}, fallback={"BBB.ST": fb})
     s = y.sources()
-    prices, source = pull_prices(list(y.prices), s.prices, lambda t: s.fallback_bars(t, "2024-10-30", str(TODAY)))
+    prices, source = pull_prices(list(y.prices), s.prices, lambda t: s.fallback_bars(t, "2024-10-30", str(TODAY)), sleep=nosleep)
     assert source == {"AAA": "primary", "DDD": "primary", "BBB.ST": "fallback"}
     assert "CCC" not in prices                                     # no source at all: left out, validate reports no_data
     assert prices["BBB.ST"][0].equals(fb[fb.index >= "2024-10-30"])
-    assert y.called("fallback") == ["BBB.ST", "CCC"]               # only the tickers the primary missed
-    assert y.called("prices") == [("AAA", "BBB.ST", "CCC", "DDD")]  # one batch call
+    assert sorted(y.called("fallback")) == ["BBB.ST", "CCC"]       # only the tickers the primary missed (pool order is free)
+    assert y.called("prices") == [("AAA", "BBB.ST", "CCC", "DDD"), ("BBB.ST", "CCC")]   # one batch, then one second try for the misses
 
 
 def test_empty_primary_series_falls_back():
     y = fake(empty={"AAA"}, fallback={"AAA": series()})
-    _, source = pull_prices(list(y.prices), y.download, lambda t: y.fallback_bars(t, "2000-01-01", str(TODAY)))
+    _, source = pull_prices(list(y.prices), y.download, lambda t: y.fallback_bars(t, "2000-01-01", str(TODAY)), sleep=nosleep)
     assert source["AAA"] == "fallback"
 
 
 def test_batch_download_raising_propagates_today():
-    # Pins current behaviour for half 2: pull_prices does not catch a primary that raises (real yf.download rarely does).
+    # When EVERY batch still fails after the retries, the error is raised: nothing to screen, the caller keeps yesterday's files.
     y = fake(down=True)
     with pytest.raises(RuntimeError, match="network unreachable"):
-        pull_prices(list(y.prices), y.download, lambda t: None)
+        pull_prices(list(y.prices), y.download, lambda t: None, sleep=nosleep)
+    assert len(y.called("prices")) == 4                          # first try + 3 retries
 
 
 def test_lag_and_nan_tail_reach_validation_with_severity_and_detail():
     y = fake(lag={"CCC": 6}, nan_tail={"DDD": 2})
-    prices, _ = pull_prices(list(y.prices), y.download)
+    prices, _ = pull_prices(list(y.prices), y.download, sleep=nosleep)
     assert prices["CCC"][0].index[-1] == pd.Timestamp(END) - pd.offsets.BDay(6)
     assert prices["DDD"][0].iloc[-2:].isna().all() and prices["DDD"][0].index[-1] == pd.Timestamp(END)
     funds = {t: {"currency": c} for t, c in (("AAA", "USD"), ("BBB.ST", "SEK"), ("CCC", "USD"), ("DDD", "USD"))}
@@ -107,7 +112,7 @@ def test_lag_and_nan_tail_reach_validation_with_severity_and_detail():
 
 def test_tz_aware_mode_still_validates_by_date():
     y = fake(tz="America/New_York")
-    prices, _ = pull_prices(list(y.prices), y.download)
+    prices, _ = pull_prices(list(y.prices), y.download, sleep=nosleep)
     assert prices["AAA"][0].index.tz is not None
     universe = [Stock("AAA", "AAA", "US")]
     issues = validate_run(universe, {"AAA": prices["AAA"]}, {"AAA": {"currency": "USD"}}, Settings(), TODAY)
@@ -128,7 +133,7 @@ def test_fetch_prices_parses_a_yf_download_shaped_frame(monkeypatch):
     assert out["AAA"][0].equals(bars["AAA"][0]) and out["AAA"][1].equals(bars["AAA"][1])
     assert out["BBB.ST"][0].isna().all()                      # Yahoo's failed ticker: all-NaN, then pull_prices falls back
     assert "ZZZ" not in out                                    # not in the frame at all: omitted
-    prices, source = pull_prices(["AAA", "BBB.ST"], lambda t: out, lambda t: (series(), None))
+    prices, source = pull_prices(["AAA", "BBB.ST"], lambda t: out, lambda t: (series(), None), sleep=nosleep)
     assert source == {"AAA": "primary", "BBB.ST": "fallback"}
 
 
@@ -151,8 +156,8 @@ def test_fundamentals_seam_uses_cache_and_reports_missing_currency(tmp_path):
     assert f["DDD"]["currency"] is None
     assert len(list((tmp_path / "raw" / "yfinance_fundamentals").glob("*.json"))) == 1
     n = len(y.called("info"))
-    fetch_fundamentals(list(y.prices), path, fetch_info=y.info)
-    assert len(y.called("info")) == n + 1                       # only the failed ticker is asked again; the rest is cached
+    fetch_fundamentals(list(y.prices), path, fetch_info=y.info, sleep=nosleep)
+    assert len(y.called("info")) == n + 3                        # only the failed ticker is asked again (1 try + 2 retries)
     issues = validate_run([Stock("DDD", "DDD", "US")], {"DDD": (series(), None)}, {"DDD": f["DDD"]}, Settings(), TODAY)
     assert [(i.check, i.severity) for i in issues] == [("currency_missing", "warn")]
 
@@ -198,3 +203,175 @@ def test_news_and_raw_closes():
     rc = s.raw_closes("AAA", "2026-10-01", "2026-10-29")
     assert rc.index[0] >= pd.Timestamp("2026-10-01") and rc.index[-1] < pd.Timestamp("2026-10-29")
     assert s.raw_closes("CCC", "2026-10-01", "2026-10-29") is None
+
+
+# ---- DATA-3: batched pull, retry, lag re-fetch, fallback pool, reasons -------------------------------------------
+def universe(n_us=130, extra=()):
+    return {**{f"U{i:03d}": series() for i in range(n_us)}, **{t: series() for t in extra}}
+
+
+def test_pull_is_split_into_batches_of_60_with_a_pause_between():
+    y = fake(prices=universe(130))
+    pauses = []
+    prices, source = pull_prices(list(y.prices), y.download, sleep=pauses.append)
+    assert [len(c) for c in y.called("prices")] == [60, 60, 10] and len(prices) == 130
+    assert pauses == [0.5, 0.5]                                  # between batches only; nothing missing, nobody lagging
+
+
+def test_failed_batch_is_retried_with_exponential_backoff():
+    y = fake(prices=universe(70), flaky=2)                       # the first two download calls raise a 429-like error
+    waits, reasons = [], {}
+    prices, source = pull_prices(list(y.prices), y.download, sleep=waits.append, reasons=reasons)
+    assert len(prices) == 70 and set(source.values()) == {"primary"} and reasons == {}
+    assert waits[:2] == [2.0, 4.0]                               # 2 s, then 4 s, then the third try works
+    assert [len(c) for c in y.called("prices")] == [60, 60, 60, 10]
+
+
+def test_a_dead_batch_goes_to_the_fallback_and_every_ticker_gets_a_reason():
+    # Calls 1-4 are batch 1 (first try + 3 retries) and all raise; batch 2 works.
+    y = fake(prices=universe(70), flaky=4, fallback={"U000": series()})
+    reasons = {}
+    s = y.sources()
+    prices, source = pull_prices(list(y.prices), s.prices, lambda t: s.fallback_bars(t, "2000-01-01", str(TODAY)),
+                                 sleep=nosleep, reasons=reasons)
+    assert set(prices) == {f"U{i:03d}" for i in list(range(60, 70)) + [0]} and source["U000"] == "fallback"
+    assert "failed after 4 attempts" in reasons["U001"] and "429" in reasons["U001"] and "fallback had no data" in reasons["U001"]
+    assert "used the OpenBB fallback" in reasons["U000"] and "429" in reasons["U000"]        # saved, but the reason is kept for data_quality
+    assert "U060" not in reasons
+
+
+def test_tickers_yahoo_dropped_get_one_second_try():
+    y = fake(fail_first={"CCC"})                                 # all-NaN on the first call, fine on the second
+    reasons = {}
+    prices, source = pull_prices(list(y.prices), y.download, sleep=nosleep, reasons=reasons)
+    assert source["CCC"] == "primary" and "CCC" not in reasons
+    assert y.called("prices")[1] == ("CCC",)
+
+
+def test_reasons_say_what_went_wrong_for_each_kind_of_miss():
+    y = fake(fail={"CCC"}, empty={"DDD"})
+    reasons = {}
+    pull_prices(list(y.prices) + ["ZZZ"], y.download, lambda t: None, sleep=nosleep, reasons=reasons)
+    assert "only empty (NaN) closes" in reasons["CCC"] and "empty price series" in reasons["DDD"]
+    assert "no rows" in reasons["ZZZ"] and all("fallback had no data" in r for r in reasons.values())
+
+
+def test_a_fallback_that_raises_is_recorded_not_fatal():
+    y = fake(fail={"CCC"})
+
+    def boom(t):
+        raise ConnectionError("openbb down")
+
+    reasons = {}
+    prices, _ = pull_prices(list(y.prices), y.download, boom, sleep=nosleep, reasons=reasons)
+    assert "CCC" not in prices and "OpenBB fallback raised ConnectionError: openbb down" in reasons["CCC"]
+
+
+def test_lagging_pa_ticker_is_refetched_and_newer_bars_replace_the_old():
+    prices = {"AIR.PA": series(), "MC.PA": series(), "OR.PA": series(), "SU.PA": series(), "AAA": series()}
+    y = fake(prices=prices, lag={"SU.PA": 3}, lag_heals={"SU.PA"})
+    reasons = {}
+    got, source = pull_prices(list(prices), y.download, sleep=nosleep, reasons=reasons)
+    assert got["SU.PA"][0].index[-1] == pd.Timestamp(END)        # the second request returned the missing days
+    assert y.called("prices")[1] == ("SU.PA",)                   # only the lagging .PA name, not its peers or the US name
+    assert reasons == {}
+
+
+def test_lag_that_a_refetch_cannot_fix_is_recorded_and_the_old_bars_kept():
+    prices = {"AIR.PA": series(), "MC.PA": series(), "SU.PA": series()}
+    y = fake(prices=prices, lag={"SU.PA": 3})
+    reasons = {}
+    got, _ = pull_prices(list(prices), y.download, sleep=nosleep, reasons=reasons)
+    assert got["SU.PA"][0].index[-1] == pd.Timestamp(END) - pd.offsets.BDay(3)
+    assert "behind its exchange peers" in reasons["SU.PA"] and "no newer bar" in reasons["SU.PA"]
+
+
+def test_lagging_is_judged_against_the_same_exchange_only():
+    d = date
+    late = lagging_tickers({"A": d(2026, 10, 29), "B": d(2026, 10, 29), "C": d(2026, 10, 27),
+                            "X.PA": d(2026, 10, 28), "Y.PA": d(2026, 10, 28)})
+    assert late == {"C": d(2026, 10, 29)}                        # Paris closing a day "earlier" than New York is not lag
+    assert lagging_tickers({"X.PA": d(2026, 10, 28)}) == {}      # a group of one has no peers
+    assert lagging_tickers({"A": d(2026, 11, 20), "B": d(2026, 10, 29), "C": d(2026, 10, 29)}) == {}   # one future-dated bar
+
+
+def test_pull_never_writes_raw_files(tmp_path):
+    y = fake()
+    pull_prices(list(y.prices), y.download, sleep=nosleep)
+    assert list(tmp_path.iterdir()) == []                        # saving stays with cache.save_raw_prices ("x" mode)
+
+
+# ---- DATA-6: fundamentals retry, stale flag, spread ---------------------------------------------------------------
+DAY = 86400.0
+
+
+def test_fundamentals_fetch_is_retried_then_succeeds(tmp_path):
+    y = fake(info_flaky={"AAA": 2})
+    waits, status = [], {}
+    f = fetch_fundamentals(["AAA"], tmp_path / "f.json", fetch_info=y.info, sleep=waits.append, pace=0, status=status, now=1000.0)
+    assert f["AAA"]["currency"] == "USD" and waits == [2.0, 4.0] and status["AAA"]["error"] is None
+
+
+def test_fundamentals_failure_after_retries_has_a_reason_and_no_entry(tmp_path):
+    y = fake(fail={"CCC"})
+    status = {}
+    f = fetch_fundamentals(["CCC"], tmp_path / "f.json", fetch_info=y.info, sleep=nosleep, pace=0, status=status, now=1000.0)
+    assert f == {"CCC": {}} and "failed after 3 attempts" in status["CCC"]["error"] and "404" in status["CCC"]["error"]
+    assert status["CCC"]["stale"] is False and status["CCC"]["age_days"] is None
+
+
+def test_stale_flag_only_when_older_than_the_cache_age_and_not_refreshable(tmp_path):
+    path, y = tmp_path / "f.json", fake()
+    t0 = 1_000_000.0
+    fetch_fundamentals(["AAA", "CCC"], path, fetch_info=y.info, sleep=nosleep, pace=0, now=t0)
+    down = fake(fail={"AAA", "CCC"})                             # the info endpoint is dead from now on
+    status = {}
+    f = fetch_fundamentals(["AAA", "CCC"], path, fetch_info=down.info, sleep=nosleep, pace=0, now=t0 + 7 * DAY, status=status)
+    assert f["AAA"]["currency"] == "USD"                         # old value kept
+    assert status["AAA"]["stale"] is False and status["AAA"]["error"] is not None   # due for refresh, failed, still inside 7 days
+    status = {}
+    fetch_fundamentals(["AAA"], path, fetch_info=down.info, sleep=nosleep, pace=0, now=t0 + 8 * DAY, status=status)
+    assert status["AAA"]["stale"] is True and round(status["AAA"]["age_days"]) == 8 and "404" in status["AAA"]["error"]
+    status = {}
+    fetch_fundamentals(["AAA"], path, fetch_info=y.info, sleep=nosleep, pace=0, now=t0 + 8 * DAY, status=status)
+    assert status["AAA"]["stale"] is False and status["AAA"]["fetched_at"]
+
+
+def test_refreshes_are_spread_over_the_week(tmp_path):
+    names = [f"T{i:03d}" for i in range(348)]
+    y = fake(prices={t: series() for t in names})
+    path, per_night = tmp_path / "f.json", []
+    t0 = 2_000_000.0
+    for night in range(28):
+        before = len(y.called("info"))
+        fetch_fundamentals(names, path, fetch_info=y.info, sleep=nosleep, pace=0, now=t0 + night * DAY)
+        per_night.append(len(y.called("info")) - before)
+    assert per_night[0] == 348 and sum(per_night[1:4]) == 0      # cold start fetches all; nothing is due in the first 3 days
+    later = per_night[4:]
+    assert max(later) <= 100                                     # capped at about 2/7 of the list per night
+    assert sum(1 for n in later if n > 0) >= 15                  # refreshes happen on many different nights
+    status = {}
+    fetch_fundamentals(names, path, fetch_info=y.info, sleep=nosleep, pace=0, now=t0 + 28 * DAY, status=status)
+    assert not any(s["stale"] for s in status.values()) and max(s["age_days"] for s in status.values()) <= 7
+
+
+def test_refresh_age_is_deterministic_and_inside_bounds():
+    ages = {t: data.refresh_age_days(t) for t in (f"T{i}" for i in range(200))}
+    assert set(ages.values()) == {4, 5, 6, 7}
+    assert data.refresh_age_days("AAA") == data.refresh_age_days("AAA") == ages.get("AAA", data.refresh_age_days("AAA"))
+    assert data.refresh_age_days("AAA", 7, 7) == 7
+
+
+def test_requests_are_paced_across_threads(tmp_path):
+    y = fake(prices={f"T{i}": series() for i in range(5)})
+    waits = []
+    fetch_fundamentals(list(y.prices), tmp_path / "f.json", fetch_info=y.info, sleep=waits.append, pace=0.25, workers=4, now=1.0)
+    assert len(waits) >= 3 and all(0 < w <= 1.0 + 1e-6 for w in waits)    # threads queue up behind the pacer instead of bursting
+
+
+def test_unreadable_cache_is_kept_aside_and_rebuilt(tmp_path):
+    path = tmp_path / "f.json"
+    path.write_text('{"AAA": {"ts": 1, "d"')                     # a half-written file from an older, non-atomic version
+    f = fetch_fundamentals(["AAA"], path, fetch_info=fake().info, sleep=nosleep, pace=0, now=1000.0)
+    assert f["AAA"]["currency"] == "USD" and list(tmp_path.glob("f.json.bad-*"))
+    assert "AAA" in __import__("json").loads(path.read_text())

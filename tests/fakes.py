@@ -13,6 +13,10 @@ Failure modes (each mimics what the real source does, not an idealised error):
   no_currency  fundamentals come back without "currency".
   fx / index   a currency or index symbol not in the dict returns None (absent pair or index).
   down       the whole batch download raises (network down); the per-ticker fallback still runs.
+  flaky      n: the first n download() calls raise (a rate-limited / dropped batch); later calls work.
+  lag_heals  tickers in `lag` whose newest bars appear when they are asked for again (a re-fetch fixes the lag).
+  fail_first tickers that come back all-NaN the first time and fine the second time.
+  info_flaky {ticker: n}: the first n info() calls for that ticker raise (fundamentals retry).
   tz         a time zone such as "America/New_York": every series gets a tz-aware index, like Yahoo's history().
 """
 from __future__ import annotations
@@ -50,7 +54,8 @@ class FakeYahoo:
     def __init__(self, prices: dict, *, fail=(), empty=(), lag: dict | None = None, nan_tail: dict | None = None,
                  fallback: dict | None = None, fund: dict | None = None, no_currency=(), fx: dict | None = None,
                  index: dict | None = None, news: dict | None = None, earnings: dict | None = None,
-                 down: bool = False, tz: str | None = None):
+                 down: bool = False, tz: str | None = None, flaky: int = 0, lag_heals=(), fail_first=(),
+                 info_flaky: dict | None = None):
         self.prices = {t: _as_bars(v) for t, v in prices.items()}
         self.fail, self.empty, self.no_currency = set(fail), set(empty), set(no_currency)
         self.lag, self.nan_tail = dict(lag or {}), dict(nan_tail or {})
@@ -58,6 +63,9 @@ class FakeYahoo:
         self.fund, self.fx, self.index = dict(fund or {}), dict(fx or {}), dict(index or {})
         self.news_items, self.earnings_data = dict(news or {}), dict(earnings or {})
         self.down, self.tz = down, tz
+        self.flaky, self.lag_heals, self.fail_first = flaky, set(lag_heals), set(fail_first)
+        self.info_flaky = dict(info_flaky or {})
+        self._served: dict[str, int] = {}
         self.calls: list[tuple[str, object]] = []
         self._lock = threading.Lock()                   # fundamentals, earnings and news are fetched from thread pools
 
@@ -78,11 +86,13 @@ class FakeYahoo:
 
     def _primary_bars(self, t: str) -> tuple[pd.Series, pd.Series | None]:
         close, vol = self.prices[t]
-        if t in self.fail:
+        with self._lock:
+            seen = self._served[t] = self._served.get(t, 0) + 1
+        if t in self.fail or (t in self.fail_first and seen == 1):
             close = pd.Series(np.nan, index=close.index)
         if t in self.empty:
             close, vol = close.iloc[:0], (None if vol is None else vol.iloc[:0])
-        n = self.lag.get(t, 0)
+        n = 0 if (t in self.lag_heals and seen > 1) else self.lag.get(t, 0)
         if n:
             close, vol = close.iloc[:-n], (None if vol is None else vol.iloc[:-n])
         k = self.nan_tail.get(t, 0)
@@ -97,6 +107,11 @@ class FakeYahoo:
         self._log("prices", tuple(tickers))
         if self.down:
             raise FakeNetworkError("download failed: network unreachable")
+        with self._lock:
+            boom = self.flaky > 0
+            self.flaky -= boom
+        if boom:
+            raise FakeNetworkError("download failed: 429 too many requests")
         return {t: self._primary_bars(t) for t in tickers if t in self.prices}
 
     def fallback_bars(self, ticker: str, start: str, end: str):
@@ -113,13 +128,19 @@ class FakeYahoo:
         self._log("info", ticker)
         if ticker in self.fail:
             raise FakeNetworkError(f"404 for {ticker}")
+        with self._lock:
+            left = self.info_flaky.get(ticker, 0)
+            if left:
+                self.info_flaky[ticker] = left - 1
+        if left:
+            raise FakeNetworkError(f"429 for {ticker}")
         d = {**HEALTHY, "currency": currency_for(ticker), **self.fund.get(ticker, {})}
         if ticker in self.no_currency:
             d.pop("currency", None)
         return d
 
     def fundamentals(self, tickers: list[str], cache_path: Path) -> dict:
-        return fetch_fundamentals(tickers, cache_path, fetch_info=self.info)
+        return fetch_fundamentals(tickers, cache_path, fetch_info=self.info, sleep=lambda s: None)
 
     def fx_last(self, symbol: str) -> float | None:
         self._log("fx", symbol)

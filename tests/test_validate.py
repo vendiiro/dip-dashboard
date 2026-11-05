@@ -181,3 +181,15 @@ def test_spike_needs_thin_volume_when_volume_is_known():
     no_vol = [i for i in validate_prices("X", c, TODAY, 4) if i.check == "spike_revert"]
     assert len(no_vol) == 1 and "possible" in no_vol[0].detail                    # without volume it is only a possibility
     assert "spike_revert" not in checks(validate_prices("X", c, TODAY, 4, volume(100, float("nan"))))       # unusable volume: stay quiet, not guess
+
+
+def test_fetch_issues_have_severity_and_plain_detail():
+    from dipdash.validate import fetch_issues
+    reasons = {"AAA": "primary source had no data; used the OpenBB fallback", "CCC": "Yahoo returned no rows for this ticker"}
+    status = {"AAA": {"stale": True, "age_days": 8.2, "error": "RuntimeError: 429"},
+              "BBB": {"stale": False, "age_days": None, "error": "failed after 3 attempts: 404"},
+              "DDD": {"stale": False, "age_days": 1.0, "error": None}}
+    got = {(i.ticker, i.check): i for i in fetch_issues(reasons, {"AAA": object()}, status)}
+    assert got[("AAA", "fetch_failed")].severity == "warn" and got[("CCC", "fetch_failed")].severity == "error"
+    assert "8 days old" in got[("AAA", "fundamentals_stale")].detail and "429" in got[("AAA", "fundamentals_stale")].detail
+    assert got[("BBB", "fundamentals_missing")].severity == "warn" and ("DDD", "fundamentals_stale") not in got

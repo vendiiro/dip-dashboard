@@ -48,3 +48,71 @@ def test_writing_to_an_existing_path_fails_instead_of_overwriting(tmp_path):
 def test_sources_are_kept_apart_and_empty_listing_is_fine(tmp_path):
     save_raw_prices(sample(), "yf", tmp_path, NOW)
     assert list_raw("openbb", tmp_path) == []
+
+
+# ---- atomic JSON writes (fundamentals cache) -------------------------------------------------------------------
+def test_atomic_write_replaces_whole_file_and_leaves_no_temp(tmp_path):
+    import json
+    from dipdash.cache import atomic_write_json
+    p = tmp_path / "sub" / "f.json"
+    atomic_write_json(p, {"a": 1})
+    atomic_write_json(p, {"a": 2})
+    assert json.loads(p.read_text()) == {"a": 2} and [x.name for x in p.parent.iterdir()] == ["f.json"]
+
+
+def test_crash_while_writing_keeps_the_old_file_intact(tmp_path, monkeypatch):
+    import json
+    import os
+    from dipdash import cache
+    p = tmp_path / "f.json"
+    cache.atomic_write_json(p, {"old": True})
+
+    def crash(fd):                                    # the process dies after the temp file is written but before the swap
+        raise OSError("disk unplugged")
+
+    monkeypatch.setattr(os, "fsync", crash)
+    with pytest.raises(OSError):
+        cache.atomic_write_json(p, {"new": "x" * 10_000})
+    assert json.loads(p.read_text()) == {"old": True}             # never half a file
+    assert [x.name for x in tmp_path.iterdir()] == ["f.json"]     # and the temp file is cleaned up
+
+
+def test_crash_during_json_dump_keeps_the_old_file_intact(tmp_path, monkeypatch):
+    import json
+    from dipdash import cache
+    p = tmp_path / "f.json"
+    cache.atomic_write_json(p, {"old": True})
+
+    def half_dump(obj, fh):
+        fh.write('{"new": [1, 2,')                    # half a document reaches the temp file, then the "crash"
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cache.json, "dump", half_dump)
+    with pytest.raises(KeyboardInterrupt):
+        cache.atomic_write_json(p, {"new": 1})
+    assert json.loads(p.read_text()) == {"old": True} and len(list(tmp_path.iterdir())) == 1
+
+
+def test_fundamentals_cache_survives_a_crash_mid_write_and_an_orphan_temp_file(tmp_path, monkeypatch):
+    import os
+    from dipdash import data
+    from fakes import FakeYahoo
+    y = FakeYahoo({"AAA": geometric(30, 0.01), "BBB": geometric(30, 0.01)})
+    path = tmp_path / "fundamentals.json"
+    data.fetch_fundamentals(["AAA"], path, fetch_info=y.info, sleep=lambda s: None, pace=0, now=1000.0)
+    before = path.read_text()
+    (tmp_path / "fundamentals.json.999.tmp").write_text('{"half')            # what a hard kill leaves behind
+    monkeypatch.setattr(os, "replace", lambda *a, **k: (_ for _ in ()).throw(OSError("killed")))
+    with pytest.raises(OSError):
+        data.fetch_fundamentals(["AAA", "BBB"], path, fetch_info=y.info, sleep=lambda s: None, pace=0, now=2000.0)
+    monkeypatch.undo()
+    assert path.read_text() == before
+    f = data.fetch_fundamentals(["AAA", "BBB"], path, fetch_info=y.info, sleep=lambda s: None, pace=0, now=3000.0)
+    assert f["BBB"]["currency"] == "USD"                                       # the next run just works
+
+
+def test_raw_fundamentals_pull_is_never_overwritten(tmp_path):
+    from dipdash.data import save_raw_fundamentals
+    a = save_raw_fundamentals({"AAA": {"ts": 1}}, tmp_path, NOW)
+    b = save_raw_fundamentals({"AAA": {"ts": 2}}, tmp_path, NOW)               # same second
+    assert a != b and a.read_text() != b.read_text()

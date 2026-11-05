@@ -134,6 +134,20 @@ def check_duplicate_listings(universe: list[Stock]) -> list[Issue]:
     return out
 
 
+def fetch_issues(reasons: dict[str, str], prices: dict, fund_status: dict | None = None) -> list[Issue]:
+    """Plain-language issues for failed fetches. `reasons` is filled by data.pull_prices, `fund_status` by
+    data.fetch_fundamentals. A ticker with no bars at all is an error; one that was rescued (fallback, re-fetch) or only lags
+    is a warn; an old fundamentals entry that could not be refreshed is a warn. Not wired into the run yet."""
+    out = [Issue(t, "fetch_failed", "warn" if t in prices else "error", why) for t, why in sorted(reasons.items())]
+    for t, st in sorted((fund_status or {}).items()):
+        if st.get("stale"):
+            out.append(Issue(t, "fundamentals_stale", "warn",
+                             f"fundamentals are {st['age_days']:.0f} days old (cache limit 7) and could not be refreshed: {st.get('error') or 'no reason recorded'}"))
+        elif st.get("error") and st.get("age_days") is None:
+            out.append(Issue(t, "fundamentals_missing", "warn", f"fundamentals could not be fetched: {st['error']}"))
+    return out
+
+
 def validate_run(universe: list[Stock], prices: dict, funds: dict, settings: Settings, today: date) -> list[Issue]:
     issues = check_duplicate_listings(universe)
     for s in universe:

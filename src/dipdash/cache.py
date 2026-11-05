@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import gzip
+import json
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -38,3 +40,24 @@ def load_raw_prices(path: Path | str) -> dict:
 
 def list_raw(source: str, root: Path | str) -> list[Path]:
     return sorted((Path(root) / source).glob("*.csv.gz"))
+
+
+def atomic_write_json(path: Path | str, obj) -> Path:
+    """Write JSON so a reader (or the next run) sees either the old file or the complete new one, never half of it.
+
+    Temp file in the same folder, flush and fsync, then os.replace (atomic on one volume, also on Windows). If anything
+    fails the temp file is removed and the original is untouched. A crash that kills the process leaves at most a stray
+    *.tmp next to the target, which nothing reads."""
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_name(f"{p.name}.{os.getpid()}.tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(obj, fh)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, p)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+    return p
