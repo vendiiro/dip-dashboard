@@ -36,7 +36,7 @@ def day_name(iso: str | None) -> str:
 
 
 STANDING_CAVEAT = ("So far no tested version of this screen has done better than chance on data it had not seen (see docs/decisions.md). "
-                   "A flag says only that a stock fell and passed the checks; it says nothing about what the price does next. "
+                   "A flag says only that a stock fell. The check results describe its latest fundamentals, and nothing here says what the price does next. "
                    "Treat the list as a place to start reading.")
 
 
@@ -188,8 +188,8 @@ def build_digest(payload: dict, settings: Settings, *, previous_asof: str | None
     w(f"**Falling-knife flags ({len(knives)}).** A dip inside a long downtrend: below a {'falling ' if settings.falling_knife.below_200d_falling else ''}200-day average and at least "
       f"{settings.falling_knife.drawdown_52w:.0%} under the 52-week high. These are a different situation from a short dip.")
     for r in knives:
-        w(f"- {r['t']} ({clean_text(r['name'])}): 5-day {pct(r['r5'])}, {pct(r['dd52'])} from the 52-week high, quality {r['q'] if r['q'] is not None else '–'}.")
-    w(f"\n**Dips with fewer checks passed ({len(low)}):** " + (", ".join(f"{r['t']} (q {r['q']})" for r in low) or "none") + ".")
+        w(f"- {r['t']} ({clean_text(r['name'])}): 5-day {pct(r['r5'])}, {pct(r['dd52'])} from the 52-week high, quality score {r['q'] if r['q'] is not None else '–'}.")
+    w(f"\n**Dips with fewer checks passed ({len(low)}):** " + (", ".join(f"{r['t']} (quality score {r['q']})" for r in low) or "none") + ".")
     w(f"**{SETUP_LABELS[NO_FUNDAMENTALS]} ({len(nofund)}):** " + (", ".join(r["t"] + (f" ({UNRELIABLE_TEXT})" if r.get("q_status") == "distorted" else "") for r in nofund) or "none") + ".\n")
 
     # ---- 6. headlines (untrusted)

@@ -101,7 +101,7 @@ def test_other_flagged_dips_are_grouped_by_setup():
     rows = [row("KN", FALLING_KNIFE, dd52=-0.5), row("LOW", LOW_QUALITY, q=17), row("NOF", NO_FUNDAMENTALS, q=None)]
     other = build_digest(payload(rows), S).split("## Other flagged dips")[1].split("## Headlines")[0]
     assert "Falling-knife flags (1)" in other and "KN (KN Inc): 5-day −8.0%, −50.0% from the 52-week high" in other
-    assert "Dips with fewer checks passed (1):** LOW (q 17)" in other and "Dip, no fundamentals (1):** NOF" in other
+    assert "Dips with fewer checks passed (1):** LOW (quality score 17)" in other and "Dip, no fundamentals (1):** NOF" in other
 
 
 def test_distorted_no_fundamentals_rows_read_data_looks_unreliable():
@@ -246,6 +246,8 @@ def test_standing_caveat_always_present(tmp_path):
         text = build_digest(payload([row("AAA")]), S, backtest_line=line)
         assert STANDING_CAVEAT in text
     assert "done better than chance on data it had not seen" in STANDING_CAVEAT
+    assert "A flag says only that a stock fell. The check results describe its latest fundamentals" in STANDING_CAVEAT
+    assert "passed the checks" not in STANDING_CAVEAT
 
 
 def test_history_dates_and_previous_data_date(tmp_path):
