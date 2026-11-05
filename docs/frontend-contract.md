@@ -37,12 +37,18 @@ The "Used by" column says which file would break: `browser` = `tests/test_browse
 | `id:droplab` | browser | Label of the minimum drop slider (hidden under the default rules) |
 | `id:q` | browser, visual | Search box |
 | `id:ctltoggle` | browser, visual | Phone "Filters" button that opens the controls |
+| `id:ctlsum` | browser | Summary on that button, e.g. "All dips · All · quality score ≥ 60" |
 | `id:dqbtn` | browser | Data-quality badge button (also shows "N stock(s) failed to draw"; wording for stocks without price data is "N without price data") |
 | `id:dqpanel` | browser | Data-quality panel opened by `#dqbtn` |
 | `id:stale` | browser | Stale-data banner element (FE-3) |
 | `id:fail` | browser, visual | Visible failure alert (FE-4) |
 | `id:hist` | browser | Histogram of today's moves |
 | `id:sect` | browser | Sector breakdown chart |
+| `id:defs` | browser | The `<details>` that holds the definitions; closed by default at every width. Links to `#def-...` open it |
+| `id:def-q` | browser | Quality score definition; target of the "Definitions" link in the brief |
+| `id:def-setup` | browser | Setup label definition (opened by `#def-setup` links and URLs) |
+| `id:def-res` | browser | Definition of "5d move vs index (residual)" |
+| `id:def-beta` | browser | The one plain-words definition of beta |
 
 ## Hooks by `data-testid`
 
@@ -50,13 +56,16 @@ The "Used by" column says which file would break: `browser` = `tests/test_browse
 |---|---|---|
 | `testid:stale` | browser | The stale banner, visible only when prices are over 2 weekdays old on a non-demo page |
 | `testid:fail` | browser | The failure alert |
-| `testid:tile-quality` | browser | Dips-meeting-the-check-thresholds tile; its `.big` equals the rows ranked `Quality dip` (shown as "Dips meeting the check thresholds") |
+| `testid:tile-quality` | browser | Dips-meeting-the-check-thresholds tile; its `.big` equals the rows ranked `Quality dip` (shown as "Dips meeting the check thresholds"); its `.foot` starts "N of M dips", where M is the "All dips" count |
 | `testid:tile-new` | browser | New-since-yesterday tile; chips equal the rows marked new |
 | `testid:tile-knife` | browser | Falling-knife tile |
 | `testid:tile-market` | browser | Market-context tile |
 | `testid:tile-chip` | browser | One ticker chip inside a tile |
 | `testid:tile-chip-more` | browser | The "+N more" button of a tile |
 | `testid:new-badge` | browser | The NEW badge in a row or card |
+| `testid:defs` | browser | The Definitions `<details>` (same element as `#defs`) |
+| `testid:defs-toggle` | browser | Its `<summary>` ("Definitions", at least 40 px tall) |
+| `testid:foot-always` | browser | Sources and "Not investment advice", always visible outside the toggle |
 | `testid:cards-more` | browser | "Show all N stocks" button under the phone cards |
 
 ## Data attributes

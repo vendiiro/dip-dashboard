@@ -480,6 +480,7 @@ def test_default_order_is_size_of_drop_and_user_sort_still_works(browser, demo_h
 
 def test_footer_explains_scored_distorted_and_net_margin(browser, demo_html):
     page, _ = open_page(browser, demo_html)
+    page.click("[data-testid=defs-toggle]")                                           # the definitions are closed until asked for
     foot = page.inner_text("footer").lower()
     for need in ("scored on n/6", "distorted", "above 100%", "net margin above 0", "listed as missing, not as failed", "definitions, not tests", "return on equity", "score-based label"):
         assert need in foot
@@ -553,4 +554,68 @@ def test_alert_badge_shows_setup_text_keyed_on_the_enum(browser, demo_html):
 def test_hide_knives_label_is_a_40px_target(browser, demo_html):
     page, _ = open_page(browser, demo_html)
     assert page.locator("label[for=hideknife]").bounding_box()["height"] >= 40
+    page.close()
+
+
+def test_definitions_toggle_is_closed_and_keeps_sources_and_advice_visible(browser, demo_html):
+    for w, h in ((1280, 900), (390, 844)):
+        page, errors = open_page(browser, demo_html, w, h)
+        tog = page.locator("[data-testid=defs-toggle]")
+        assert tog.inner_text() == "Definitions" and tog.bounding_box()["height"] >= 40
+        assert page.evaluate("document.getElementById('defs').open") is False       # closed by default on both widths
+        assert page.locator("#def-setup").is_hidden() and page.locator("#def-res").is_hidden()
+        always = page.locator("[data-testid=foot-always]")
+        assert always.is_visible() and "Not investment advice" in always.inner_text() and "Sources" in always.inner_text()
+        tog.click()
+        assert page.locator("#def-setup").is_visible()
+        assert page.evaluate("document.documentElement.scrollWidth - innerWidth") <= 0
+        assert errors == []
+        page.close()
+
+
+def test_definition_links_open_the_toggle_and_scroll_to_the_entry(browser, demo_html):
+    page, errors = open_page(browser, demo_html, 390, 844)
+    page.click("#brief a[href='#def-q']")                                             # the "see Definitions" link in the brief
+    assert page.evaluate("document.getElementById('defs').open") is True
+    assert page.locator("#def-q").is_visible() and page.evaluate("document.getElementById('def-q').getBoundingClientRect().top < innerHeight")
+    page.close()
+    page, _ = open_page(browser, demo_html + "#def-setup", 1280, 900)                 # a direct link opens it too
+    assert page.evaluate("document.getElementById('defs').open") is True and page.locator("#def-setup").is_visible()
+    page.evaluate("document.getElementById('defs').open = false; location.hash = '#def-beta'")
+    pw.expect(page.locator("#def-beta")).to_be_visible()
+    assert errors == []
+    page.close()
+
+
+def test_residual_label_is_plain_and_beta_is_defined_once(browser, demo_html):
+    page, _ = open_page(browser, demo_html)
+    page.click("#colbtn")
+    heads = [h.lower() for h in page.locator("#head th").all_inner_texts()]     # the header is upper-cased by CSS
+    assert any("5d move vs index (residual)" in h for h in heads) and not any("resid." in h for h in heads)
+    page.click("[data-testid=defs-toggle]")
+    names = page.locator("footer dt").all_inner_texts()
+    assert "5d move vs index (residual)" in names and names.count("Beta") == 1 and "5d resid." not in names
+    assert "In plain words" in page.inner_text("#def-res") and "moves with its index" in page.inner_text("#def-beta")
+    page.locator("#body tr.row").first.click()
+    page.click("td.detail button.more")
+    detail = page.inner_text("td.detail")
+    assert "5d move vs index (residual)" in detail and "Resid. in std devs" not in detail and "5d resid." not in detail
+    page.close()
+
+
+def test_quality_tile_reconciles_with_the_all_dips_count(browser, demo_html):
+    page, _ = open_page(browser, demo_html)
+    dips = page.evaluate("DATA.rows.filter(r => __dipView(r.t).rank > 0).length")
+    big = page.locator("[data-testid=tile-quality] .big").inner_text()
+    foot = page.locator("[data-testid=tile-quality] .foot").inner_text()
+    assert foot.startswith(f"{big} of {dips} dips")
+    page.click("#show button[data-v=dips]")
+    assert page.inner_text("#tabletitle") == f"All dips · {dips}"
+    page.close()
+
+
+def test_phone_filters_summary_says_quality_score(browser, demo_html):
+    page, _ = open_page(browser, demo_html, 390, 844)
+    assert "quality score ≥ " in page.inner_text("#ctlsum") or "quality score ≥ " in page.text_content("#ctlsum")
+    assert "quality ≥" not in page.text_content("#ctlsum")
     page.close()

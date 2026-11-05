@@ -215,10 +215,18 @@ svg .tick{stroke:var(--line)} svg .axis{stroke:var(--line-strong)}
 .tip{position:fixed;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12px;padding:6px 8px;border-radius:6px;max-width:260px;z-index:20;line-height:1.4}
 .tip .num{font-family:var(--f-data);font-size:12px}
 
-footer{color:var(--ink-2);font-size:13px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;border-top:1px solid var(--line);padding-top:16px}
+footer{color:var(--ink-2);font-size:13px;border-top:1px solid var(--line);padding-top:16px;display:grid;gap:16px}
 footer dl{margin:0;display:grid;gap:6px;align-content:start}
 footer dt{font-weight:600;color:var(--ink)}
-footer dd{margin:0}
+footer dd{margin:0;scroll-margin-top:12px}
+footer .defs>summary{display:flex;align-items:center;gap:8px;min-height:44px;padding:0 14px;border:1px solid var(--line-strong);border-radius:8px;cursor:pointer;font-weight:600;color:var(--ink);list-style:none;width:max-content;max-width:100%}
+footer .defs>summary::-webkit-details-marker{display:none}
+footer .defs>summary::before{content:'›';display:inline-block;transition:transform .15s}
+footer .defs[open]>summary::before{transform:rotate(90deg)}
+footer .defs>summary:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+footer .defgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:16px}
+footer .endgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+footer dd.hit{background:var(--line);border-radius:4px}
 
 @media (max-width:900px){
   .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -328,7 +336,10 @@ footer dd{margin:0}
     </div>
   </div>
 
-  <footer aria-label="Definitions">
+  <footer aria-label="Definitions, sources and notes">
+    <details class="defs" id="defs" data-testid="defs">
+    <summary data-testid="defs-toggle">Definitions</summary>
+    <div class="defgrid">
     <dl>
       <dt>Dip</dt><dd id="def-dip"></dd>
       <dt>Quality score</dt><dd id="def-q"></dd>
@@ -343,14 +354,19 @@ footer dd{margin:0}
       <dt>RSI</dt><dd>14-day Relative Strength Index, 0–100. Under 30 means the stock has fallen fast relative to its recent moves.</dd>
       <dt>Vol ×</dt><dd>Today’s volume divided by the average of the previous 20 days.</dd>
       <dt>Trigger alerts</dt><dd>Plain notices that a research condition turned true at the latest close, for example the close moving back above its 20-day average, RSI(14) moving back above 30, a new 60-day low, or an earnings date coming up. Each fires once, when the condition changes from false to true. They use daily closes only, the thresholds are untested defaults you can change in config/alerts.toml, and nothing here predicts returns or suggests an action.</dd>
-      <dt>5d resid.</dt><dd>The 5-day move left after removing what the stock’s own index would explain, using the stock’s usual sensitivity to it (beta, estimated from the previous year of daily moves and excluding the last 5 days; capped between 0 and 3). A large negative number means the drop is larger than the index move and the stock’s usual sensitivity would explain. Beta comes from one year of one stock’s data and is noisy (about ±0.2–0.3); stocks with a negative estimate are floored at 0, so they get no market adjustment. It describes today’s move only; it has not been backtested and is not a signal.</dd>
+      <dt>5d move vs index (residual)</dt><dd id="def-res">The part of the stock’s 5-day move that its index does not explain. In plain words: the index move is taken out first, scaled by the stock’s usual sensitivity to it (beta, defined next), and what is left is shown. A large negative number means the stock fell by more than the index and its usual sensitivity would explain. The “in std devs” figure expresses it in units of the stock’s own normal daily noise. It describes today’s move only; it has not been backtested and is not a signal. Not the same as “5d vs index”, which is the plain difference without the beta adjustment.</dd>
+      <dt>Beta</dt><dd id="def-beta">How strongly a stock usually moves with its index: 1.0 means about the same size of move, 1.5 means about one and a half times as large, 0 means no link. It is estimated from the previous year of daily moves, excluding the last 5 days, so it is noisy (about ±0.2–0.3). Values are kept between 0 and 3: a negative estimate is floored at 0, so that stock gets no index adjustment.</dd>
       <dt>Earnings tag</dt><dd>Shown when a company reported within the last 5 trading days or reports within the next 10. A drop right after a report is a different situation from a drop with no news. Dates come from a free source, can be missing or off by a day, and are not point-in-time, so they are never used in the backtest.</dd>
       <dt>5d vs index</dt><dd>The stock’s 5-day move minus the move of its own country’s index where one is configured (matched by ticker suffix), otherwise its regional index, otherwise STOXX 600. Index types are mixed: the DAX is a total-return index (it includes dividends) and the Stockholm and Oslo indices are all-share, not large-cap. A big negative number means the drop is not just the market.</dd>
     </dl>
+    </div>
+    </details>
+    <div class="endgrid" data-testid="foot-always">
     <dl>
       <dt>Sources</dt><dd id="def-src"></dd>
       <dt>Not investment advice</dt><dd>This is an educational research tool. It lists screen results (candidates to research), not advice. A price drop alone does not show that a company is in good shape. Read the news and filings to judge whether the cause is temporary.</dd>
     </dl>
+    </div>
   </footer>
 </main>
 <div class="tip" id="tip" hidden></div>
@@ -517,6 +533,21 @@ $('def-src').textContent = DATA.demo ? 'Synthetic demo data.' : 'Daily adjusted 
 // Chart width in px: the drawing is as wide as the space it gets, so text keeps its size on a phone.
 const chartW = (max, reserve) => Math.max(260, Math.min(max, innerWidth - reserve));
 
+// ---------- definitions toggle: links to #def-... open it first ----------
+const defs = $('defs');
+function openDef(id) {
+  const t = id && document.getElementById(id); if (!t || !defs.contains(t)) return false;
+  defs.open = true;
+  document.querySelectorAll('footer dd.hit').forEach(x => x.classList.remove('hit')); t.classList.add('hit');
+  t.scrollIntoView({block: 'start'}); return true;
+}
+document.addEventListener('click', e => {
+  const a = e.target.closest && e.target.closest('a[href^="#def-"]'); if (!a) return;
+  if (openDef(a.getAttribute('href').slice(1))) { e.preventDefault(); history.replaceState(null, '', a.getAttribute('href')); }
+});
+window.addEventListener('hashchange', () => openDef(location.hash.slice(1)));
+if (location.hash) openDef(location.hash.slice(1));
+
 // ---------- tooltip ----------
 const tip = $('tip');
 function showTip(e, nodes) { tip.replaceChildren(...nodes); tip.hidden = false; const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8), y = Math.min(e.clientY + 14, innerHeight - tip.offsetHeight - 8); tip.style.left = x + 'px'; tip.style.top = y + 'px'; }
@@ -586,7 +617,8 @@ function brief(all) {
   const h = el('h2', null, 'Today in brief'); h.id = 'brief-h';
   h.append(el('span', 'sub'));
   const sub = h.lastChild; sub.append(el('span', 'dot', ' · '), 'a description of the latest close, not a forecast.'); const rest = el('span', 'subrest', ' Dip and quality counts follow the window and quality settings; the rest covers all screened stocks.'); sub.append(rest);
-  const p1 = el('p', null, `${dips.length} of ${all.length} screened stocks are flagged as dips; ${qd.length} of them meet the check thresholds (see Definitions)${newQ.length ? ' and ' + newQ.length + ' ' + (newQ.length === 1 ? 'is' : 'are') + ' new since the previous close' : ''}.`);
+  const p1 = el('p'), dl = el('a', null, 'Definitions'); dl.href = '#def-q';
+  p1.append(`${dips.length} of ${all.length} screened stocks are flagged as dips; ${qd.length} of them meet the check thresholds (see `, dl, `)${newQ.length ? ' and ' + newQ.length + ' ' + (newQ.length === 1 ? 'is' : 'are') + ' new since the previous close' : ''}.`);
   const p2 = el('p');
   const ix = (DATA.indices || []).slice(0, 2).filter(i => i.r1 != null);
   const r5s = all.map(r => r.r5).filter(v => v != null).sort((a, b) => a - b);
@@ -637,7 +669,7 @@ function alertsPanel() {
 // ---------- filters toggle (phone) ----------
 function ctlSummary() {
   const pressed = id => { const b = document.querySelector('#' + id + ' [aria-pressed="true"]'); return b ? (b.dataset.label || b.textContent).trim() : ''; };
-  $('ctlsum').textContent = [pressed('show'), pressed('region'), 'quality ≥ ' + $('qmin').value].filter(Boolean).join(' · ');
+  $('ctlsum').textContent = [pressed('show'), pressed('region'), 'quality score ≥ ' + $('qmin').value].filter(Boolean).join(' · ');
 }
 $('ctltoggle').addEventListener('click', () => {
   const open = $('controls').classList.toggle('open'); $('ctltoggle').setAttribute('aria-expanded', String(open));
@@ -646,7 +678,7 @@ $('ctltoggle').addEventListener('click', () => {
 // ---------- tiles ----------
 function tiles(all) {
   const box = $('tiles'); box.replaceChildren();
-  const qd = all.filter(r => vw(r).rank === 4), kn = all.filter(r => vw(r).label === 'Falling knife');
+  const dipsN = all.filter(r => vw(r).rank > 0).length, qd = all.filter(r => vw(r).rank === 4), kn = all.filter(r => vw(r).label === 'Falling knife');
   const newQ = qd.filter(r => wasQualityDip(r) === false);
   const mk = (id, lab, n, foot, chips) => {
     const t = el('div', 'tile'); t.dataset.testid = id; t.append(el('div', 'lab', lab), el('div', 'big', String(n)));
@@ -660,7 +692,7 @@ function tiles(all) {
     }
     if (foot) t.append(el('div', 'foot', foot)); box.append(t);
   };
-  mk('tile-quality', 'Dips meeting the check thresholds', qd.length, `${$('win').value === 'any' ? 'Dip under the default rules' : 'Dip on the chosen window'}, score ≥ ${$('qmin').value}, net margin above 0`, qd.map(r => r.t));
+  mk('tile-quality', 'Dips meeting the check thresholds', qd.length, `${qd.length} of ${dipsN} dips · ${$('win').value === 'any' ? 'default rules' : 'chosen window'}, quality score ≥ ${$('qmin').value}, net margin above 0`, qd.map(r => r.t));
   mk('tile-new', 'New since yesterday', newQ.length, newQ.length ? 'Started meeting the check thresholds with the latest close' : 'Same dips meeting the check thresholds as the previous close', newQ.map(r => r.t));
   mk('tile-knife', 'Falling-knife flags', kn.length, 'Dipping inside a long downtrend', kn.map(r => r.t));
   const t = el('div', 'tile'); t.dataset.testid = 'tile-market'; t.append(el('div', 'lab', 'Market context'));
@@ -728,7 +760,7 @@ const COLS = [
   {k: 'price', l: 'Price', dir: -1, cell: r => { const td = el('td', 'n', r.price == null ? '–' : r.price.toFixed(2)); if (r.ccy) td.append(el('span', 'nm', ' ' + r.ccy)); return td; }},
   {k: 'r1', l: '1d', dir: 1, cell: pctCell('r1')}, {k: 'r5', l: '5d', dir: 1, cell: pctCell('r5')},
   {k: 'x5', l: '5d vs index', dir: 1, cell: pctCell('x5'), tip: 'The stock’s 5-day move minus its own country’s (or region’s) index move'},
-  {k: 'res5', l: '5d resid.', dir: 1, more: true, cell: pctCell('res5'), tip: 'The 5-day move left over after removing what the stock’s own index and its usual sensitivity to it (beta) would explain. Beta comes from the previous year, excluding the last 5 days.'},
+  {k: 'res5', l: '5d move vs index (residual)', dir: 1, more: true, cell: pctCell('res5'), tip: 'The part of the 5-day move the index does not explain: the index move, scaled by the stock’s usual sensitivity to it (beta), is taken out first. Beta is estimated from the previous year, excluding the last 5 days.'},
   {k: 'r21', l: '1m', dir: 1, more: true, cell: pctCell('r21')},
   {k: 'dd52', l: 'vs 52w high', dir: 1, cell: pctCell('dd52')}, {k: 'vs200', l: 'vs 200d avg', dir: 1, more: true, cell: pctCell('vs200')},
   {k: 'rsi', l: 'RSI', dir: 1, cell: r => el('td', 'n ' + (r.rsi != null && r.rsi < 30 ? 'down' : ''), r.rsi == null ? '–' : r.rsi.toFixed(0))},
@@ -934,10 +966,10 @@ function detail(r) {
   const KEY = ['5d move vs', 'Forward P/E', 'Trailing P/E', 'Market cap (USD)', 'Sector', 'Next earnings'];   // the rest sits behind "More context"
   [[r.idx ? '5d move vs ' + r.idx : '5d move vs index' + (r.x5 == null && r.idx_why ? ' (' + r.idx_why + ')' : ''), r.x5 == null ? '–' : pct(r.x5)], ['Forward P/E', r.fpe == null ? '–' : r.fpe.toFixed(1)], ['Trailing P/E', r.tpe == null ? '–' : r.tpe.toFixed(1)],
    ['Market cap (USD)', mc && mc.value != null ? big(mc.value) : '–'], ['Sector', r.sector || '–'], ['From 20-day high', pct(r.dd20)], ['5d move in std devs', r.z5 == null ? '–' : r.z5.toFixed(1)],
-   ['5d resid.', r.res5 == null ? '–' : pct(r.res5)], ['Resid. in std devs', r.res5z == null ? '–' : r.res5z.toFixed(1)],
+   ['5d move vs index (residual)', r.res5 == null ? '–' : pct(r.res5)], ['5d move vs index (residual), in std devs', r.res5z == null ? '–' : r.res5z.toFixed(1)],
    ['Beta' + (r.beta_side === 'cap' ? ' (capped at 3)' : r.beta_side === 'floor' ? ' (floored at 0)' : ''), r.beta == null ? '–' : r.beta.toFixed(2) + (r.beta_side && r.beta_raw != null ? ' (est. ' + r.beta_raw.toFixed(2) + ')' : '')],
    ['Last earnings', earnText(r, 'last')], ['Next earnings', earnText(r, 'next')]]
-    .forEach(([a, b]) => { const keep = KEY.some(k => a.startsWith(k)); const row = el('div', keep ? 'kvx' : 'kvx extra'); row.append(el('span', null, a), el('span', null, b)); if (!keep) row.hidden = true; kv.append(row); });
+    .forEach(([a, b]) => { const keep = KEY.some(k => a.startsWith(k)) && !a.includes('(residual)'); const row = el('div', keep ? 'kvx' : 'kvx extra'); row.append(el('span', null, a), el('span', null, b)); if (!keep) row.hidden = true; kv.append(row); });
   p3.append(kv);
   { const more = el('button', 'more', 'More context'); more.type = 'button'; more.setAttribute('aria-expanded', 'false');
     more.onclick = e => { e.stopPropagation(); const ex = more.getAttribute('aria-expanded') !== 'true'; more.setAttribute('aria-expanded', String(ex)); kv.querySelectorAll('.extra').forEach(x => { x.hidden = !ex; }); more.textContent = ex ? 'Less context' : 'More context'; };
