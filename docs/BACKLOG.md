@@ -37,10 +37,10 @@ Reviews: stats-reviewer on RES-1 and RES-7; wording-guard on the RES-1 caveat te
 | FE-3 + FE-4 + FE-7 | Stale-data banner ("data is from Fri 31 Oct; the nightly run may have failed"); visible error message plus `<noscript>` if drawing fails; small bugs (end dot always red, `.foot` unstyled in detail, brief claims to follow all filters, chart width on resize, currency on chart axis) | ui-builder | template.html | M | browser tests with an old payload and a broken row; 4 screenshots | todo |
 | FE-13 | Visual-regression screenshots: default, detail, filters, empty, stale, print states, with font routing and a pixel diff against baselines; `docs/frontend-contract.md` listing the DOM ids tests depend on | ui-builder (after FE-3) | scripts/screenshots.py, tests/visual/, docs/frontend-contract.md | M | a planted colour change is flagged | todo |
 | RES-4 | One pre-registration and trial registry (`registry.py`: register before computing, one trial schema, a ledger of periods already viewed); all three runners use it | backtest-analyst | registry.py, backtest_run.py, scripts/run_feature_experiment.py, scripts/run_forecast_calibration.py | M | a runner that computes before registering fails a test | todo |
-| RES-2 | Quality score honesty: show "scored on n/6"; add a `distorted` status (ROE above 100%, or ROE and D/E both missing with positive debt, which suggests negative equity); add a `must_pass` list in settings, empty until Iiro chooses | screen-logic | quality.py, config/settings.toml [quality], tests/test_quality.py | M | known-answer tests: negative equity cannot reach 100; label counts on the snapshot reported as descriptive only | blocked: Iiro decision D1 |
+| RES-2 | Quality score honesty: show "scored on n/6"; add a `distorted` status (ROE above 100%, or ROE and D/E both missing with positive debt, which suggests negative equity); add a `must_pass` list in settings, empty until Iiro chooses | screen-logic | quality.py, config/settings.toml [quality], tests/test_quality.py | M | known-answer tests: negative equity cannot reach 100; label counts on the snapshot reported as descriptive only | steps 1-3 done 2026-11-05 (D1 answered; `must_pass` default `net_margin_positive`); RES-11 page part done: neutral label, sort by size of drop, "Dips meeting the check thresholds" |
 | OPS-6 + OPS-7 | `tasks.py` (stdlib, Windows and Linux): `demo`, `test`, `test-browser`, `shots`, `check`. Pre-commit guards: a wording scan (buy now, sell, price target, will recover) and a block on staged `data/`, `output/`, `.env` | test-engineer | tasks.py, .pre-commit-config.yaml, scripts/check_wording.py | S-M | `python tasks.py check` green; a planted "buy now" is rejected | todo |
-| OPS-10 + OPS-8 | Topic index for `docs/decisions.md` (or one file per decision) so parallel appends stop conflicting; a short "working in parallel" section in CLAUDE.md pointing to AGENTS.md | docs-steward | docs/decisions*, CLAUDE.md | M | every old entry present exactly once | blocked: Iiro approves the CLAUDE.md text |
-| DATA-10 | `run_daily.bat`: one retry 20 minutes after exit code 2; rotate `run.log` at about 5 MB | ops-runner | scripts/run_daily.bat | S | Windows only: Iiro runs it once | todo |
+| OPS-10 + OPS-8 | Topic index for `docs/decisions.md` (or one file per decision) so parallel appends stop conflicting; a short "working in parallel" section in CLAUDE.md pointing to AGENTS.md | docs-steward | docs/decisions*, CLAUDE.md | M | every old entry present exactly once | done (D5 A approved 2026-11-04; Rule 4 is in CLAUDE.md) |
+| DATA-10 | `run_daily.bat`: one retry 20 minutes after exit code 2; rotate `run.log` at about 5 MB | ops-runner | scripts/run_daily.bat | S | Windows only: Iiro runs it once | done (retry and rotation present in the .bat; Windows run still Iiro's) |
 
 ## Wave 3: structure that makes later changes cheap
 
@@ -69,7 +69,7 @@ Reviews: stats-reviewer on RES-1 and RES-7; wording-guard on the RES-1 caveat te
 
 | ID | Task | Owner | Locks | Size | Check | Status |
 |---|---|---|---|---|---|---|
-| RES-11 | A written claims contract (`docs/claims.md`): neutral setup labels such as "Dip, passes 4 of 5 scored checks"; default sort never by score; a generated "What testing found" box; more banned phrases ("likely", "rebound", "undervalued"). Then integrator (digest, alerts ranking) and ui-builder (page) apply it | docs-steward, then integrator and ui-builder | docs/claims.md, digest.py, alerts.py, src/web/ | M | tests assert the box matches the registry and the default sort is not by score | blocked: Iiro decision D2 |
+| RES-11 | A written claims contract (`docs/claims.md`): neutral setup labels such as "Dip, passes 4 of 5 scored checks"; default sort never by score; a generated "What testing found" box; more banned phrases ("likely", "rebound", "undervalued"). Then integrator (digest, alerts ranking) and ui-builder (page) apply it | docs-steward, then integrator and ui-builder | docs/claims.md, digest.py, alerts.py, src/web/ | M | tests assert the box matches the registry and the default sort is not by score | D2 decided B; page part done 2026-11-05; claims.md, digest and alerts parts open |
 | RES-5 | Forward ledger: every night appends what was flagged (spec and universe hash); a script scores matured rows at 5/21/63 days. A true holdout without survivorship; needs years for power, stated plainly | backtest-analyst (ledger module, scorer), integrator (nightly hook) | ledger.py, scripts/score_ledger.py, then cli.py | M | append-only and idempotent tests; synthetic matured row | todo |
 | RES-10 | Survivorship: `config/delisted.csv` where history can be found, plus a pre-registered stress bound (how much loser removal would cancel the estimate) | backtest-analyst, universe-curator | config/delisted.csv, scripts/run_backtest.py, backtest_report.py | L | spec lists the delisted names; bound matches a hand computation | todo |
 | DATA-9 | Raw-data retention script (dry run by default; archive, never delete without approval) | data-engineer | scripts/raw_retention.py | S-M | tmp_path test keeps the newest 60 days untouched | blocked: Iiro decision D3 |
@@ -79,10 +79,21 @@ Reviews: stats-reviewer on RES-1 and RES-7; wording-guard on the RES-1 caveat te
 ## Decisions needed from Iiro
 
 - **D1 (RES-2):** which quality checks must pass, whatever the share. For example "net margin above 0". This is a definition, not a tested filter, because free fundamentals are not point-in-time.
-- **D2 (RES-11):** rename "Quality dip" to a neutral label such as "Dip, passes n of m checks", and stop sorting candidates by score by default.
+- **D2 (RES-11): decided B** (closed). Neutral label "Dip, passes n of m checks"; candidates not sorted by score by default.
 - **D3 (DATA-9):** raw-data retention policy, for example keeping every pull for 60 days and then one per week, archived rather than deleted.
 - **D4 (DATA-2):** what to do with tickers `verify_universe.py` flags (delisted, renamed, under 20B USD). Nothing is removed without your yes.
-- **D5 (OPS-8):** approve the short "working in parallel" section for CLAUDE.md.
+- **D5 (OPS-8): closed.** Option A approved 2026-11-04; the section is Rule 4 in CLAUDE.md.
+
+## Follow-ups after RES-2 (added 2026-11-05)
+
+| ID | Task | Owner | Status |
+|---|---|---|---|
+| FU-1 | Regenerate stale samples: `docs/sample-output/digest_example_midsession_2026-11-02.md` (old headings, quality column, old caveat at line ~84), `snapshots/2026-11-04/latest/digest.md` and `daily_review_example_2026-11-02.md` | ops-runner | todo |
+| FU-2 | Phone Filters summary says lowercase "quality ≥ N" at `template.html` ~640 and prose at ~625: use "quality score". Phone baselines must be remade | ui-builder | todo |
+| FU-3 | `docs/payload.md` lines ~76/89/90/180 reader-facing wording; enum values untouched | integrator | todo |
+| FU-4 | `TESTING.md` ~line 63 still describes the old plain-share Intel 67 example; reword after confirming RES-2 behaviour | docs-steward | todo |
+| FU-5 | Optional: pass sector to V3 only if Iiro asks (decided 2026-11-05: keep disclosure only) | screen-logic / backtest-analyst | parked |
+| FU-6 | `CLAUDE.md` line 1 and line 45 still say "quality-dip dashboard" / "quality score": needs Iiro's approval | docs-steward | blocked: Iiro approval |
 
 ## Not verified by the audits
 Anything needing Yahoo or OpenBB (the sandbox is blocked), Windows behaviour, runtime for 348 tickers, and the ticker

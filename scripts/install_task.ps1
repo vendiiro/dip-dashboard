@@ -36,6 +36,6 @@ $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -RunOnlyIfNetworkAv
             -ExecutionTimeLimit (New-TimeSpan -Hours 2) -MultipleInstances IgnoreNew
 if ($WakeToRun) { $settings.WakeToRun = $true }
 Register-ScheduledTask -TaskName $name -Action $action -Trigger $trigger -Settings $settings `
-    -Description "Quality-dip screen: refresh dashboard and digest after the market close" -Force | Out-Null
+    -Description "Dip screen: refresh dashboard and digest after the market close" -Force | Out-Null
 Write-Host "Registered task ${name}: Tue-Sat at $Time (local time), runs $bat"
 Write-Host "Test it now:   Start-ScheduledTask -TaskName $name     then read output\run.log"
