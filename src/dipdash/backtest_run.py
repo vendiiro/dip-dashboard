@@ -48,6 +48,8 @@ def clean_bars(close: pd.Series, volume: pd.Series | None) -> tuple[pd.Series, i
     return c[keep], int((~keep).sum())
 
 
+# NOTE: if the backtest ever starts using these keys, remove them from this exclusion first, or the spec hash will not change
+# and the frozen spec would silently misdescribe the test.
 QUALITY_LABEL_KEYS = ("must_pass", "distorted_roe_above")
 
 
