@@ -9,4 +9,5 @@ arch==8.0.0
 matplotlib==3.11.2
 pytest==9.1.1
 playwright==1.63.0
+pillow==12.3.0   # pixel diff in tests/visual (FE-13); supports Python 3.11 to 3.14
 pre-commit==4.7.0   # runs the two guards before a commit, the same on Windows and Linux (OPS-7)

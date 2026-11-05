@@ -48,6 +48,15 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: python -m playwright install --with-deps chromium
       - run: python -m pytest -q -rs tests/test_browser.py
+      - run: python -m pytest -q -rs tests/visual
+      - name: Visual diffs (actual and diff images)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-diffs
+          path: output/visual/
+          retention-days: 14
+          if-no-files-found: warn
       - name: Screenshots of the demo page
         if: always()
         run: |
