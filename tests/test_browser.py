@@ -286,8 +286,9 @@ def test_filter_counts_chips_reset_and_detail_order(browser, demo_html):
 def variant_html(tmp_path, demo_html, js, name="v.html"):
     """A copy of the demo page whose DATA is changed by `js` (run right after `const DATA = ...;`)."""
     from pathlib import Path
-    from urllib.parse import unquote, urlparse
-    html = Path(unquote(urlparse(demo_html).path)).read_text(encoding="utf-8")
+    from urllib.parse import urlparse
+    from urllib.request import url2pathname
+    html = Path(url2pathname(urlparse(demo_html).path)).read_text(encoding="utf-8")
     i = html.index("const DATA = ")
     j = html.index("\n", i)
     out = tmp_path / name
@@ -376,8 +377,9 @@ def test_a_broken_chart_leaves_the_detail_and_the_table(browser, demo_html, tmp_
 
 def test_a_data_file_that_is_not_valid_javascript_still_shows_a_message(browser, demo_html, tmp_path):
     from pathlib import Path
-    from urllib.parse import unquote, urlparse
-    html = Path(unquote(urlparse(demo_html).path)).read_text(encoding="utf-8")
+    from urllib.parse import urlparse
+    from urllib.request import url2pathname
+    html = Path(url2pathname(urlparse(demo_html).path)).read_text(encoding="utf-8")
     i = html.index("const DATA = ")
     bad = tmp_path / "cut.html"
     bad.write_text(html[:i + 200] + html[html.index("\n", i):], encoding="utf-8")    # payload cut short mid-line

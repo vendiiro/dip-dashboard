@@ -19,6 +19,8 @@ Failed:
 The 7 test_browser.py failures share one error: `OSError: [Errno 22] Invalid argument: '\\C:\\Users\\K..ytt..j..\\...\\demo.html'`
 (a Windows path with non-ASCII characters turned into a bad path inside the tests). Pre-existing, not a line-ending issue, not fixed.
 
+Fixed (task 1b): not the non-ASCII folder itself. Two test helpers did `Path(unquote(urlparse(uri).path))`, which gives `C:...` on Windows; now `url2pathname`. Test-only change, production code unaffected; tests/test_browser.py 74 passed.
+
 Skipped:
 - tests/visual/test_visual.py (whole module, 1 skip): baselines were made on Linux, this is Windows. Baselines not regenerated.
 
