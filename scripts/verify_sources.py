@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""Re-run the M2 data verification and write docs/m2-data-verification.md. Needs network and the project venv.
+"""Re-run the M2 data verification and write a Markdown report. Needs network and the project venv.
 
-    .venv/bin/python scripts/verify_sources.py
+    .venv/bin/python scripts/verify_sources.py                      # writes output/verification/m2-data-verification.md
+    .venv/bin/python scripts/verify_sources.py --out docs/m2-data-verification.md   # deliberately refresh the tracked doc
+    .venv/bin/python scripts/verify_sources.py --help
 
 Compares Yahoo (yfinance) with exchange-operator data served through OpenBB 5.0.0:
 US closes vs Nasdaq and Cboe, Nordic closes and market caps vs Nasdaq Nordic, fundamentals ratios vs Nasdaq.
 Continental European lines have no independent source in the default OpenBB bundle; they only get the internal checks.
 """
+import argparse
 import json
 import re
 import sys
@@ -19,13 +22,29 @@ warnings.filterwarnings("ignore")
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-import pandas as pd  # noqa: E402
-import yfinance as yf  # noqa: E402
+DEFAULT_OUT = ROOT / "output" / "verification" / "m2-data-verification.md"   # output/ is not committed
+TRACKED_DOC = ROOT / "docs" / "m2-data-verification.md"
 
-from dipdash import openbb_source  # noqa: E402
-from dipdash.crosscheck import compare_closes  # noqa: E402
-from dipdash.data import fetch_prices, fetch_raw_closes  # noqa: E402
-from dipdash.validate import validate_prices  # noqa: E402
+
+def parse_args(argv=None):
+    ap = argparse.ArgumentParser(
+        description="Re-run the M2 data verification (Yahoo vs Nasdaq, Cboe and Nasdaq Nordic) and write a Markdown report. "
+                    "Needs network access and the project venv. Educational research tool; no investment advice.")
+    ap.add_argument("--out", type=Path, default=DEFAULT_OUT,
+                    help=f"where to write the report (default: {DEFAULT_OUT.relative_to(ROOT)}). The tracked doc "
+                         f"{TRACKED_DOC.relative_to(ROOT)} is only overwritten if you pass it here.")
+    return ap.parse_args(argv)
+
+
+def _load_deps():
+    """Network-capable imports live here so that --help and parse_args work without them."""
+    global pd, openbb_source, compare_closes, fetch_prices, fetch_raw_closes, validate_prices
+    import pandas as pd  # noqa: F401
+    from dipdash import openbb_source  # noqa: F401
+    from dipdash.crosscheck import compare_closes  # noqa: F401
+    from dipdash.data import fetch_prices, fetch_raw_closes  # noqa: F401
+    from dipdash.validate import validate_prices  # noqa: F401
+
 
 US = ["AAPL", "MSFT", "JNJ", "KO", "JPM"]
 NORDIC = ["NOKIA.HE", "SAMPO.HE", "KNEBV.HE", "ERIC-B.ST", "NOVO-B.CO"]
@@ -120,7 +139,9 @@ def continental_rows():
     return rows
 
 
-def main():
+def main(argv=None):
+    args = parse_args(argv)
+    _load_deps()
     obb = openbb_source._client()
     parts = [f"# M2 data verification\n\nGenerated {datetime.now():%Y-%m-%d %H:%M} by `scripts/verify_sources.py` "
              f"(openbb {version('openbb')}, yfinance {version('yfinance')}). Window: {START} to {END}. "
@@ -141,7 +162,8 @@ def main():
               "No source reachable from the build container covers these lines (OpenBB's default bundle has none; Stooq is blocked by the network policy). "
               "Only the internal checks ran.\n",
               md(continental_rows(), ["Ticker", "Bars (1y)", "Last bar", "Largest 1-day move", "Validation findings"]), ""]
-    out = ROOT / "docs" / "m2-data-verification.md"
+    out = args.out if args.out.is_absolute() else Path.cwd() / args.out
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(parts), encoding="utf-8")
     print(f"wrote {out}")
 

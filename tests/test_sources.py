@@ -405,3 +405,25 @@ def test_stale_fundamentals_reach_status_and_become_fundamentals_stale_issues(tm
     assert status["CCC"]["stale"] is False
     got = [i for i in fetch_issues({}, {"AAA": 1, "CCC": 1}, status) if i.check == "fundamentals_stale"]
     assert [(i.ticker, i.severity) for i in got] == [("AAA", "warn")] and "9 days old" in got[0].detail
+
+
+# ---- scripts/verify_sources.py: --help works offline, default output is not the tracked doc ----
+def _verify_script():
+    return Path(__file__).resolve().parents[1] / "scripts" / "verify_sources.py"
+
+
+def test_verify_sources_help_exits_zero_without_network():
+    r = subprocess.run([sys.executable, str(_verify_script()), "--help"], capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0
+    assert "--out" in r.stdout
+
+
+def test_verify_sources_default_out_is_not_under_docs():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("verify_sources_under_test", _verify_script())
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    default = mod.parse_args([]).out
+    assert "docs" not in default.relative_to(mod.ROOT).parts
+    assert default.relative_to(mod.ROOT).parts[0] == "output"
+    assert mod.parse_args(["--out", "docs/m2-data-verification.md"]).out == Path("docs/m2-data-verification.md")
