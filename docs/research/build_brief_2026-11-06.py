@@ -39,8 +39,8 @@ WEB_LINES = [
      "The report names no single cause; it points to midterm-election uncertainty and to heavy selling in AI-linked "
      "memory, chip-equipment and data-centre stocks.",
      "https://investinglive.com/stocks/nasdaq-100-suffers-worst-day-since-2020/", "published 2026-11-05"),
-    ("Wed 2026-11-04", "AMD reported fiscal Q3 adjusted EPS $2.09 vs $1.95 expected (LSEG) and revenue $13.38B vs "
-     "$13.09B; shares were up about 4% before the open that morning. The next day the screen shows AMD -17.3%.",
+    ("Tue 2026-11-03", "AMD reported (results after the close; article dated 2026-11-04) fiscal Q3 adjusted EPS $2.09 vs $1.95 expected (LSEG) and revenue $13.38B vs "
+     "$13.09B; shares were up about 4% before the open on 2026-11-04. On 2026-11-05 the screen shows AMD -17.3%.",
      "https://www.cnbc.com/2026/11/04/amd-earnings-analysts-ai-growth.html", "published 2026-11-04"),
     ("Fri 2026-10-30", "Chip shares fell sharply: Intel -28.6%, AMD -10.9%, Micron -5.3%, Nvidia -4.2%; the Philadelphia "
      "Semiconductor Index fell 7.2% (S&P 500 -1.8%). Cited causes include Intel's weak outlook and AI-spending worries. "
@@ -201,7 +201,7 @@ def extra_low(m: dict, f: dict, ern: str) -> str:
 QS_DIP = ("1) Is the cause specific to the company, or shared by its sector or the whole market (S&P 500 fell 4.4% that day)? "
           "2) Do the latest filing and guidance support the quality checks, or are the figures out of date? "
           "3) How does the valuation compare with the company's own history and its peers?")
-QS_LOW = ("1) What would a fall like its past worst one mean for a holder, and could you sit through it? "
+QS_LOW = ("1) What would a fall like its past worst one mean for someone holding it, and could you sit through it? "
           "2) What growth does the current valuation price in? "
           "3) How much revenue depends on one product, customer or region?")
 
@@ -234,7 +234,7 @@ def build(args) -> None:
         closes = fetch_closes(pool + ["^GSPC", "^STOXX"])
         if cache:
             closes.to_pickle(cache)
-    fetched = datetime.now().strftime("%Y-%m-%d %H:%M")
+    fetched = datetime.fromtimestamp(cache.stat().st_mtime if cache and cache.exists() else time.time()).strftime("%Y-%m-%d %H:%M")
 
     res = {}
     for t in pool:
@@ -271,6 +271,7 @@ def build(args) -> None:
       "smaller past falls (drawdown); a stock can have low past volatility and still fall hard, and a past record does not "
       "predict the future. Every name below shows its numbers so you can judge; NVDA and GOOGL are included because you asked, "
       "whatever their numbers are.\n")
+    A("Method: volatility uses daily log returns, beta uses weekly simple returns over about 5 years, and European betas compare local-currency prices with ^STOXX.\n")
     A("Terms: **volatility** = yearly standard deviation of daily returns (typical size of swings). **Max drawdown** = worst "
       "peak-to-low fall in the 5 years. **Current drawdown** = distance below the 5-year high today. **Beta** = how much the "
       "stock moved per 1% move of its index in weekly data (S&P 500 for US names, STOXX 600 for European names; 1 = moves with the index).\n")
@@ -287,7 +288,7 @@ def build(args) -> None:
     A("## 2a. Dips to research (from the newest complete screen)\n")
     A(f"Rule: the first {MAX_DIPS} rows of the screen's candidate table (dip flag and check score of at least 60), largest "
       f"5-day drop first. {len(dips)} candidates were flagged; **{left_out} were left out** of this list (see output/digest.md). "
-      "Many chip names fell together on one day, so these are not independent.\n")
+      "The 10 are simply the largest 5-day drops, not a quality ranking. Many chip names fell together on one day, so these are not independent.\n")
     A("| Ticker | Name | 1 day | 5 days | Checks passed | Falling-knife flag | Data warnings | Next report | Flagged because |\n|---|---|---|---|---|---|---|---|---|")
     for r in top:
         t = r["ticker"]
@@ -303,7 +304,7 @@ def build(args) -> None:
     A("")
 
     A("## 2b. Large companies with lower measured risk, plus GOOGL and NVDA\n")
-    A(f"Selection rule (fixed before looking at results): from `config/universe.csv`, keep companies with market cap of at least "
+    A(f"Selection rule (set by the author before the 5-year figures were computed; this cannot be verified from the files): from `config/universe.csv`, keep companies with market cap of at least "
       f"{MIN_CAP_USD / 1e9:.0f}B USD (cached fundamentals, converted at the {TODAY} rate) and at least {MIN_CHECKS} scored quality checks passed "
       f"(of the six project checks; checks without data are not scored); require about 4 or more years of bars. "
       f"That leaves **{len(ranked)}** names. Rank by lowest 5-year volatility and take the first {N_LOWEST}; add GOOGL and NVDA. "
@@ -328,8 +329,8 @@ def build(args) -> None:
         hi = "above" if m["vol5y"] > med5 else "below"
         A(f"- **{t}**: 5-year volatility {pct(m['vol5y'])} is {hi} the eligible median ({pct(med5)}); worst 5-year fall {pct(m['maxdd'])}; "
           f"today {pct(m['curdd'])} from its 5-year high. Shown as measured, not as a recommendation.")
-    A("- The screen lists NVDA under \"Dip, no fundamentals\" with the setup \"data looks unreliable\"; treat its quality checks here with extra care "
-      "and verify them in the company's own filings.\n")
+    A("- The screen puts NVDA in 'Dip, no fundamentals' with the label 'data looks unreliable' because its return on equity (117%) is above the "
+      "100% level the project treats as distorted. The 6 of 6 above counts that figure as passed; check it in the filings.\n")
     A("Questions to research for every name above: " + QS_LOW + "\n")
     A("Name-specific notes (free-source P/E figures can look odd, for example a very low or very high trailing value; check them in the filings):\n")
     for t in shown_b:
@@ -341,7 +342,7 @@ def build(args) -> None:
     A("- **Not advice, not a tested rule.** Nothing here has been backtested as an entry rule; earlier project work found no out-of-sample edge for the dip rules.")
     A("- **Survivorship bias.** The universe is today's list of large companies; names that fell out of favour or were removed are absent, so past volatility and drawdown here look milder than the whole market's history.")
     A("- **Fundamentals are not point-in-time.** Quality checks use current free-source figures (cached up to 7 days) that can be stale or wrong; they say nothing about what was known in the past.")
-    A("- **Past volatility does not predict future safety.** Low measured risk can end in one day, as the 2026-11-05 market move showed. Beta is computed against one index and changes over time.")
+    A("- **Past volatility does not predict future safety.** Low measured risk can end quickly: on 2026-11-05 the S&P 500 fell 4.4% in one day. Beta is computed against one index and changes over time.")
     A("- **Market cap** is converted to USD at the 2026-11-06 rate; European prices and fundamentals have no independent cross-check.")
     A("- **Coverage:** ROG.SW and BK returned no prices and AVB has no recent bars, so they are missing from the screen.")
     A(f"- **Reproduce:** `docs/research/build_brief_2026-11-06.py` (reads the main checkout read-only; web lines are listed in the script).\n")
