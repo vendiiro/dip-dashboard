@@ -1,0 +1,8 @@
+{
+  "platform": "Linux-6.18.44-fc-v236-x86_64-with-glibc2.39",
+  "chromium": "153.0.8010.12",
+  "fixed_today": "2026-11-05",
+  "tolerance_per_channel": 8,
+  "max_changed_fraction": 0.001,
+  "fonts": "system fonts, Google Fonts stubbed"
+}

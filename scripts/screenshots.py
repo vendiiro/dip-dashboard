@@ -5,6 +5,12 @@
 
 Writes four PNGs, prints console errors and horizontal overflow, and exits 1 if either is found.
 Setup once on Windows: pip install playwright && playwright install chromium
+Visual regression (FE-13): named states against committed baselines, see tests/visual/vrlib.py and docs/frontend-contract.md
+
+    python scripts/screenshots.py --states all --compare tests/visual/baseline     # exit 1 if a state changed; diffs in output/visual/
+    python scripts/screenshots.py --states default,detail --compare tests/visual/baseline
+    python scripts/screenshots.py --states all --update                            # remake the baselines (by hand, never in CI)
+
 Set DIP_CHROMIUM=/path/to/chrome to use a browser you already have (the cloud build container does).
 """
 import argparse
@@ -20,13 +26,63 @@ SCHEMES = ("light", "dark")
 IGNORE = ("fonts.googleapis.com", "fonts.gstatic.com", "ERR_BLOCKED", "ERR_NAME_NOT_RESOLVED", "ERR_CONNECTION", "ERR_TUNNEL")
 
 
+def run_states(a) -> int:
+    import tempfile
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tests" / "visual"))
+    import vrlib
+    names = None if a.states == "all" else a.states.split(",")
+    unknown = [n for n in names or [] if n not in vrlib.STATES]
+    if unknown:
+        print(f"unknown state(s) {unknown}; known: {', '.join(vrlib.STATES)}")
+        return 2
+    if not (a.compare or a.update):
+        print("give --compare DIR or --update")
+        return 2
+    if vrlib.pillow_missing():
+        print("Pillow is needed to compare images: pip install pillow")
+        return 2
+    if a.compare and not vrlib.forced() and vrlib.skip_reason():
+        print(f"compare skipped: {vrlib.skip_reason()}")
+        return 0
+    shots = vrlib.all_shots(names)
+    bad, rendered = 0, {}
+    with tempfile.TemporaryDirectory() as tmp, sync_playwright() as pw:
+        browser = vrlib.launch(pw)
+        html = vrlib.build_fixed_demo(Path(tmp) / "demo.html")
+        for s in shots:
+            png, errors = vrlib.render(browser, html, s, Path(tmp))
+            rendered[s.name] = png
+            if a.update:
+                print(f"{s.name:24s} rendered")
+                continue
+            verdict, frac = vrlib.check(s, png, Path(a.compare))
+            errors = [e for e in errors if not e.startswith("dashboard: could not draw")]
+            bad += verdict != "ok" or bool(errors)
+            print(f"{s.name:24s} {verdict:8s} {frac:7.3%} console_errors={len(errors)}")
+        if a.update:
+            vrlib.update_baselines(shots, rendered, browser.version, vrlib.BASELINE)
+            print(f"wrote {len(shots)} baselines to {vrlib.BASELINE}; look at them before you commit")
+        browser.close()
+    if bad:
+        print(f"{bad} state(s) changed; images in {vrlib.OUT}")
+    return 1 if bad else 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("html")
+    ap.add_argument("html", nargs="?", help="page to render; with --states the fixed demo page is built instead")
+    ap.add_argument("--states", default="", help="'all' or a comma list of named states (visual regression mode)")
+    ap.add_argument("--compare", default="", help="baseline folder to compare with, e.g. tests/visual/baseline")
+    ap.add_argument("--update", action="store_true", help="rewrite the baselines in tests/visual/baseline from this render")
     ap.add_argument("--out", default="output/screens")
     ap.add_argument("--tag", default="", help="prefix for the PNG names, e.g. demo or live")
     ap.add_argument("--click", default="", help="CSS selector to click before the screenshot")
     a = ap.parse_args()
+    if a.states:
+        return run_states(a)
+    if not a.html:
+        ap.error("give a page, or --states")
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     url = Path(a.html).resolve().as_uri()
