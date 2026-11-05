@@ -463,7 +463,7 @@ def test_setup_label_shows_setup_text_and_keys_on_the_enum(browser, demo_html):
         if badge.count():
             assert text in badge.inner_text()
     assert "Quality dip" not in page.inner_text("#body")                              # the enum is a key, not a label
-    assert page.evaluate("DATA.rows.some(r => /^Dip · passes \\d+ of \\d+ checks$/.test(r.setup_text))")
+    assert page.evaluate("DATA.rows.some(r => /^Dip · passes \\d+ of \\d+ scored checks( \\(\\d+ no data\\))?$/.test(r.setup_text))")
     page.close()
 
 
@@ -481,7 +481,7 @@ def test_default_order_is_size_of_drop_and_user_sort_still_works(browser, demo_h
 def test_footer_explains_scored_distorted_and_net_margin(browser, demo_html):
     page, _ = open_page(browser, demo_html)
     foot = page.inner_text("footer").lower()
-    for need in ("scored on n/6", "distorted", "above 100%", "net margin above 0", "listed as missing, not as failed", "definitions, not tests"):
+    for need in ("scored on n/6", "distorted", "above 100%", "net margin above 0", "listed as missing, not as failed", "definitions, not tests", "return on equity", "score-based label"):
         assert need in foot
     assert not any(w in foot for w in ("top pick", "recommend", "you should buy"))
     page.close()
@@ -492,8 +492,65 @@ def test_distorted_and_no_fundamentals_states_render(browser, demo_html):
     page.evaluate("""() => { const r = DATA.rows.find(x => x.dip && x.q != null && !x.knife); r.q_status = 'distorted'; r.q_why = 'ROE and debt/equity are both missing'; window.__t = r.t; document.getElementById('q').dispatchEvent(new Event('input')); }""")
     t = page.evaluate("window.__t")
     badge = page.locator(f"#body tr.row[data-t='{t}'] .badge")
-    assert "Dip, no fundamentals" in badge.inner_text() and "ROE and debt/equity are both missing" in badge.get_attribute("title")
+    assert "Dip · data looks unreliable" in badge.inner_text() and "ROE and debt/equity are both missing" in badge.get_attribute("title")
+    title = badge.get_attribute("title")
+    assert "no fundamentals" not in title.lower().replace("dip, no fundamentals", "") and "unreliable" in title   # data exists, so the tip must not say it is missing
+    assert "nightly screen labels" not in title
     page.locator(f"#body tr.row[data-t='{t}']").click()
     assert "distorted" in page.inner_text("td.detail").lower()
     assert errors == []
+    page.close()
+
+
+def test_default_sort_note_shows_until_a_column_is_chosen(browser, demo_html):
+    page, _ = open_page(browser, demo_html)
+    note = page.locator("#sortnote")
+    assert note.is_visible() and note.inner_text() == "Sorted by size of drop"
+    assert page.locator("#head th[aria-sort=ascending], #head th[aria-sort=descending]").count() == 0
+    page.click("#head th:has-text('Price')")
+    assert note.is_hidden() and page.locator("#head th[aria-sort=ascending], #head th[aria-sort=descending]").count() == 1
+    page.click("#show button[data-v=all]")                                            # a filter change returns to the default order
+    assert note.is_visible()
+    page.close()
+
+
+def test_neutral_check_threshold_wording_and_title(browser, demo_html):
+    page, _ = open_page(browser, demo_html)
+    assert page.title() == "Dip Screen" and page.inner_text("h1") == "Dip Screen"
+    assert page.locator("[data-testid=tile-quality] .lab").inner_text() == "Dips meeting the check thresholds"
+    assert "meet the check thresholds (see Definitions)" in page.inner_text("#brief")
+    page.click("#show button[data-v=quality]")
+    assert page.inner_text("#tabletitle").startswith("Dips meeting the check thresholds")
+    assert "Dips meeting the check thresholds" in page.inner_text("#activebar")
+    visible = (page.inner_text("main") + " ".join(page.evaluate("[...document.querySelectorAll('[title]')].map(e => e.title)"))).lower()
+    for old in ("quality dip", "quality bar", "pass the quality", "passing the checks", "dip, low quality"):
+        assert old not in visible
+    page.close()
+
+
+def test_label_under_non_default_controls_uses_scored_denominator(browser, demo_html):
+    page, errors = open_page(browser, demo_html)
+    page.select_option("#win", "r5")
+    page.evaluate("() => { const d = document.getElementById('drop'); d.value = 1; d.dispatchEvent(new Event('input')); }")
+    texts = page.evaluate("[...document.querySelectorAll('#body td[data-k=setup] .badge')].map(b => b.textContent)")
+    assert texts and any("scored checks" in t for t in texts)
+    assert not any(" checks" in t and "scored" not in t and "passes" in t for t in texts)
+    assert errors == []
+    page.close()
+
+
+def test_alert_badge_shows_setup_text_keyed_on_the_enum(browser, demo_html):
+    page, errors = open_page(browser, demo_html)
+    n = page.evaluate("(DATA.alerts || []).filter(a => a.context && a.context.setup_text).length")
+    if n:
+        txt = page.inner_text("#alerts")
+        first = page.evaluate("DATA.alerts.find(a => a.context && a.context.setup_text).context.setup_text")
+        assert first in txt and "Quality dip" not in txt
+    assert errors == []
+    page.close()
+
+
+def test_hide_knives_label_is_a_40px_target(browser, demo_html):
+    page, _ = open_page(browser, demo_html)
+    assert page.locator("label[for=hideknife]").bounding_box()["height"] >= 40
     page.close()
