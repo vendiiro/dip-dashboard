@@ -39,7 +39,7 @@ Nightly run (main checkout, read only): `output/run.log` shows `exit code 0` at 
 - Issue counts from `data_quality.csv` (24 rows): 5 error, 4 warn, 15 info.
   - error: `stale` 1 (AVB), `fetch_failed` 2 (BK, ROG.SW), `no_data` 2 (BK, ROG.SW)
   - warn: `fetch_failed` 1 (AVB), `lagging_vs_peers` 1 (AVB), `missing_values` 1 (AVB), `spike_revert` 1 (KNEBV.HE)
-  - info: `crosscheck_ok` 5 (AJG, APH, BLK, CTAS, NOW), `empty_last_bar` 10 (AVB and 9 Nordic/Euronext names whose last bar is 2026-11-04)
+  - info: `crosscheck_ok` 5 (AJG, APH, BLK, CTAS, NOW), `empty_last_bar` 10 (AVB, plus 9 Helsinki `.HE` names: FORTUM, KNEBV, NDA-FI, NESTE, NOKIA, SAMPO, STERV, UPM, WRT1V; the 9 have their last bar on 2026-11-04 and AVB's last bar is 2026-08-14)
 - Coverage: bars 346/348, fundamentals 346/348, earnings 346/348.
 
 ### Step 3: verify_universe (full run, 348 tickers)
@@ -63,21 +63,23 @@ Flagged tickers (33). Market cap is today's value, not point-in-time.
 - **under_20b (19):** UPM.HE, STERV.HE, WRT1V.HE, TEL.OL, MOWI.OL, YAR.OL, CHTR, LULU, GIS, AKZA.AS, SOLB.BR, GALP.LS, TELIA.ST, VNA.DE, SKF-B.ST, DEMANT.CO, COLO-B.CO, CA.PA, RED.MC
 - **name_mismatch (11, expected for brand vs legal names):** AMD, IBM, UPS, SLB (Schlumberger vs SLB N.V.), BMW.DE, MUV2.DE, RMS.PA, BBVA.MC, ITX.MC, SEB-A.ST, AIG
 
-Borderline caps: TELIA.ST 20.0B and TEL.OL 19.9B USD sit right at the 20B line, so they can flip with a small price move.
+Borderline caps: TELIA.ST is 19.99B USD (19,986,072,082) and TEL.OL is 19.90B USD (19,897,546,953). Both sit right at the 20B line, so they can flip with a small price move.
 
 ### Step 4: the three failing tickers (yfinance, one at a time, no changes)
 
-- **BK** (Bank of New York Mellon): `history(period=1mo)` returns 0 rows and yfinance says "possibly delisted; no price data found". `Ticker.info` still returns quoteType EQUITY, exchange NYQ, currency USD, so the listing exists but has no price bars.
-  - Proposal: keep BK in the universe for now, and re-check in a few days? Yes / no.
-- **AVB** (AvalonBay): `history(period=1y)` returns 2 rows: 2026-08-14 with a close of 184.06, and 2026-10-05 with only a dividend and NaN prices. The pipeline already skips AVB via the 4-trading-day rule.
+Raw output, with fetch times in UTC: `output/ticker_diagnosis.txt` (git-ignored). Each ticker was fetched on 2026-11-05 between 22:27:34 and 22:28:00 UTC, with an 8-second pause between tickers. Key lines:
+
+- **BK** (fetched 22:27:34 UTC): `history(period=1y)` rows=0, nan_close=0. yfinance prints "$BK: possibly delisted; no price data found". `info`: quoteType EQUITY, exchange NYQ, longName None, currency None, marketCap None. The listing is known to Yahoo, but it has no price bars and no company details.
+  - Proposal: keep BK in the universe for now and re-check in a few days? Yes / no.
+- **AVB** (fetched 22:27:42 UTC): `history(period=1y)` rows=2, nan_close=1. Rows: `2026-08-14 ... 184.059998 ... Dividends 0.0000 Stock Splits 2.793` and `2026-10-05 ... NaN NaN NaN NaN 0 0.7025 0.000`. `info`: longName "AvalonBay Communities Inc", currency USD, marketCap 26283393024. The 2026-10-05 row has a dividend but no prices. The pipeline already skips AVB via the 4-trading-day rule.
   - Proposal: keep AVB in the universe as it is, since it is already skipped automatically? Yes / no.
-- **ROG.SW** (Roche): Yahoo returns HTTP 404 "Quote not found for symbol: ROG.SW" and 0 rows.
-- **RO.SW** (not in `config/universe.csv`): `history(period=1y)` returns 251 bars with no NaN closes, last bar 2026-11-05, close 399.00 CHF. `info` says longName "Roche Holding AG", shortName "ROCHE I", quoteType EQUITY, exchange EBS, currency CHF, marketCap about 317.9B CHF.
+- **ROG.SW** (fetched 22:27:51 UTC): HTTP 404 `"Quote not found for symbol: ROG.SW"`, then "$ROG.SW: No data found, symbol may be delisted". `history(period=1y)` rows=0, and `info` has no fields.
   - Proposal: replace ROG.SW with RO.SW in `config/universe.csv`? Yes / no. This is a ticker rename, which `common.md` forbids for agents, so it needs Iiro's explicit approval.
+- **RO.SW** (not in `config/universe.csv`; fetched 22:28:00 UTC): `history(period=1y)` rows=251, nan_close=0, last bar `2026-11-05 ... Close 399.000000`. `info`: longName "Roche Holding AG", shortName "ROCHE I", quoteType EQUITY, exchange EBS, currency CHF, marketCap 317909598208.
 
 ### Decisions and concerns
 
 - No config was changed and no ticker was removed or renamed.
 - The brief lists RO.SW as failing, but it is not in the universe and its data is fine. The failing ticker in the universe is ROG.SW.
-- The verify run took several hours of network time under Yahoo's rate limit. The `info` calls with retries dominated the run time.
-- The nightly data-quality `partial_bar` result is 0, so the 2026-11-05 "partial bar" concern from `STATUS.md` does not recur after a full close.
+- The verify run took about 2 minutes 23 seconds (first verified_at 22:22:33 UTC, last 22:24:56 UTC). The `info` calls dominated the run time. The earlier "several hours" note was wrong.
+- The nightly data-quality `partial_bar` result is 0. The brief describes a 16:37 run on 2026-11-05 with 345 `partial_bar` warnings, and that did not recur after the full close.
