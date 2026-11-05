@@ -47,7 +47,7 @@ wording above. Details: `docs/decisions.md` and `docs/plans/decisions.md`.
 4. Decide whether `CLAUDE.md` line 1 ("quality-dip dashboard") and line 45 ("quality score") should be renamed.
 
 ## Known gaps and cleanup
-- Waves 1 and 2 are done in `docs/BACKLOG.md` (updated 2026-11-05), and so are FE-1/FE-2, FE-14, DATA-3/6 and DATA-4/5/8 from waves 3 and 4. FE-11/FE-12 done (the `src/web/` split; the integrator half of FE-11 was dropped as not needed). FE-12 cleanups: duplicate dark tokens removed, 2 redundant CSS rules merged, helpers moved; the class-name clashes `.more` and `.empty` are being fixed now. Open: RES-11 claims/digest/alerts parts, FU-1, FU-5, FU-6.
+- Waves 1 and 2 are done in `docs/BACKLOG.md` (updated 2026-11-05), and so are FE-1/FE-2, FE-14, DATA-3/6 and DATA-4/5/8 from waves 3 and 4. FE-11/FE-12 done (the `src/web/` split; the integrator half of FE-11 was dropped as not needed). FE-12 cleanups: duplicate dark tokens removed, 2 redundant CSS rules merged, helpers moved; the class-name clashes `.more` and `.empty` are fixed (alerts now use `.alerts-more` and `.alerts-empty`). Open: RES-11 claims/digest/alerts parts, FU-1, FU-5, FU-6.
 - The earlier "21,900 DOM nodes" figure was not reproduced; measured on the demo page it is 1053 (desktop) and 647 (phone).
 - D3 (raw-data retention) and D4 (universe check) were answered A on 2026-11-04. DATA-9 and RES-10 are unblocked but not started.
 - Stale samples: `snapshots/2026-11-04/latest/digest.md` and `docs/sample-output/daily_review_example_2026-11-02.md`
