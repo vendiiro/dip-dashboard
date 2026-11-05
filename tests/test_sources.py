@@ -375,3 +375,33 @@ def test_unreadable_cache_is_kept_aside_and_rebuilt(tmp_path):
     f = fetch_fundamentals(["AAA"], path, fetch_info=fake().info, sleep=nosleep, pace=0, now=1000.0)
     assert f["AAA"]["currency"] == "USD" and list(tmp_path.glob("f.json.bad-*"))
     assert "AAA" in __import__("json").loads(path.read_text())
+
+
+# ---- fundamentals status through the live branch ------------------------------------------------------------------
+def test_fake_fundamentals_accepts_status_and_cli_helper_passes_it(tmp_path):
+    from dipdash import cli
+    import inspect
+    assert "status" in inspect.signature(fake().sources().fundamentals).parameters
+    status = {}
+    f = cli._fundamentals(fake().sources(), ["AAA"], tmp_path / "f.json", status)
+    assert f["AAA"]["currency"] == "USD" and status["AAA"]["error"] is None and status["AAA"]["stale"] is False
+
+
+def test_stale_fundamentals_reach_status_and_become_fundamentals_stale_issues(tmp_path, monkeypatch):
+    import json
+    from dipdash import cli
+    from dipdash.validate import fetch_issues
+    path = tmp_path / "fundamentals.json"
+    now = 1_800_000_000.0
+    y = fake(info_flaky={"AAA": 99})                              # AAA's info endpoint is dead; the others work
+    monkeypatch.setattr(data.time, "time", lambda: now)
+    old = now - 9 * DAY
+    entry = {"ts": old, "fetched_at": "2026-10-01T00:00:00+00:00", "d": {"returnOnEquity": 0.2, "currency": "USD"}}
+    path.write_text(json.dumps({"AAA": entry}))
+    status = {}
+    f = cli._fundamentals(y.sources(), ["AAA", "CCC"], path, status)
+    assert f["AAA"]["currency"] == "USD"                           # old value kept
+    assert status["AAA"]["stale"] is True and round(status["AAA"]["age_days"]) == 9 and status["AAA"]["error"]
+    assert status["CCC"]["stale"] is False
+    got = [i for i in fetch_issues({}, {"AAA": 1, "CCC": 1}, status) if i.check == "fundamentals_stale"]
+    assert [(i.ticker, i.severity) for i in got] == [("AAA", "warn")] and "9 days old" in got[0].detail

@@ -139,8 +139,8 @@ class FakeYahoo:
             d.pop("currency", None)
         return d
 
-    def fundamentals(self, tickers: list[str], cache_path: Path) -> dict:
-        return fetch_fundamentals(tickers, cache_path, fetch_info=self.info, sleep=lambda s: None)
+    def fundamentals(self, tickers: list[str], cache_path: Path, status: dict | None = None) -> dict:
+        return fetch_fundamentals(tickers, cache_path, fetch_info=self.info, sleep=lambda s: None, pace=0, status=status)
 
     def fx_last(self, symbol: str) -> float | None:
         self._log("fx", symbol)

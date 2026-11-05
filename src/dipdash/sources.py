@@ -21,8 +21,9 @@ class PriceSource(Protocol):
 
 
 class FundamentalsSource(Protocol):
-    """{ticker: {FUND_KEYS...}} for every ticker asked for (an empty dict when nothing is known), cached at cache_path."""
-    def __call__(self, tickers: list[str], cache_path: Path) -> dict: ...
+    """{ticker: {FUND_KEYS...}} for every ticker asked for (an empty dict when nothing is known), cached at cache_path.
+    When `status` (a dict) is passed it is filled with {ticker: {"stale", "age_days", "fetched_at", "error"}}."""
+    def __call__(self, tickers: list[str], cache_path: Path, *, status: dict | None = None) -> dict: ...
 
 
 class FxSource(Protocol):
@@ -45,7 +46,7 @@ RawCloses = Callable[[str, str, str], "pd.Series | None"]       # (ticker, start
 class Sources:
     """Everything the live branch of cli.main fetches from the network, as one injectable bundle.
 
-    How main wires it: pull_prices(tickers, prices, lambda t: fallback_bars(t, start, end)); fundamentals(tickers, path);
+    How main wires it: pull_prices(tickers, prices, lambda t: fallback_bars(t, start, end)); fundamentals(tickers, path, status=fund_status);
     fetch_fx_to_usd(ccys, fetch_last=fx); fetch_indices(specs, fetch_close=index); load_earnings(..., fetch=earnings);
     build_payload(news_fn=news); the cross-check uses raw_closes as its reference series.
     """
