@@ -48,6 +48,79 @@ def _number(v) -> float | None:
     return x if math.isfinite(x) else None
 
 
+# Must-pass rules are named rules, separate from the six scored checks (the scored margin check uses
+# margin_min, this one is "margin above zero"). A missing or non-finite value is NOT a failure: it is
+# reported in `must_missing`. These are definitions, not tested filters.
+MUST_PASS_RULES: dict[str, tuple[str, Callable[[float], bool]]] = {
+    "net_margin_positive": ("profitMargins", lambda v: v > 0),
+    "fcf_positive": ("freeCashflow", lambda v: v > 0),      # ready for a stricter option, unused by default
+}
+DEFAULT_MUST_PASS: tuple[str, ...] = ("net_margin_positive",)
+DEFAULT_DISTORTED_ROE_ABOVE = 1.0       # ROE above 100% usually means a tiny or negative equity base
+
+Status = str    # "ok" | "thin" | "distorted" | "no_data"
+
+
+@dataclass(frozen=True)
+class QualityResult:
+    score: int | None
+    checks: list[dict]
+    scored: int                 # applicable checks that had data
+    applicable: int             # 6 minus the checks that do not apply to the sector
+    passed: int
+    status: Status
+    distorted_why: str | None
+    must_failed: tuple[str, ...]
+    must_missing: tuple[str, ...]
+
+
+def quality_detail(fund: dict, q: QualitySettings, fx_to_usd: dict[str, float] | None = None,
+                   sector: str | None = None, must_pass: tuple[str, ...] = DEFAULT_MUST_PASS,
+                   distorted_roe_above: float = DEFAULT_DISTORTED_ROE_ABOVE) -> QualityResult:
+    """The quality score plus how much evidence stands behind it.
+
+    `score` and `checks` are exactly what `quality()` returns (the stored score is never altered).
+    Status precedence: no_data (score None) > distorted > thin (scored < applicable) > ok.
+    Distorted: ROE above `distorted_roe_above`, or ROE and debt/equity both missing for a sector where
+    debt/equity applies (suggests negative equity; `totalDebt` is not fetched yet). Unknown must_pass name -> ValueError.
+    """
+    for name in must_pass:
+        if name not in MUST_PASS_RULES:
+            raise ValueError(f"unknown must_pass rule {name!r}; known: {sorted(MUST_PASS_RULES)}")
+    score, checks = quality(fund, q, fx_to_usd, sector)
+    applicable = sum(1 for c in checks if not c.get("na"))
+    scored = sum(1 for c in checks if c["ok"] is not None)
+    passed = sum(1 for c in checks if c["ok"] is True)
+    by_key = {c["key"]: c for c in checks}
+
+    why = None
+    roe, de = by_key["returnOnEquity"], by_key["debtToEquity"]
+    if not roe.get("na") and roe["value"] is not None and roe["value"] > distorted_roe_above:
+        why = f"return on equity {roe['value']:.0%} is above {distorted_roe_above:.0%}"
+    elif not roe.get("na") and not de.get("na") and roe["value"] is None and de["value"] is None:
+        why = "return on equity and debt/equity are both missing (possible negative equity)"
+
+    failed, missing = [], []
+    for name in must_pass:
+        key, rule = MUST_PASS_RULES[name]
+        v = _number(fund.get(key))
+        if v is None:
+            missing.append(name)
+        elif not rule(v):
+            failed.append(name)
+
+    if score is None:
+        status = "no_data"
+    elif why:
+        status = "distorted"
+    elif scored < applicable:
+        status = "thin"
+    else:
+        status = "ok"
+    return QualityResult(score, checks, scored, applicable, passed, status, why,
+                         tuple(failed), tuple(missing))
+
+
 def quality(fund: dict, q: QualitySettings, fx_to_usd: dict[str, float] | None = None,
             sector: str | None = None) -> tuple[int | None, list[dict]]:
     """Return (score 0-100 or None, per-check results).

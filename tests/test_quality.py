@@ -1,7 +1,7 @@
 import pytest
 
 from dipdash.config import QualitySettings
-from dipdash.quality import build_checks, quality
+from dipdash.quality import build_checks, quality, quality_detail
 
 Q = QualitySettings()
 GOOD = {"returnOnEquity": 0.2, "profitMargins": 0.15, "debtToEquity": 80, "freeCashflow": 1e9,
@@ -149,3 +149,137 @@ def test_real_estate_gets_the_relaxed_debt_limit_like_utilities():
     f = {**GOOD, "debtToEquity": 250}
     assert quality(f, Q, sector="Real Estate")[1][2]["ok"] is True
     assert quality(f, Q, sector="Tech")[1][2]["ok"] is False
+
+
+# ---- quality_detail (RES-2): evidence behind the score, must-pass rules, distorted fundamentals -------------
+NEG_EQUITY = {k: v for k, v in GOOD.items() if k not in ("returnOnEquity", "debtToEquity")}
+PROFILES = [GOOD, NEG_EQUITY, {**GOOD, "returnOnEquity": 1.5}, {**GOOD, "profitMargins": -0.05}, {}, BANK,
+            {**GOOD, "freeCashflow": -1, "revenueGrowth": -1}]
+
+
+def test_full_data_is_ok_and_scored_on_six():
+    r = quality_detail(GOOD, Q)
+    assert (r.score, r.scored, r.applicable, r.passed, r.status) == (100, 6, 6, 6, "ok")
+    assert r.must_failed == () and r.must_missing == () and r.distorted_why is None
+
+
+@pytest.mark.parametrize("fund", PROFILES)
+@pytest.mark.parametrize("sector", [None, "Financials", "Utilities"])
+def test_quality_keeps_its_return_and_detail_repeats_it(fund, sector):
+    r = quality_detail(fund, Q, sector=sector)
+    assert quality(fund, Q, sector=sector) == (r.score, r.checks)
+
+
+def test_negative_equity_profile_keeps_raw_100_but_is_distorted():
+    r = quality_detail(NEG_EQUITY, Q)
+    assert (r.score, r.scored, r.applicable, r.status) == (100, 4, 6, "distorted")
+    assert "both missing" in r.distorted_why
+
+
+@pytest.mark.parametrize("roe, status", [(1.5, "distorted"), (1.0000001, "distorted"), (1.0, "ok"), (0.99, "ok")])
+def test_roe_distorted_boundary_is_strictly_above_100_percent(roe, status):
+    assert quality_detail({**GOOD, "returnOnEquity": roe}, Q).status == status
+
+
+def test_distorted_roe_threshold_is_a_parameter():
+    assert quality_detail({**GOOD, "returnOnEquity": 0.6}, Q, distorted_roe_above=0.5).status == "distorted"
+
+
+def test_only_one_of_roe_and_debt_missing_is_thin_not_distorted():
+    r = quality_detail({k: v for k, v in GOOD.items() if k != "returnOnEquity"}, Q)
+    assert (r.status, r.scored) == ("thin", 5)
+    assert quality_detail({k: v for k, v in GOOD.items() if k != "debtToEquity"}, Q).status == "thin"
+
+
+def test_financials_without_roe_is_not_distorted_and_counts_applicable():
+    r = quality_detail({k: v for k, v in BANK.items() if k != "returnOnEquity"}, Q, sector="Financials")
+    assert r.status == "thin" and r.applicable == 4 and r.scored == 3 and r.distorted_why is None
+    full = quality_detail(BANK, Q, sector="Financials")
+    assert (full.applicable, full.scored, full.status) == (4, 4, "ok")
+
+
+def test_financials_with_roe_and_debt_both_missing_is_not_distorted():
+    # debt/equity does not apply to a bank, so its absence says nothing about equity
+    r = quality_detail({k: v for k, v in BANK.items() if k not in ("returnOnEquity", "debtToEquity")}, Q, sector="Financials")
+    assert r.status != "distorted"
+
+
+def test_status_precedence_no_data_over_distorted_over_thin():
+    assert quality_detail({"returnOnEquity": 5.0}, Q).status == "no_data"      # distorted ROE, but too little data
+    assert quality_detail({}, Q).score is None
+    assert quality_detail({**NEG_EQUITY, "marketCap": None}, Q).status == "distorted"   # 3 scored, distorted beats thin
+
+
+def test_three_checks_with_data_is_thin_two_is_no_data():
+    r = quality_detail({**GOOD, "debtToEquity": None, "freeCashflow": None, "revenueGrowth": None}, Q)
+    assert (r.scored, r.status) == (3, "thin") and r.score == 100
+    r2 = quality_detail({"profitMargins": 0.2, "freeCashflow": 1}, Q)
+    assert (r2.score, r2.status) == (None, "no_data")
+
+
+def test_intc_like_loss_maker_scores_80_but_fails_must_pass():
+    r = quality_detail({**GOOD, "profitMargins": -0.05}, Q)
+    assert r.score == 83 and r.status == "ok" and r.must_failed == ("net_margin_positive",)
+    f = {**GOOD, "profitMargins": -0.05, "returnOnEquity": 0.01}
+    assert quality_detail(f, Q).score == 67
+
+
+@pytest.mark.parametrize("margin, must_ok, scored_ok", [(0.0, False, False), (0.01, True, False), (0.08, True, True), (-1e-9, False, False)])
+def test_net_margin_must_pass_boundary(margin, must_ok, scored_ok):
+    r = quality_detail({**GOOD, "profitMargins": margin}, Q)
+    assert (r.must_failed == ()) is must_ok
+    assert r.checks[1]["ok"] is scored_ok
+
+
+@pytest.mark.parametrize("bad", [None, float("nan"), float("inf"), "n/a"])
+def test_missing_margin_is_listed_not_failed(bad):
+    r = quality_detail({**GOOD, "profitMargins": bad}, Q)
+    assert r.must_failed == () and r.must_missing == ("net_margin_positive",)
+
+
+def test_empty_must_pass_reports_nothing():
+    r = quality_detail({**GOOD, "profitMargins": -0.5}, Q, must_pass=())
+    assert r.must_failed == () and r.must_missing == ()
+    assert quality_detail({**GOOD, "profitMargins": None}, Q, must_pass=()).must_missing == ()
+
+
+def test_unknown_must_pass_rule_raises():
+    with pytest.raises(ValueError, match="unknown must_pass"):
+        quality_detail(GOOD, Q, must_pass=("net_margin_positve",))
+
+
+def test_fcf_rule_exists_but_is_off_by_default():
+    f = {**GOOD, "freeCashflow": -1}
+    assert quality_detail(f, Q).must_failed == ()
+    assert quality_detail(f, Q, must_pass=("fcf_positive",)).must_failed == ("fcf_positive",)
+
+
+def test_negative_equity_cannot_be_labelled_quality_but_keeps_its_score():
+    from dipdash.config import Settings
+    from dipdash.screen import NO_FUNDAMENTALS, QUALITY_DIP, setup_label
+    r = quality_detail(NEG_EQUITY, Q)
+    assert setup_label(True, False, r.score, Settings(), q_ok=not r.must_failed, distorted=r.status == "distorted") == NO_FUNDAMENTALS
+    assert r.score == 100 and NO_FUNDAMENTALS != QUALITY_DIP
+
+
+def test_backtest_v3_input_is_unchanged_by_the_new_rules():
+    """V3_quality_indicative reads only the stored score; labels may change, the V3 event flags may not."""
+    from dataclasses import replace as rep
+    from dipdash.backtest import add_events, build_days
+    from dipdash.config import Settings, Stock
+    from synth import slide, geometric
+    S = Settings()
+    s = rep(S, backtest=rep(S.backtest, start_date="2025-01-01", horizons=(5,)))
+    uni = [Stock(t, t, "US") for t in ("A", "B", "C")]
+    prices = {"A": slide(), "B": slide(daily=-0.03), "C": geometric(260, 0.0005)}
+    ix = geometric(260, 0.0003)
+    funds = {"A": GOOD, "B": NEG_EQUITY, "C": {**GOOD, "profitMargins": -0.05}}
+    old = {t: quality(f, s.quality)[0] for t, f in funds.items()}
+    new = {t: quality_detail(f, s.quality).score for t, f in funds.items()}
+    assert old == new == {"A": 100, "B": 100, "C": 83}
+    d_old = add_events(build_days(prices, uni, {"US": ix, "EU": ix}, s, old), s)
+    d_new = add_events(build_days(prices, uni, {"US": ix, "EU": ix}, s, new), s)
+    assert d_old.equals(d_new) and d_old["ev_V3_quality_indicative"].sum() > 0
+    # the labels DO differ: that is the point of the new rule, and it is invisible to the backtest
+    labels = {t: quality_detail(f, s.quality) for t, f in funds.items()}
+    assert labels["B"].status == "distorted" and labels["C"].must_failed

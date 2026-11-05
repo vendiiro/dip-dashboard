@@ -6,7 +6,7 @@ import pytest
 
 from dipdash.config import DipSettings, FallingKnifeSettings, NewsSettings, QualitySettings, Settings
 from dipdash.screen import (FALLING_KNIFE, LOW_QUALITY, NO_DIP, NO_FUNDAMENTALS, QUALITY_DIP, classify, classify_prev,
-                            dip_reasons, is_dip, is_falling_knife, is_stale, needs_news, setup_label, trading_days_old)
+                            dip_reasons, is_dip, is_falling_knife, is_stale, needs_news, setup_label, setup_text, trading_days_old)
 
 DIP, KNIFE, NEWS, S = DipSettings(), FallingKnifeSettings(), NewsSettings(), Settings()
 
@@ -170,3 +170,71 @@ def test_stale_means_strictly_older_than_the_limit():
 
 def test_a_weekend_run_is_not_stale_for_friday_bars():
     assert not is_stale(date(2026, 10, 30), date(2026, 11, 1), 4)
+
+
+# ---- RES-2: must-pass and distorted fundamentals --------------------------------
+@pytest.mark.parametrize("dip, knife, q", list(itertools.product([False, True], [False, True], QS)))
+def test_truth_table_with_q_ok_true_is_unchanged_and_false_only_demotes_quality(dip, knife, q):
+    assert setup_label(dip, knife, q, S, q_ok=True) == expected_label(dip, knife, q)
+    want = expected_label(dip, knife, q)
+    assert setup_label(dip, knife, q, S, q_ok=False) == (LOW_QUALITY if want == QUALITY_DIP else want)
+
+
+@pytest.mark.parametrize("dip, knife, q", list(itertools.product([False, True], [False, True], QS)))
+@pytest.mark.parametrize("q_ok", [True, False])
+def test_distorted_only_changes_dips_with_a_score(dip, knife, q, q_ok):
+    want = expected_label(dip, knife, q)
+    got = setup_label(dip, knife, q, S, q_ok=q_ok, distorted=True)
+    assert got == (NO_FUNDAMENTALS if want in (QUALITY_DIP, LOW_QUALITY) else want)
+
+
+def test_distorted_outranks_a_failed_must_pass():
+    assert setup_label(True, False, 100, S, q_ok=False, distorted=True) == NO_FUNDAMENTALS
+
+
+def test_failed_must_pass_beats_a_high_score_and_knife_still_wins():
+    assert setup_label(True, False, 100, S, q_ok=False) == LOW_QUALITY
+    assert setup_label(True, True, 100, S, q_ok=False) == FALLING_KNIFE
+
+
+def test_classify_and_classify_prev_take_the_flags():
+    assert classify(DIPPED, 100, S, q_ok=False) == LOW_QUALITY
+    assert classify(DIPPED, 100, S, distorted=True) == NO_FUNDAMENTALS
+    assert classify_prev({"dip": True, "knife": False}, 100, S, q_ok=False) == LOW_QUALITY
+    assert classify_prev({"dip": True, "knife": False}, 100, S, distorted=True) == NO_FUNDAMENTALS
+    assert classify_prev({"dip": True, "knife": False}, 100, S) == QUALITY_DIP
+
+
+def test_intc_like_end_to_end_label():
+    from dipdash.quality import quality_detail
+    good = {"returnOnEquity": 0.2, "profitMargins": 0.15, "debtToEquity": 80, "freeCashflow": 1e9,
+            "revenueGrowth": 0.05, "marketCap": 1e11}
+    r = quality_detail({**good, "profitMargins": -0.05}, S.quality)
+    assert r.score >= S.quality.min_score
+    assert classify(DIPPED, r.score, S, q_ok=not r.must_failed, distorted=r.status == "distorted") == LOW_QUALITY
+    # must_pass = () reproduces today's label
+    r0 = quality_detail({**good, "profitMargins": -0.05}, S.quality, must_pass=())
+    assert classify(DIPPED, r0.score, S, q_ok=not r0.must_failed) == QUALITY_DIP
+
+
+# ---- setup_text (RES-11) -----------------------------------------------------------
+@pytest.mark.parametrize("setup, passed, applicable, text", [
+    (QUALITY_DIP, 5, 6, "Dip · passes 5 of 6 checks"),
+    (LOW_QUALITY, 2, 6, "Dip · passes 2 of 6 checks"),
+    (QUALITY_DIP, 3, 4, "Dip · passes 3 of 4 checks"),          # Financials: 4 applicable
+    (LOW_QUALITY, 0, 6, "Dip · passes 0 of 6 checks"),
+    (NO_DIP, 5, 6, "No dip"),
+    (FALLING_KNIFE, 5, 6, "Falling knife"),
+    (NO_FUNDAMENTALS, None, None, "Dip, no fundamentals"),
+    (NO_FUNDAMENTALS, 4, 6, "Dip, no fundamentals"),
+    (QUALITY_DIP, None, None, "Dip"),
+])
+def test_setup_text(setup, passed, applicable, text):
+    assert setup_text(setup, passed, applicable) == text
+
+
+def test_setup_text_unknown_label_raises_and_words_are_neutral():
+    with pytest.raises(ValueError):
+        setup_text("Strong buy", 5, 6)
+    for lab in (QUALITY_DIP, LOW_QUALITY):
+        assert "quality" not in setup_text(lab, 5, 6).lower()
