@@ -15,14 +15,15 @@ live, and nothing has been run on Iiro's Windows PC.**
 ## What exists now
 | Area | State |
 |---|---|
-| Page (`src/template.html`) | Done on demo data: brief, 4 tiles, filters, sortable table with phone cards, detail panel, two charts, definitions footer, stale/failure/empty states. Light and dark, desktop and phone. Last checks reported 0 console errors, 0 overflow, axe clean. |
+| Page (`src/template.html`, being split into `src/web/`) | Done on demo data: brief, 4 tiles, filters, sticky-header sortable table showing the first 25 rows plus "Show all N", phone cards (only the layout in use is built), detail panel, two charts, collapsible Definitions, stale/failure/empty states. The default table fits at 1024 px. Demo page 4.10 -> 2.26 MB; DOM nodes desktop 1934 -> 1053, phone 2258 -> 647. Light and dark, desktop and phone. Last checks reported 0 console errors, 0 overflow, axe clean. |
 | Wording | Neutral: "Dip · passes 3 of 4 scored checks (2 no data)", "Dips meeting the check thresholds", "Quality score", "Dip · data looks unreliable". Default sort is the size of the drop. No "buy", "sell", "top picks". A wording scan is set up in pre-commit and in the CI workflow. |
 | Screening (`screen.py`, `quality.py`) | Dip rule, falling-knife flag, six-check quality score with "scored on n/6". Net margin above 0 must pass (D1 B). ROE above 100%, or ROE and debt/equity both missing, is "distorted". These are definitions, not tested filters. |
-| Pipeline (`cli.py`, `data.py`, `sources.py`) | OpenBB first, yfinance fallback, typed `Sources` bundle, offline fake Yahoo for tests, data-quality checks, 4-trading-day stale rule. |
-| Digest and alerts | `digest.md` with a fixed caveat; trigger alerts (neutral names such as "RSI back above 30"). |
+| Pipeline (`cli.py`, `data.py`, `sources.py`) | OpenBB first, yfinance fallback, typed `Sources` bundle, offline fake Yahoo for tests, data-quality checks, 4-trading-day stale rule. Price pulls in batches with retry and lag re-fetch; fundamentals cache written atomically; run-level guards (missing FX rate, a whole exchange, fundamentals coverage); partial bars judged by each exchange's close time; coverage table per exchange in the digest and `run_meta.json`. All tested offline only. |
+| Payload (`dashboard.py`) | One shared date axis for all charts and integer-cent prices instead of 252 dates per stock. |
+| Digest and alerts | `digest.md` with a fixed caveat and the coverage table; trigger alerts (neutral names such as "RSI back above 30"). |
 | Research | Event-study backtest, pre-registered feature test, volatility forecast check. One registry for specs, trials and out-of-sample windows. Spec hashes pinned in tests. Result: no tested version beat chance on unseen data. |
 | Scheduling | `scripts/run_daily.bat` (retry after exit code 2, `run.log` rotation) and `scripts/install_task.ps1`. Untested on Windows. |
-| Tests and CI | Last full run (2026-11-05): 907 passed, 3 skipped. 12 pixel-diff baselines in `tests/visual/baseline` (made on Linux). GitHub Actions workflow written; no run is recorded in the repo. |
+| Tests and CI | Last full run (2026-11-05): 1013 passed, 3 skipped. 12 pixel-diff baselines in `tests/visual/baseline` (made on Linux). GitHub Actions workflow written; no run is recorded in the repo. |
 | Agents | 13 agents in `.claude/agents/`, one owner per file (`docs/agents/ownership.csv`, enforced by a test), 3 of them read-only reviewers (stats, wording, UI). One decision per file in `docs/decisions/`. |
 
 ## Decisions made (all by Iiro)
@@ -46,25 +47,21 @@ wording above. Details: `docs/decisions.md` and `docs/plans/decisions.md`.
 4. Decide whether `CLAUDE.md` line 1 ("quality-dip dashboard") and line 45 ("quality score") should be renamed.
 
 ## Known gaps and cleanup
-- Waves 1 and 2 are done in `docs/BACKLOG.md` (updated 2026-11-05). Open there: RES-11 claims/digest/alerts parts, FU-1 to FU-6.
+- Waves 1 and 2 are done in `docs/BACKLOG.md` (updated 2026-11-05), and so are FE-1/FE-2, FE-14, DATA-3/6 and DATA-4/5/8 from waves 3 and 4. Doing: FE-11/FE-12 (the `src/web/` split; `template.html` becomes a generated file). Open: RES-11 claims/digest/alerts parts, FU-1, FU-5, FU-6.
+- The earlier "21,900 DOM nodes" figure was not reproduced; measured on the demo page it is 1053 (desktop) and 647 (phone).
 - D3 (raw-data retention) and D4 (universe check) were answered A on 2026-11-04. DATA-9 and RES-10 are unblocked but not started.
 - Stale samples: `snapshots/2026-11-04/latest/digest.md` and `docs/sample-output/daily_review_example_2026-11-02.md`
   still use the old wording; the mid-session digest sample carries a dated note.
-- Phone Filters summary says lowercase "quality ≥ N" (FU-2).
 - Backtest quality score ignores sector-specific checks (disclosed in its report).
 
 ## Possible next steps, in order of value
-**A. Make the first live run work (blocks everything else).** Run on the PC, fix what the real feeds break (symbols,
-stale bars, rate limits), then DATA-3/DATA-6 (batched pulls, retries, atomic fundamentals cache) and DATA-4/5/8 (guards for
-a missing FX rate or a whole exchange, coverage table per exchange).
+**A. Make the first live run work (blocks everything else).** Run on the PC and fix what the real feeds break (symbols,
+stale bars, rate limits). The batching, retry and guard code (DATA-3/6, DATA-4/5/8) is written but has only run on fakes. Next in the data lane: DATA-12/14.
 
 **B. Page.**
-- Table above the fold and a lighter file: the page is about 4 MB (77% is chart history) and builds a hidden desktop table
-  on phone. FE-1, FE-2, FE-14.
-- Collapse the definitions footer behind a "Definitions" toggle with anchors. It is about a third of the phone page today.
-- Replace jargon: "5d resid." should read "5d move vs index (residual)" with a plain line; define "beta" once.
+- Jargon: the residual label is plainer now; define "beta" once (RES-9 covers the beta labels).
 - Filters kept in the URL, print stylesheet, light/dark toggle, keyboard access to charts (FE-5/6/8).
-- Split `template.html` into `src/web/` parts that still build one file (FE-11/12) before adding more features.
+- Finish the `src/web/` split (FE-11/12, in progress; integrator then wires `render_html`) before adding more features.
 
 **C. Research honesty.**
 - `docs/claims.md`, a written claims contract, and a generated "What testing found" box (RES-11).

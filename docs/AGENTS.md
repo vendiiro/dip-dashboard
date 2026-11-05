@@ -13,7 +13,7 @@ Definitions live in `.claude/agents/*.md` (Claude Code loads them as subagents).
 | Branch | Agent | Edits | Reviewed by |
 |---|---|---|---|
 | Root | **orchestrator** | `docs/BACKLOG.md`, this file, `docs/agents/*`, `.claude/agents/*` | Iiro |
-| Dashboard | **ui-builder** | `src/template.html`, `tests/test_browser.py`, `scripts/screenshots.py`, demo pages, the `dashboard-design` skill | ui-reviewer, wording-guard |
+| Dashboard | **ui-builder** | `src/web/` (page parts) and the generated `src/template.html`, `tests/test_browser.py`, `tests/test_web_build.py`, `scripts/screenshots.py`, demo pages, the `dashboard-design` skill | ui-reviewer, wording-guard |
 | Dashboard | ui-reviewer (read-only) | nothing | |
 | Pipeline | **integrator** | `cli.py`, `dashboard.py` (the payload), `digest.py`, `alerts.py`, `demo.py`, `config.py`, small helpers, `docs/payload.md` | wording-guard for digest and alert text |
 | Data | **data-engineer** | `data.py`, `openbb_source.py`, `cache.py`, `fx.py`, `earnings.py`, `validate.py`, `crosscheck.py`, `scripts/verify_sources.py` | |
@@ -62,8 +62,9 @@ The exact list is `docs/agents/ownership.csv`.
 - Edit only your own files. To change someone else's, put the exact change in your handoff.
 - Adding a file? Add its pattern to `docs/agents/ownership.csv` in the same commit, or `tests/test_ownership.py` fails.
   Only the orchestrator edits that file, so ask for the change in your handoff if you are not the orchestrator.
-- The hot group is `src/template.html` (later `src/web/`), `src/dipdash/dashboard.py` and `src/dipdash/cli.py`. Two tasks that
+- The hot group is `src/template.html`, `src/web/`, `src/dipdash/dashboard.py` and `src/dipdash/cli.py`. Two tasks that
   touch it never run at the same time; a paired task (marked ① ② in the backlog) runs its parts in order.
+- `src/template.html` is generated from `src/web/` (python src/web/assemble.py --write); edit the parts. The lock on `template.html` now covers `src/web/` too.
 - The build sandbox usually cannot reach Yahoo or OpenBB. Use `--demo`, the synthetic tests and `snapshots/`, and list
   what needs a live run on Iiro's Windows PC.
 - Wording stays neutral everywhere: "screen results", "candidates", "flagged because". Never "buy", "sell" or "target".

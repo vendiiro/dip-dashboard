@@ -6,8 +6,10 @@ docs/AGENTS.md,orchestrator
 docs/agents/*,orchestrator
 .claude/agents/*,orchestrator
 src/template.html,ui-builder
+# src/template.html is generated from src/web/ (python src/web/assemble.py --write); edit the parts.
 scripts/screenshots.py,ui-builder
 tests/test_browser.py,ui-builder
+tests/test_web_build.py,ui-builder
 docs/demo/*,ui-builder
 docs/sample-output/dashboard-demo.html,ui-builder
 .claude/skills/dashboard-design/*,ui-builder
