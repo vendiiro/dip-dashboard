@@ -330,3 +330,44 @@ def test_validate_run_with_now_uses_exchange_time_and_includes_all_guards(tmp_pa
     assert {i.ticker for i in got if i.check == "partial_bar"} == {"AAA", "BBB"}
     after = datetime(2026, 10, 30, 0, 15, tzinfo=ZoneInfo("Europe/Helsinki"))
     assert not [i for i in validate_run(u, prices, funds, Settings(), date(2026, 10, 30), now=after, fx_rates=rates) if i.severity != "info"]
+
+
+def _spike_series(n=260, at=100, jump=1.296, back=True):
+    c = geometric(n, 0.0)
+    c.iloc[at:] = c.iloc[at:] * jump                # a level shift from bar `at` on
+    if back:
+        c.iloc[at + 1:] = c.iloc[at + 1:] / jump    # the next bar is back at the old level
+    return c
+
+
+def test_price_spike_reverted_is_flagged_with_date_and_size():
+    c = _spike_series()
+    i = [x for x in validate_prices("X", c, TODAY, 4) if x.check == "price_spike_reverted"]
+    assert len(i) == 1 and i[0].severity == "warn" and i[0].ticker == "X"
+    assert "+29.6%" in i[0].detail and str(c.index[100].date()) in i[0].detail
+
+
+def test_price_spike_reverted_catches_a_drop_and_does_not_change_prices():
+    c = _spike_series(jump=0.75)
+    before = c.copy()
+    i = [x for x in validate_prices("X", c, TODAY, 4) if x.check == "price_spike_reverted"]
+    assert len(i) == 1 and "-25.0%" in i[0].detail
+    pd.testing.assert_series_equal(c, before)
+
+
+def test_a_genuine_one_way_jump_is_not_a_reverted_spike():
+    assert "price_spike_reverted" not in checks(validate_prices("X", _spike_series(back=False), TODAY, 4))
+
+
+def test_a_spike_on_the_last_bar_has_no_next_bar_and_is_not_flagged():
+    c = geometric(260, 0.0)
+    c.iloc[-1] = c.iloc[-2] * 1.3
+    assert "price_spike_reverted" not in checks(validate_prices("X", c, TODAY, 4))
+
+
+def test_a_small_reverted_move_below_the_threshold_is_not_flagged():
+    assert "price_spike_reverted" not in checks(validate_prices("X", _spike_series(jump=1.10), TODAY, 4))
+
+
+def test_old_spikes_outside_the_last_250_bars_are_ignored():
+    assert "price_spike_reverted" not in checks(validate_prices("X", _spike_series(n=400, at=50), TODAY, 4))

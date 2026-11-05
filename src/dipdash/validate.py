@@ -21,6 +21,9 @@ MAX_JUMP = 0.40          # daily move that more likely means a split / adjustmen
 SPIKE = 0.15             # a lone bar this far from BOTH neighbours, which sit close to each other, is a bad tick, not news
 SPIKE_NEIGHBOUR_TOL = 0.05
 SPIKE_LOW_VOLUME = 0.6      # a bad tick trades on thin volume; a real market-wide reversal day does not
+PRICE_SPIKE_REVERTED = 0.20     # one-day close-to-close move this large that the next bar undoes (request: move to [data] in settings.toml)
+PRICE_SPIKE_BACK_TOL = 0.03     # "undone" = the close two bars on is within 3 percentage points of the close before the move
+PRICE_SPIKE_BARS = 250          # only the newest bars are checked, so old splits and known events do not flood the log
 MAX_GAP_WEEKDAYS = 5     # a longer hole between bars means missing data (holiday gaps are at most 4)
 MAX_MISSING_SHARE = 0.05
 
@@ -47,6 +50,27 @@ def expected_currency(ticker: str) -> str | None:
     """Trading currency implied by the exchange suffix (no suffix = US/USD); None if the suffix is unknown."""
     ex = exchange_for(ticker)
     return ex.currency if ex else None
+
+
+def check_price_spike_reverted(ticker: str, close: pd.Series, threshold: float = PRICE_SPIKE_REVERTED,
+                               back_tol: float = PRICE_SPIKE_BACK_TOL, bars: int = PRICE_SPIKE_BARS) -> list[Issue]:
+    """A one-day close-to-close move of at least `threshold` that the next bar reverses: the close two bars on is back within
+    `back_tol` of the close before the move. Often a bad price in the pull, but it can also be a real event, so this is a
+    warning only and the prices are never changed. Looks at the newest `bars` closes; a move on the last bar has no next
+    bar to compare with and is not flagged. Prices are expected to be adjusted already (splits do not show up as jumps)."""
+    c = close.dropna() if close is not None else pd.Series(dtype=float)
+    c = c[~c.index.duplicated(keep="last")].sort_index().iloc[-bars:]
+    c = c[c > 0]
+    if len(c) < 3:
+        return []
+    v = c.to_numpy(dtype=float)
+    move = v[1:-1] / v[:-2] - 1                      # move into bar i (i = 1 .. n-2)
+    net = v[2:] / v[:-2] - 1                         # change from the bar before the move to the bar after it
+    hit = (np.abs(move) >= threshold) & (np.abs(net) <= back_tol)
+    return [Issue(ticker, "price_spike_reverted", "warn",
+                  f"close moved {move[i]:+.1%} on {str(c.index[i + 1])[:10]} and was back within {back_tol * 100:.0f} points the next day: "
+                  f"possible bad price, check the source (prices unchanged)")
+            for i in np.flatnonzero(hit)]
 
 
 def validate_prices(ticker: str, close: pd.Series, today: date, max_stale_trading_days: int, volume: pd.Series | None = None) -> list[Issue]:
@@ -93,6 +117,7 @@ def validate_prices(ticker: str, close: pd.Series, today: date, max_stale_tradin
                     continue                                    # heavy volume: a real reversal day (a crash rebound), not a bad tick
             note = "likely a bad price: thin volume" if vol is not None else "possible bad price: check the volume"
             issues.append(Issue(ticker, "spike_revert", "warn", f"{mid[i] / prev[i] - 1:+.1%} on {str(when)[:10]} and back the next day, {note}"))
+    issues += check_price_spike_reverted(ticker, c)
     if len(c) > 1:
         days = c.index.values.astype("datetime64[D]")
         gaps = np.busday_count(days[:-1], days[1:])
