@@ -11,6 +11,8 @@ roe_min = 0.12
 margin_min = 0.08
 debt_to_equity_max = 150
 market_cap_min = 20_000_000_000   # in USD; other currencies are converted
+must_pass = ["net_margin_positive"]   # named rules; a failure blocks the "Quality dip" label (definition, not a tested filter)
+distorted_roe_above = 1.0             # ROE above 100% is flagged as distorted
 
 [falling_knife]
 below_200d_falling = true

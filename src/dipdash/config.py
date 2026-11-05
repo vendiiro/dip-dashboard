@@ -24,6 +24,8 @@ class QualitySettings:
     margin_min: float = 0.08
     debt_to_equity_max: float = 150
     market_cap_min: float = 20_000_000_000
+    must_pass: tuple[str, ...] = ("net_margin_positive",)    # named rules (quality.py); a failure blocks the "Quality dip" label
+    distorted_roe_above: float = 1.0                          # ROE above this (1.0 = 100%) is flagged as distorted
 
 
 @dataclass(frozen=True)

@@ -48,11 +48,17 @@ def clean_bars(close: pd.Series, volume: pd.Series | None) -> tuple[pd.Series, i
     return c[keep], int((~keep).sum())
 
 
+QUALITY_LABEL_KEYS = ("must_pass", "distorted_roe_above")
+
+
 def freeze_spec(s: Settings, universe: list[Stock], data_meta: dict, calendar) -> dict:
     """Everything that defines the test, with a hash. Built from inputs only; no returns are involved."""
     bt = s.backtest
+    # must_pass and distorted_roe_above are labelling definitions used by the dashboard, not tested filters: the backtest's V3
+    # uses the raw score vs min_score. Keeping them out keeps existing spec hashes (incl. the published sample) reproducible.
+    quality = {k: v for k, v in asdict(s.quality).items() if k not in QUALITY_LABEL_KEYS}
     spec = {
-        "rule": {"dip": asdict(s.dip), "falling_knife": asdict(s.falling_knife), "quality": asdict(s.quality),
+        "rule": {"dip": asdict(s.dip), "falling_knife": asdict(s.falling_knife), "quality": quality,
                  "dip_definition": "1-day <= -drop_1d OR 5-day <= -drop_5d OR close >= drawdown_20d below its 20-day high; needs 252 bars of history"},
         "variants": VARIANTS,
         "universe": {"n": len(universe), "tickers": [u.ticker for u in universe],

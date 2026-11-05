@@ -14,9 +14,9 @@ import pandas as pd
 from .config import Settings, Stock
 from .fsio import atomic_write_text
 from .metrics import clean, compute_metrics, history
-from .quality import quality
+from .quality import quality_detail
 from .residual import residual_move
-from .screen import classify, dip_reasons, is_falling_knife, is_stale, needs_news
+from .screen import classify, dip_reasons, is_falling_knife, is_stale, needs_news, setup_text
 from .validate import Issue
 
 TEMPLATE = Path(__file__).resolve().parents[1] / "template.html"
@@ -82,7 +82,10 @@ def build_payload(universe: list[Stock], prices: Prices, funds: dict, settings: 
             skipped.append({"t": s.ticker, "reason": "stale", "detail": f"last bar {m['asof']}"})
             continue
         f = funds.get(s.ticker, {})
-        q, checks = quality(f, settings.quality, fx_to_usd, sector=s.sector)
+        qr = quality_detail(f, settings.quality, fx_to_usd, sector=s.sector, must_pass=settings.quality.must_pass,
+                            distorted_roe_above=settings.quality.distorted_roe_above)
+        q, checks = qr.score, qr.checks
+        q_ok, distorted = not qr.must_failed, qr.status == "distorted"
         m["knife"] = is_falling_knife(m, settings.falling_knife)
         m["hist"] = history(prices[s.ticker][0])
         m["prev"] = _yesterday(prices[s.ticker], settings)
@@ -106,11 +109,14 @@ def build_payload(universe: list[Stock], prices: Prices, funds: dict, settings: 
         m["partial"] = s.ticker in partial
         m.update({
             "t": s.ticker, "name": s.name, "region": s.region, "sector": s.sector,
-            "q": q, "qchecks": checks, "fpe": clean(f.get("forwardPE"), 1), "tpe": clean(f.get("trailingPE"), 1),
+            "q": q, "qchecks": checks, "q_scored": qr.scored, "q_applicable": qr.applicable, "q_passed": qr.passed,
+            "q_status": qr.status, "q_why": qr.distorted_why, "q_must_failed": list(qr.must_failed),
+            "q_must_missing": list(qr.must_missing), "fpe": clean(f.get("forwardPE"), 1), "tpe": clean(f.get("trailingPE"), 1),
             "ccy": f.get("currency") or "", "news": [],
             "dip": bool(dip_reasons(m, settings.dip)), "why": dip_reasons(m, settings.dip),
-            "setup": classify(m, q, settings),
+            "setup": classify(m, q, settings, q_ok=q_ok, distorted=distorted),
         })
+        m["setup_text"] = setup_text(m["setup"], qr.passed, qr.applicable)
         rows.append(m)
 
     movers = [r for r in rows if needs_news(r, settings.news)]

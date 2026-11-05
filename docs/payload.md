@@ -75,11 +75,19 @@ One entry of `rows`. Keys are exactly these.
 | `earn` | dict | yes | | earnings context (see Earn); null when earnings were not loaded (always in the demo) |
 | `q` | int | yes | 0 to 100 | quality score: share of quality checks passed; null when too few checks have data |
 | `qchecks` | list | no | | the six checks (see Quality check) |
+| `q_scored` | int | no | count | quality checks that had data (of the applicable ones); shown as "scored on n/6" |
+| `q_applicable` | int | no | count | 6 minus the checks that do not apply to the sector (4 for Financials) |
+| `q_passed` | int | no | count | applicable checks passed |
+| `q_status` | str | no | | evidence behind `q`: `ok`, `thin` (scored fewer than applicable), `distorted` (see `q_why`) or `no_data` (`q` is null); precedence no_data, distorted, thin, ok |
+| `q_why` | str | yes | | plain-language reason when `q_status` is `distorted` (for example ROE above the limit, or ROE and debt/equity both missing); null otherwise |
+| `q_must_failed` | list | no | | names of must-pass rules that failed (for example `net_margin_positive`); empty list when none. A failure makes `setup` `Dip, low quality` whatever `q` is |
+| `q_must_missing` | list | no | | names of must-pass rules whose data is missing; missing is not a failure |
 | `fpe` | float | yes | ratio | forward price/earnings |
 | `tpe` | float | yes | ratio | trailing price/earnings |
 | `ccy` | str | no | currency code | currency of `price`; empty text if unknown |
 | `news` | list | no | | recent headlines for fallers (see Headline); third-party text |
-| `setup` | str | no | | one of `Quality dip`, `Falling knife`, `Dip, low quality`, `Dip, no fundamentals`, `No dip` |
+| `setup` | str | no | | one of `Quality dip`, `Falling knife`, `Dip, low quality`, `Dip, no fundamentals`, `No dip`; the stable key, never reworded. It can differ for the same `q`: distorted fundamentals give `Dip, no fundamentals`, a failed must-pass rule gives `Dip, low quality` |
+| `setup_text` | str | no | | reader-facing text for `setup`: "Dip · passes N of M checks" for `Quality dip` and `Dip, low quality` (N = `q_passed`, M = `q_applicable`), otherwise the same as `setup`. Show this, key on `setup` |
 
 ## Hist
 
@@ -166,8 +174,11 @@ One entry of `rows`. Keys are exactly these.
 ## Settings
 
 `settings` has three dicts, copied from `config/settings.toml`: `dip` (`drop_1d`, `drop_5d`, `drawdown_20d`, fractions),
-`quality` (`min_score`, `roe_min`, `margin_min`, `debt_to_equity_max`, `market_cap_min`) and `knife` (`below_200d_falling`,
+`quality` (`min_score`, `roe_min`, `margin_min`, `debt_to_equity_max`, `market_cap_min`, `must_pass`, `distorted_roe_above`) and `knife` (`below_200d_falling`,
 `drawdown_52w`). The page reads `dip.drop_5d` and `quality.min_score`.
+
+- `quality.must_pass`: list of str, never null; named rules (`net_margin_positive`, `fcf_positive`), default `["net_margin_positive"]`. A failed rule blocks the `Quality dip` label; missing data is not a failure. A definition, not a tested filter.
+- `quality.distorted_roe_above`: float (fraction, 1.0 = 100%), never null; ROE above this marks the fundamentals `distorted`.
 
 ## Alert item
 

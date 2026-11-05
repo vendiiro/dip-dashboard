@@ -146,7 +146,8 @@ def build_digest(payload: dict, settings: Settings, *, previous_asof: str | None
           f"{down5} fell 5% or more over 5 days. When the median is far below zero, the market is moving and single-stock drops mean less.\n")
 
     # ---- today vs the previous close
-    was = {r["t"]: classify_prev(r.get("prev"), r["q"], settings) for r in rows}      # the payload rows themselves stay untouched
+    was = {r["t"]: classify_prev(r.get("prev"), r["q"], settings, q_ok=not r.get("q_must_failed"),
+                                 distorted=r.get("q_status") == "distorted") for r in rows}     # the payload rows themselves stay untouched
     cand = sorted((r for r in rows if r["setup"] == "Quality dip"), key=lambda r: r["r5"])
     new = [r for r in cand if was[r["t"]] is not None and was[r["t"]] != "Quality dip"]
     gone = [r for r in rows if was[r["t"]] == "Quality dip" and r["setup"] != "Quality dip"]
@@ -157,8 +158,9 @@ def build_digest(payload: dict, settings: Settings, *, previous_asof: str | None
     w(f"Flagged by the default rules (1-day ≤ {pct(-settings.dip.drop_1d, 0)}, 5-day ≤ {pct(-settings.dip.drop_5d, 0)}, or ≥ {settings.dip.drawdown_20d:.0%} below the 20-day high) "
       f"with a quality score of at least {settings.quality.min_score}. Sorted by the 5-day move.\n")
     if cand:
-        w(md_table(["Ticker", "Name", "1 day", "5 days", "5d vs index", "Quality", "Flagged because"],
-                   [[(r["t"] + (" **NEW**" if r["t"] in new_t else "")), *_row_line(r)[1:]] for r in cand]))
+        w(md_table(["Ticker", "Name", "1 day", "5 days", "5d vs index", "Quality", "Setup", "Flagged because"],
+                   [[(r["t"] + (" **NEW**" if r["t"] in new_t else "")), *_row_line(r)[1:6],
+                     clean_text(r.get("setup_text") or r["setup"], 40), _row_line(r)[6]] for r in cand]))
         w("")
     else:
         w("No stock is flagged as a quality dip.\n")

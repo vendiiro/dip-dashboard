@@ -71,6 +71,20 @@ def test_spec_hash_is_stable_and_changes_with_any_frozen_choice():
     assert freeze_spec(s, uni, {**META, "raw_sha256": "1" * 8}, cal)["spec_hash"] != h
 
 
+def test_quality_labelling_keys_do_not_change_the_spec_hash_but_min_score_does():
+    prices, ix, uni, q, s = synthetic()
+    cal = sorted({d for c in prices.values() for d in c.index})
+    h = freeze_spec(s, uni, META, cal)["spec_hash"]
+    for key in ("must_pass", "distorted_roe_above"):
+        old = getattr(s.quality, key)
+        new = ("x_changed",) if isinstance(old, (tuple, list)) else (old + 1.0 if isinstance(old, (int, float)) else old)
+        s2 = replace(s, quality=replace(s.quality, **{key: new}))
+        assert getattr(s2.quality, key) != old
+        assert freeze_spec(s2, uni, META, cal)["spec_hash"] == h
+    s3 = replace(s, quality=replace(s.quality, min_score=s.quality.min_score + 1))
+    assert freeze_spec(s3, uni, META, cal)["spec_hash"] != h
+
+
 def test_full_run_writes_every_artifact_and_a_report_without_banned_wording(tmp_path):
     prices, ix, uni, q, s = synthetic(effect=0.006)
     out = tmp_path / "2026-11-02"

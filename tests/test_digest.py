@@ -144,7 +144,14 @@ def test_clean_text_edge_cases():
 def test_company_names_with_table_characters_cannot_break_the_table():
     text = build_digest(payload([row("AAA", QUALITY_DIP, name="Bad | Name <x>")]), S)
     line = next(l for l in text.splitlines() if l.startswith("| AAA"))
-    assert line.count("|") == 8                                       # 7 columns, unbroken
+    assert line.count("|") == 9                                       # 8 columns, unbroken
+    assert "| Quality dip |" in line                                  # no setup_text on this hand-made row: falls back to the enum
+
+
+def test_candidates_show_the_neutral_setup_text():
+    r = {**row("AAA", QUALITY_DIP), "setup_text": "Dip · passes 5 of 6 checks"}
+    text = build_digest(payload([r]), S)
+    assert "| Dip · passes 5 of 6 checks |" in text and "Setup" in text
 
 
 # ---------------------------------------------------------------- wording and banners
