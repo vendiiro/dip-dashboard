@@ -73,7 +73,7 @@ One entry of `rows`. Keys are exactly these.
 | `idx_sym` | str | yes | | Yahoo symbol of that index |
 | `idx_why` | str | yes | | why `x5` is null; null when `x5` is present |
 | `earn` | dict | yes | | earnings context (see Earn); null when earnings were not loaded (always in the demo) |
-| `q` | int | yes | 0 to 100 | quality score: share of quality checks passed; null when too few checks have data |
+| `q` | int | yes | 0 to 100 | quality score: share of the applicable checks passed (0 to 100); null when too few checks have data |
 | `qchecks` | list | no | | the six checks (see Quality check) |
 | `q_scored` | int | no | count | quality checks that had data (of the applicable ones); shown as "scored on n/6" |
 | `q_applicable` | int | no | count | 6 minus the checks that do not apply to the sector (4 for Financials) |
@@ -86,7 +86,7 @@ One entry of `rows`. Keys are exactly these.
 | `tpe` | float | yes | ratio | trailing price/earnings |
 | `ccy` | str | no | currency code | currency of `price`; empty text if unknown |
 | `news` | list | no | | recent headlines for fallers (see Headline); third-party text |
-| `setup` | str | no | | one of `Quality dip`, `Falling knife`, `Dip, low quality`, `Dip, no fundamentals`, `No dip`; the stable key, never reworded. It can differ for the same `q`: distorted fundamentals give `Dip, no fundamentals`, a failed must-pass rule gives `Dip, low quality` |
+| `setup` | str | no | | one of `Quality dip`, `Falling knife`, `Dip, low quality`, `Dip, no fundamentals`, `No dip`; the stable key, never reworded. `Quality dip` = a dip whose quality score meets the minimum and net margin is above 0 (shown as "Dip · passes N of M scored checks"); `Falling knife` = a dip that also meets the falling-knife condition; `Dip, low quality` = a dip whose quality score is below the minimum or a must-pass rule failed; `Dip, no fundamentals` = a dip with missing or distorted fundamentals; `No dip` = the dip thresholds were not met. It can differ for the same `q`: distorted fundamentals give `Dip, no fundamentals`, a failed must-pass rule gives `Dip, low quality` |
 | `setup_text` | str | no | | reader-facing text for `setup`; show this, key on `setup`. For `Quality dip` and `Dip, low quality`: "Dip · passes N of M scored checks" (N = `q_passed`, M = `q_scored`), with " (K no data)" appended when K = `q_applicable` − `q_scored` > 0, e.g. "Dip · passes 5 of 6 scored checks" or "Dip · passes 3 of 4 scored checks (2 no data)"; plain "Dip" when no counts exist. `Dip, no fundamentals` reads "Dip, no fundamentals", or "Dip · data looks unreliable" when `q_status` is `distorted`. `Falling knife` and `No dip` are unchanged. Enum-level labels for lists: `Quality dip` = "Dip, more checks passed", `Dip, low quality` = "Dip, fewer checks passed" (`SETUP_LABELS` in `screen.py`) |
 
 ## Hist
@@ -177,7 +177,7 @@ One entry of `rows`. Keys are exactly these.
 `quality` (`min_score`, `roe_min`, `margin_min`, `debt_to_equity_max`, `market_cap_min`, `must_pass`, `distorted_roe_above`) and `knife` (`below_200d_falling`,
 `drawdown_52w`). The page reads `dip.drop_5d` and `quality.min_score`.
 
-- `quality.must_pass`: list of str, never null; named rules (`net_margin_positive`, `fcf_positive`), default `["net_margin_positive"]`. A failed rule blocks the `Quality dip` label; missing data is not a failure. A definition, not a tested filter.
+- `quality.must_pass`: list of str, never null; named rules (`net_margin_positive`, `fcf_positive`), default `["net_margin_positive"]`. A failed rule means the setup cannot be `Quality dip` (it becomes `Dip, low quality`); missing data is not a failure. A definition, not a tested filter.
 - `quality.distorted_roe_above`: float (fraction, 1.0 = 100%), never null; ROE above this marks the fundamentals `distorted`.
 
 ## Alert item
