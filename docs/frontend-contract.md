@@ -50,7 +50,7 @@ The "Used by" column says which file would break: `browser` = `tests/test_browse
 |---|---|---|
 | `testid:stale` | browser | The stale banner, visible only when prices are over 2 weekdays old on a non-demo page |
 | `testid:fail` | browser | The failure alert |
-| `testid:tile-quality` | browser | Quality-dips tile; its `.big` equals the rows ranked `Quality dip` (shown as "Dips meeting the check thresholds") |
+| `testid:tile-quality` | browser | Dips-meeting-the-check-thresholds tile; its `.big` equals the rows ranked `Quality dip` (shown as "Dips meeting the check thresholds") |
 | `testid:tile-new` | browser | New-since-yesterday tile; chips equal the rows marked new |
 | `testid:tile-knife` | browser | Falling-knife tile |
 | `testid:tile-market` | browser | Market-context tile |

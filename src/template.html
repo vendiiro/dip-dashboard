@@ -699,7 +699,7 @@ function activeList() {
   if (S.region) a.push(['region', 'Region: ' + S.region]);
   if (q) a.push(['q', 'Search: “' + q + '”']);
   if ($('hideknife').checked) a.push(['knife', 'Falling knives hidden']);
-  if (+$('qmin').value !== DEF_Q) a.push(['qmin', 'Quality ≥ ' + $('qmin').value]);
+  if (+$('qmin').value !== DEF_Q) a.push(['qmin', 'Quality score ≥ ' + $('qmin').value]);
   if ($('win').value !== 'any') a.push(['win', WIN[$('win').value].label + ' ≥ ' + $('drop').value + '% drop']);
   return a;
 }
@@ -885,7 +885,7 @@ function renderCards(list) {
     const mets = el('div', 'mets');
     const m = (lab, txt, cls) => { const d = el('div'); d.append(el('span', 'lab', lab), el('span', 'v ' + (cls || ''), txt)); mets.append(d); };
     m('1d', pct(r.r1), sgnCls(r.r1)); m('5d', pct(r.r5), sgnCls(r.r5));
-    const dq = el('div'); dq.append(el('span', 'lab', 'Quality')); const qv = el('span', 'v', r.q == null ? '–' : String(r.q)); qv.append(qnote(r), qmeter(r)); dq.append(qv); mets.append(dq);
+    const dq = el('div'); dq.append(el('span', 'lab', 'Quality score')); const qv = el('span', 'v', r.q == null ? '–' : String(r.q)); qv.append(qnote(r), qmeter(r)); dq.append(qv); mets.append(dq);
     const sp = el('div'); sp.style.justifySelf = 'end'; sp.append(spark(r.spark)); mets.append(sp);
     const bdrow = el('div', 'bdrow'); bdrow.append(badge(r)); { const et = earnTag(r); if (et) bdrow.append(et); const pt = partialTag(r); if (pt) bdrow.append(pt); }
     b.append(l1, px, mets, bdrow);

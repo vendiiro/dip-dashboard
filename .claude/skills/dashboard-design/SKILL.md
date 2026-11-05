@@ -12,7 +12,7 @@ ones that apply and follow them where they are more specific than this file.
 ## Structure (top to bottom)
 1. **Header:** title, data date (last market close per region), generated time, data-quality badge
    (for example "3 tickers stale").
-2. **Summary tiles:** quality dips today, new since yesterday, falling-knife flags, market context
+2. **Summary tiles:** dips meeting the check thresholds today, new since yesterday, falling-knife flags, market context
    (index move for S&P 500 and STOXX 600) so a market-wide selloff is not mistaken for stock-specific news.
 3. **Controls:** window, minimum drop, minimum quality, region, search. Controls change the table live.
 4. **Candidate table:** one row per stock; sortable; defaults to the most useful sort. Columns: stock,
