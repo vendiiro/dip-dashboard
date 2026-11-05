@@ -1,7 +1,7 @@
 # Decisions log
 
 Generated file, do not edit by hand. Each decision is its own file in `docs/decisions/`; this page is the topic index,
-oldest first in each table (74 decisions). Source files cite this path, so it must keep existing.
+oldest first in each table (75 decisions). Source files cite this path, so it must keep existing.
 
 ## How to add a decision
 1. Add a new file `docs/decisions/YYYY-MM-DD-NN-<topic>-<slug>.md`: NN is the next free number for that date, topic is one of
@@ -10,7 +10,7 @@ oldest first in each table (74 decisions). Source files cite this path, so it mu
    a blank line, then the decision text (date, options considered, choice and reason).
 3. Rebuild this index: `python tests/test_decisions_index.py --write`. `pytest tests/test_decisions_index.py` fails while it is out of date.
 
-Topics: [Data](#data) (17) · [Screen](#screen) (9) · [Backtest](#backtest) (13) · [Dashboard](#dashboard) (20) · [Alerts](#alerts) (2) · [Ops](#ops) (11) · [Docs](#docs) (2)
+Topics: [Data](#data) (17) · [Screen](#screen) (9) · [Backtest](#backtest) (13) · [Dashboard](#dashboard) (21) · [Alerts](#alerts) (2) · [Ops](#ops) (11) · [Docs](#docs) (2)
 
 ## Data
 
@@ -90,6 +90,7 @@ Topics: [Data](#data) (17) · [Screen](#screen) (9) · [Backtest](#backtest) (13
 | 2026-11-05 | [Setup text counts scored checks; distorted rows read 'Dip · data looks unreliable'](decisions/2026-11-05-02-dashboard-setup-text-counts-scored-checks.md) |
 | 2026-11-05 | [Neutral page and digest wording](decisions/2026-11-05-03-dashboard-neutral-page-and-digest-wording.md) |
 | 2026-11-05 | [Default sort is size of drop](decisions/2026-11-05-05-dashboard-default-sort-is-size-of-drop.md) |
+| 2026-11-05 | [Dashboard template is generated from src/web/](decisions/2026-11-05-06-dashboard-template-generated-from-src-web.md) |
 
 ## Alerts
 

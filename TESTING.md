@@ -30,8 +30,10 @@ python -m venv .venv
 pip install -r requirements-dev.txt
 python -m playwright install chromium
 python -m pytest -q
+python tasks.py web
 python src/dip_screener.py --demo --out output/demo.html --history
 ```
+`python tasks.py web` regenerates `src/template.html` from the parts in `src/web/`; run it after editing anything in `src/web/`. `python tasks.py check` (guards, then unit tests) fails first if the template is stale and prints the same fix.
 Expected: the full suite passes (browser tests skip unless Playwright and a Chromium are installed), then `output/demo.html`, `output/digest.md`, `output/data_quality.demo.csv`, and dated copies in `output/history/`.
 `requirements-dev.txt` holds the exact versions that tests and CI use (with Playwright, without `openbb`); the second line downloads the Chromium the browser tests and screenshots need.
 `requirements.txt` is for the live run (Level 3). It adds `openbb` (about 1 GB, only used for the second-source price cross-check), which is optional:
