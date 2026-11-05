@@ -6,9 +6,10 @@
 Pre-stated ship criterion is in the forecast.py docstring (written before any result): overall OOS 80% coverage within 0.80 +/- 0.04
 AND dip-state coverage within 0.80 +/- 0.06; two attempts (raw, then one in-sample-fitted global scale factor), no further tuning.
 Design: per stock, origins every 21 trading days from the 401st close; model refitted on data up to the origin only; outcome = log return
-over the next 21 bars (windows do not overlap within a stock). Split = backtest.split_cutoff(all dates, 0.4); in-sample origins are those
+over the next 21 bars (windows do not overlap within a stock). Split = backtest.shared_cutoff (dates on or after settings backtest.start_date, settings oos_fraction; the same as the backtest and the feature experiment); in-sample origins are those
 whose outcome ends on or before the cutoff (purge); out-of-sample origins are after it. Uncertainty: month-clustered bootstrap by origin month.
-Pre-registration: a frozen spec built from the constants below (forecast_spec) is registered (registry.register: spec_<hash>.json +
+Dip state = backtest.dip_state (the project's dip rule from settings, incl. the 20-day-high rule), looked up by origin date.
+Pre-registration: a frozen spec built from the constants below and the settings (forecast_spec) is registered (registry.register: spec_<hash>.json +
 a row in <out-root>/registry.csv) BEFORE any origin is computed; every coverage and pinball cell goes to <out-root>/trials_all.csv.
 Output: <out-root>/<today>_forecast/{spec_forecast.json, results.csv, origins.csv.gz, report_forecast.md, calibration.png}.
 """
@@ -30,7 +31,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from dipdash import forecast as fc  # noqa: E402
 from dipdash import registry  # noqa: E402
-from dipdash.backtest import cluster_bootstrap, group_of, split_cutoff  # noqa: E402
+from dipdash.backtest import cluster_bootstrap, dip_state, group_of, shared_calendar, shared_cutoff, signals  # noqa: E402
 from dipdash.backtest_run import clean_bars, sha256  # noqa: E402
 from dipdash.cache import load_raw_prices  # noqa: E402
 from dipdash.config import load_settings, load_universe  # noqa: E402
@@ -39,7 +40,6 @@ from dipdash.provenance import build_provenance  # noqa: E402
 H = 21
 STEP = 21
 START = fc.MIN_OBS            # first origin has 400 returns
-OOS_FRACTION = 0.4
 TARGET, TOL_ALL, TOL_DIP = 0.80, 0.04, 0.06
 METHODS = ("garch_t_fhs", "ewma", "naive")
 DEFAULT_RAW = ROOT / "data" / "raw" / "yfinance_backtest" / "2026-11-04.csv.gz"
@@ -67,7 +67,22 @@ def origins_meta(spec: dict) -> dict:
             "cutoff": spec["split"]["cutoff"]}
 
 
-def forecast_spec(raw: Path, tickers: list[str], cutoff: pd.Timestamp, limit: int, family_id: str) -> dict:
+def dip_text(s) -> str:
+    """The dip definition in words, with the settings values, for the frozen spec."""
+    d = s.dip
+    return (f"the project's dip rule (backtest.dip_state), true if 1-day return <= -{100 * d.drop_1d:g}% or 5-day return <= -{100 * d.drop_5d:g}% "
+            f"or the close is >= {100 * d.drawdown_20d:g}% below its 20-day high, at the origin close; needs 252 bars of history")
+
+
+def origin_dips(close: pd.Series, s) -> pd.Series:
+    """backtest.dip_state of one stock, on the stock's own dates. Every origin (bar START and later) must have 252 bars of history."""
+    sig = signals(close, s)
+    assert sig.index.equals(close.index), "signals dropped bars: the dip series would not line up with the origins"
+    assert len(sig) > START and bool(sig["valid"].iloc[START:].all()), "an origin lacks the 252 bars of history the dip rule needs"
+    return dip_state(close, s)
+
+
+def forecast_spec(raw: Path, tickers: list[str], cutoff: pd.Timestamp, limit: int, family_id: str, s) -> dict:
     """Pre-registration of the calibration test, built from constants, the raw file's hash and dates only (no outcome enters)."""
     spec = {
         "family_id": family_id,
@@ -77,8 +92,9 @@ def forecast_spec(raw: Path, tickers: list[str], cutoff: pd.Timestamp, limit: in
         "methods": list(METHODS),
         "design": {"horizons": [H], "step": STEP, "first_origin_bar": START, "refit": "at every origin, on data up to the origin only",
                    "outcome": "log return from the origin close to the close H bars later",
-                   "dip_state": "5-day return <= -7% or 1-day return <= -4% at the origin"},
-        "split": {"oos_fraction": OOS_FRACTION, "cutoff": str(cutoff.date()),
+                   "dip_state": dip_text(s),
+                   "dip_settings": {"drop_1d": s.dip.drop_1d, "drop_5d": s.dip.drop_5d, "drawdown_20d": s.dip.drawdown_20d}},
+        "split": {"oos_fraction": s.backtest.oos_fraction, "start_date": s.backtest.start_date, "cutoff": str(cutoff.date()),
                   "purge": "in-sample origins whose outcome ends after the cutoff are dropped; out-of-sample = origins after the cutoff"},
         "criterion_text": CRITERION_TEXT,
         "verdict_rule": {"target": TARGET, "tol_all": TOL_ALL, "tol_dip": TOL_DIP, "attempts": list(ATTEMPTS), "groups": list(VERDICT_GROUPS),
@@ -101,17 +117,15 @@ def attach_provenance(spec: dict, s) -> dict:
 
 
 def _one_stock(args):
-    ticker, close = args
+    ticker, close, dip = args                      # dip: precomputed bool Series on close's index (the pool gets data, not settings)
     t0 = time.time()
     c = close.to_numpy()
     rows = []
     for k in range(START, len(c) - H, STEP):
         res = fc.all_ranges(close.iloc[: k + 1], H, seed=k)
         y = float(np.log(c[k + H] / c[k]))
-        r1 = c[k] / c[k - 1] - 1
-        r5 = c[k] / c[k - 5] - 1
         row = {"ticker": ticker, "origin": close.index[k], "end": close.index[k + H], "y": y,
-               "dip": bool(r5 <= -0.07 or r1 <= -0.04), "fallback": res["garch_t_fhs"]["method"] == "ewma_fallback"}
+               "dip": bool(dip.loc[close.index[k]]), "fallback": res["garch_t_fhs"]["method"] == "ewma_fallback"}
         for m in METHODS:
             d = res[m]
             row[f"{m}_lo"], row[f"{m}_mid"], row[f"{m}_hi"] = (float(np.log1p(d[x])) for x in ("lo", "mid", "hi"))
@@ -120,10 +134,10 @@ def _one_stock(args):
     return ticker, rows, time.time() - t0
 
 
-def build_origins(reg, prices: dict, workers: int) -> tuple[pd.DataFrame, float]:
+def build_origins(reg, prices: dict, dips: dict, workers: int) -> tuple[pd.DataFrame, float]:
     """workers <= 1 runs in this process (tests, small runs); otherwise a process pool. Needs the Registration token."""
     registry.require_registered(reg)
-    jobs = list(prices.items())
+    jobs = [(t, c, dips[t]) for t, c in prices.items()]
     out, secs, nfits = [], 0.0, 0
     if workers <= 1:
         results = map(_one_stock, jobs)
@@ -289,8 +303,8 @@ Educational screen output. This tests whether a volatility RANGE is honest. It s
 
 ## Design
 - Universe: {meta['n_stocks']} stocks (current constituents), history {meta['first']} to {meta['last']}. Origins every 21 trading days per stock, model refitted on data up to the origin only (trailing 750 returns, min 400); {meta['n_origins']} origins in total, {meta['n_fallback']} ({pct(meta['fb_rate'])}) used the EWMA fallback because GARCH did not converge.
-- Split: backtest.py `split_cutoff` at 60/40 -> in-sample ends {meta['cutoff']}. In-sample origins whose 21-day outcome ends after the cutoff are dropped (purge). Out-of-sample: {meta['n_oos']} origins (scored only; k was fitted on {meta['n_is']} in-sample origins).
-- Dip state at the origin: 5-day return <= -7% or 1-day <= -4% (the project's dip rule), {meta['n_oos_dip']} OOS origins.
+- Split: backtest.py `shared_cutoff` (dates from {meta['start_date']}, {meta['oos_fraction']:.0%} out of sample) -> in-sample ends {meta['cutoff']}. In-sample origins whose 21-day outcome ends after the cutoff are dropped (purge). Out-of-sample: {meta['n_oos']} origins (scored only; k was fitted on {meta['n_is']} in-sample origins).
+- Dip state at the origin: {meta['dip_text']}; {meta['n_oos_dip']} OOS origins.
 - Windows do not overlap within a stock; across stocks they do (market-wide events), hence CIs from the month-clustered bootstrap (`backtest.cluster_bootstrap`, {DRAWS} draws, 95%, clusters = origin month, {meta['n_oos_months']} months).
 - Runtime: about {meta['sec_per_fit']:.2f} s per origin (one GARCH fit plus baselines, inside a busy process pool); {meta['sec_per_stock_now']:.2f} s for one nightly forecast on its own.
 
@@ -353,9 +367,10 @@ def main(argv: list[str] | None = None) -> int:
     if a.limit:
         prices = dict(list(prices.items())[: a.limit])
     region = {u.ticker: group_of(u.region) for u in load_universe()}
-    all_dates = sorted(set().union(*[set(c.index) for c in prices.values()]))
-    cutoff = split_cutoff(all_dates, OOS_FRACTION)
-    spec = forecast_spec(Path(a.raw), list(prices), cutoff, a.limit, f"forecast_{date.today().isoformat()}")
+    s = load_settings()
+    all_dates = shared_calendar(prices, s.backtest.start_date)
+    cutoff = shared_cutoff(prices, s)
+    spec = forecast_spec(Path(a.raw), list(prices), cutoff, a.limit, f"forecast_{date.today().isoformat()}", s)
     p = out / "origins.csv.gz"
     meta_p = out / META_FILE
     if a.limit and out_root.resolve() == DEFAULT_ROOT.resolve():
@@ -368,7 +383,7 @@ def main(argv: list[str] | None = None) -> int:
                   f"({'missing' if have is None else 'differs'}). Run without --reuse.")
             return 2
     oos_dates = [d for d in all_dates if d > cutoff]
-    attach_provenance(spec, load_settings())                                                   # not hashed; set before register so the archive holds it
+    attach_provenance(spec, s)                                                   # not hashed; set before register so the archive holds it
     reg = registry.register("forecast", spec, out, out_root, fields={"oos_start": oos_dates[0], "oos_end": oos_dates[-1]})   # BEFORE any origin
     spec["registration"] = registry.registration_block(reg)                                                                 # not hashed
     (out / "spec_forecast.json").write_text(json.dumps(spec, indent=2, default=str), encoding="utf-8")
@@ -379,7 +394,7 @@ def main(argv: list[str] | None = None) -> int:
         spf = float(pd.read_csv(out / "timing.csv").spf.iloc[0]) if (out / "timing.csv").exists() else float("nan")
     else:
         print(f"Walk-forward over {len(prices)} stocks with {a.workers} workers...", flush=True)
-        df, spf = build_origins(reg, prices, a.workers)                       # written below, after the trial cells are logged
+        df, spf = build_origins(reg, prices, {t: origin_dips(c, s) for t, c in prices.items()}, a.workers)                       # written below, after the trial cells are logged
     df["group"] = df.ticker.map(region).fillna("Other")
     ins = df[df.end <= cutoff]
     oos = df[df.origin > cutoff].reset_index(drop=True)
@@ -407,10 +422,11 @@ def main(argv: list[str] | None = None) -> int:
         meta_p.write_text(json.dumps(origins_meta(spec), indent=2), encoding="utf-8")
     res.to_csv(out / "results.csv", index=False)
     chart(res, out / "calibration.png")
-    meta = {"today": date.today().isoformat(), "n_stocks": df.ticker.nunique(), "first": min(all_dates).date(),
+    meta = {"today": date.today().isoformat(), "n_stocks": df.ticker.nunique(), "first": min(c.index[0] for c in prices.values()).date(),
             "last": max(all_dates).date(), "n_origins": len(df), "n_fallback": int(df.fallback.sum()), "fb_rate": df.fallback.mean(),
             "cutoff": cutoff.date(), "n_oos": len(oos), "n_is": len(ins), "n_oos_dip": int(oos.dip.sum()),
             "n_oos_months": oos.origin.dt.strftime("%Y-%m").nunique(), "sec_per_fit": spf, "sec_per_stock_now": sec_now,
+            "dip_text": dip_text(s), "start_date": s.backtest.start_date, "oos_fraction": s.backtest.oos_fraction,
             "spec_hash": reg.spec_hash, "planned_cells": PLANNED_CELLS, "oos_reuse": reg.reuse_note(), "incomplete": reg.incomplete_earlier}
     write_report(out, res, meta, v1, v2, ship)
     registry.mark_complete(reg)

@@ -186,7 +186,7 @@ def test_build_origins_refuses_without_a_registration():
     from dipdash import registry
     mod = _load_calibration_script()
     with pytest.raises(registry.RegistrationError):
-        mod.build_origins(None, {}, 1)
+        mod.build_origins(None, {}, {}, 1)
 
 
 def test_reuse_needs_matching_origins_meta_and_limit_is_refused_on_the_default_root(tmp_path, monkeypatch):

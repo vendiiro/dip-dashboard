@@ -111,7 +111,7 @@ def test_forecast_spec_gets_provenance_before_registration(tmp_path):
     mod = _load_script("run_forecast_calibration")
     raw = tmp_path / "raw.csv.gz"
     raw.write_bytes(b"x")
-    spec = mod.forecast_spec(raw, ["A", "B"], pd.Timestamp("2022-01-03"), 0, "forecast_t")
+    spec = mod.forecast_spec(raw, ["A", "B"], pd.Timestamp("2022-01-03"), 0, "forecast_t", S)
     h = spec["spec_hash"]
     mod.attach_provenance(spec, S)
     assert spec["provenance"]["code_sha256"] and registry.hash_for("forecast", spec) == h

@@ -459,3 +459,54 @@ def test_independent_placebo_is_too_optimistic_when_events_share_dates_and_the_d
         shift += r["shift_p"] < 0.05
     assert indep >= 3 * max(shift, 1) or indep - shift >= 3, (indep, shift)
     assert shift <= 3
+
+
+# ======================================================================== RES-8: one split, one dip state
+def test_all_runners_get_the_same_cutoff():
+    """Same synthetic prices through backtest, features and forecast: one calendar (>= start_date) and one cutoff."""
+    from dataclasses import replace as rep
+    from test_backtest_run import META, synthetic
+    from dipdash import backtest as bt
+    from dipdash.backtest_run import freeze_spec
+    prices, ix, uni, q, s = synthetic(n_stocks=3)
+    cal = bt.shared_calendar(prices, s.backtest.start_date)
+    assert cal and min(cal) >= pd.Timestamp(s.backtest.start_date)
+    cut = bt.shared_cutoff(prices, s)
+    assert cut == split_cutoff(cal, s.backtest.oos_fraction)
+    all_dates = sorted({d for c in prices.values() for d in c.index})
+    assert cut != split_cutoff(all_dates, s.backtest.oos_fraction), "start_date must matter (the old forecast ignored it)"
+    assert freeze_spec(s, uni, META, cal)["split"]["cutoff"] == str(cut.date())                      # backtest
+    assert bt.shared_cutoff(prices, rep(s, backtest=rep(s.backtest, oos_fraction=0.3))) > cut          # oos_fraction comes from settings
+    for name in ("run_feature_experiment", "run_forecast_calibration"):                               # both scripts use the shared function
+        mod = _load_script(name)
+        assert mod.shared_cutoff is bt.shared_cutoff and mod.shared_calendar is bt.shared_calendar
+
+
+def _load_script(name):
+    import importlib.util
+    from pathlib import Path
+    path = Path(__file__).resolve().parents[1] / "scripts" / f"{name}.py"
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def slow_slide(n=300, days=23, daily=-0.0075):
+    """Flat, then a slow slide: about 13% below the 20-day high, no -4% day and no -7% five-day return."""
+    c = np.concatenate([np.full(n, 100.0), 100.0 * (1 + daily) ** np.arange(1, days + 1)])
+    return pd.Series(c, index=dates(len(c)))
+
+
+def test_dip_state_includes_the_20d_rule():
+    from dipdash.backtest import dip_state
+    c = slow_slide()
+    sig = signals(c, S)
+    last = sig.iloc[-1]
+    assert last["dd20"] <= -0.12 and last["dd20"] > -0.15, last["dd20"]
+    assert last["r1"] > -S.dip.drop_1d and last["r5"] > -S.dip.drop_5d, "the slide must not trigger the 1d or 5d rule"
+    assert bool(dip_state(c, S).iloc[-1]) is True
+    old = (sig["r5"] <= -0.07) | (sig["r1"] <= -0.04)                          # the forecast runner's former hard-coded rule
+    assert not old.iloc[-1]
+    assert dip_state(c, S).equals(sig["dip"])
+    assert not dip_state(c.iloc[:300], S).any()                                # flat: no flag

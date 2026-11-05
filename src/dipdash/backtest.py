@@ -93,6 +93,23 @@ def split_cutoff(dates, oos_fraction: float) -> pd.Timestamp:
     return d[int(len(d) * (1 - oos_fraction)) - 1]
 
 
+def shared_calendar(prices: dict[str, pd.Series], start_date: str) -> list[pd.Timestamp]:
+    """Distinct trading dates on or after start_date over all series: the calendar every research runner splits."""
+    start = pd.Timestamp(start_date)
+    return sorted({d for c in prices.values() for d in c.index if d >= start})
+
+
+def shared_cutoff(prices: dict[str, pd.Series], s: Settings) -> pd.Timestamp:
+    """The one out-of-sample cutoff: split_cutoff of shared_calendar with settings.backtest.oos_fraction.
+    Backtest, feature experiment and forecast calibration all use it."""
+    return split_cutoff(shared_calendar(prices, s.backtest.start_date), s.backtest.oos_fraction)
+
+
+def dip_state(close: pd.Series, s: Settings) -> pd.Series:
+    """The dip flag of `signals` (1-day, 5-day or 20-day-high rule from settings; False without 252 bars of history)."""
+    return signals(close, s)["dip"]
+
+
 # ---------------------------------------------------------------- day table
 def _naive(c: pd.Series) -> pd.Series:
     """Index by calendar date: drop any time zone and time of day so stocks and indices line up by date."""

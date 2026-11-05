@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 
 from .backtest import (EU, PERIODS, US, VARIANTS, Cell, add_events, add_peer_returns, add_periods, build_days, run_cells,
-                       split_cutoff)
+                       shared_calendar, split_cutoff)
 from . import registry
 from .backtest_notes import revisions_for
 from .config import Settings, Stock
@@ -126,7 +126,7 @@ def run_backtest(prices: dict, index_close: dict, universe: list[Stock], quality
     out_dir.mkdir(parents=True, exist_ok=True)
     root = Path(root) if root is not None else out_dir.parent
     today = today or date.today()
-    calendar = sorted({d for c in prices.values() for d in c.index if d >= pd.Timestamp(s.backtest.start_date)})
+    calendar = shared_calendar(prices, s.backtest.start_date)
     spec = freeze_spec(s, universe, data_meta, calendar)
     cut = pd.Timestamp(spec["split"]["cutoff"])
     oos = [d for d in calendar if d > cut]

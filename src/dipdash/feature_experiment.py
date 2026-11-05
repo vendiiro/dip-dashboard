@@ -193,11 +193,13 @@ def spec_hash(spec: dict) -> str:
     return registry.hash_for("features", spec)
 
 
-def freeze_spec(parent: dict, cutoff: str, n_universe: int, family_id: str, boot: dict, rule: dict | None = None) -> dict:
+def freeze_spec(parent: dict, cutoff: str, n_universe: int, family_id: str, boot: dict, rule: dict | None = None,
+                oos_fraction: float = 0.4) -> dict:
     """Pre-registration. Built from inputs only (dates, settings, definitions); no return enters it.
 
     rule: the event rule's settings by value (dip, falling_knife, cooldown_days, start_date, horizons). Added only when given, so
-    specs frozen without it keep their hash."""
+    specs frozen without it keep their hash.
+    oos_fraction: settings.backtest.oos_fraction; the default keeps the hash of specs frozen before it was a parameter."""
     spec = {
         "family_id": family_id,
         "parent_backtest_spec": parent,
@@ -206,7 +208,7 @@ def freeze_spec(parent: dict, cutoff: str, n_universe: int, family_id: str, boot
         "feature_timing": "every feature at signal day t uses bars <= t only (trailing windows; tested by truncation)",
         "target": "fwd21 (entry next close, exit 21 bars later) minus the mean fwd21 of ALL stocks in the universe on the same signal date",
         "statistic": "Spearman rank correlation between feature and target, pooled over events",
-        "split": {"oos_fraction": 0.4, "cutoff_last_in_sample_date": cutoff, "purge": "in-sample events whose exit is after the cutoff are dropped"},
+        "split": {"oos_fraction": oos_fraction, "cutoff_last_in_sample_date": cutoff, "purge": "in-sample events whose exit is after the cutoff are dropped"},
         "in_sample_use": "ONLY to fix the sign of each feature (sign of in-sample rho) and the tercile cut points; nothing else is frozen or tuned",
         "out_of_sample": "the one test: last 40% of trading dates",
         "family": {"size": len(FAMILY), "members": FAMILY, "test": "OOS pooled (All regions) Spearman rho",

@@ -21,7 +21,8 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from dipdash.backtest import Cell, add_events, add_periods, build_days, cell_events, group_of, split_cutoff  # noqa: E402
+from dipdash.backtest import (Cell, add_events, add_periods, build_days, cell_events, group_of, shared_calendar,  # noqa: E402
+                              shared_cutoff)
 from dipdash.backtest_run import clean_bars, sha256  # noqa: E402
 from dipdash import registry  # noqa: E402
 from dipdash.cache import load_raw_prices  # noqa: E402
@@ -171,15 +172,15 @@ def main(argv: list[str] | None = None) -> int:
         if len(c2):
             prices[t] = c2
             volumes[t] = v.reindex(c2.index) if v is not None else None
-    calendar = sorted({d for c in prices.values() for d in c.index if d >= pd.Timestamp(s.backtest.start_date)})
-    cutoff = split_cutoff(calendar, s.backtest.oos_fraction)
+    calendar = shared_calendar(prices, s.backtest.start_date)
+    cutoff = shared_cutoff(prices, s)
     boot = {"method": "bootstrap resampling calendar months (whole months with replacement), rank correlation recomputed per draw",
             "draws": a.draws or s.backtest.bootstrap_draws, "level": s.backtest.ci_level, "seed": s.backtest.seed + 2100}
     parent = {"spec_hash": PARENT_SPEC, "raw_file": raw.name, "raw_sha256": sha256(raw),
               "universe_sha256": sha256(ROOT / "config" / "universe.csv"), "n_series": len(prices)}
     rule = {"dip": asdict(s.dip), "falling_knife": asdict(s.falling_knife), "cooldown_days": s.backtest.cooldown_days,
             "start_date": s.backtest.start_date, "horizons": list(s.backtest.horizons)}      # used by build_event_table; was only in the file hash
-    spec = freeze_spec(parent, str(cutoff.date()), len(universe), family_id, boot, rule)
+    spec = freeze_spec(parent, str(cutoff.date()), len(universe), family_id, boot, rule, s.backtest.oos_fraction)
     oos_dates = [d for d in calendar if d > cutoff]
     spec["provenance"] = build_provenance(s, ROOT / "src" / "dipdash")                      # not hashed; set before register so the archive holds it
     reg = registry.register("features", spec, out_dir, Path(a.out_root),                   # BEFORE any return or correlation
