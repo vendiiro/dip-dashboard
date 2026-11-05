@@ -1,5 +1,6 @@
 import csv
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
@@ -113,7 +114,7 @@ def test_validate_run_covers_missing_tickers_and_missing_fundamentals():
     prices = {"A": (geometric(100, 0.001), volume(100)), "C": (geometric(100, 0.001), None)}
     funds = {"A": {"currency": "USD"}}
     got = {(i.ticker, i.check) for i in validate_run(u, prices, funds, Settings(), TODAY)}
-    assert got == {("B", "no_data"), ("C", "no_fundamentals")}
+    assert got == {("B", "no_data"), ("C", "no_fundamentals"), ("*", "fundamentals_coverage")}   # 0 of 2 screened stocks have numbers
 
 
 def test_quality_log_is_sorted_by_severity_and_has_a_header(tmp_path):
@@ -193,3 +194,139 @@ def test_fetch_issues_have_severity_and_plain_detail():
     assert got[("AAA", "fetch_failed")].severity == "warn" and got[("CCC", "fetch_failed")].severity == "error"
     assert "8 days old" in got[("AAA", "fundamentals_stale")].detail and "429" in got[("AAA", "fundamentals_stale")].detail
     assert got[("BBB", "fundamentals_missing")].severity == "warn" and ("DDD", "fundamentals_stale") not in got
+
+
+# ---- DATA-4 / DATA-5: guards that fail loudly (offline, FakeYahoo + tmp dirs) -------------------------------------------
+from datetime import timezone  # noqa: E402
+
+from dipdash.fx import fetch_fx_to_usd  # noqa: E402
+from dipdash.validate import (check_exchange_coverage, check_fundamentals_coverage, check_fx_rates,  # noqa: E402
+                              check_lagging_vs_peers, check_partial_bars, has_fundamentals)
+from fakes import FakeYahoo  # noqa: E402
+
+
+def _universe(*tickers):
+    return [Stock(t, t, "US" if "." not in t else "Europe") for t in tickers]
+
+
+def _pull(fake, universe, tmp_path):
+    """The real fetch path on the fake: prices, fundamentals through the real cache, FX through fetch_fx_to_usd."""
+    tickers = [s.ticker for s in universe]
+    prices = fake.download(tickers)
+    funds = fake.fundamentals(list(prices), tmp_path / "fundamentals.json")
+    rates = fetch_fx_to_usd((f.get("currency") for f in funds.values()), fetch_last=fake.fx_last)
+    return prices, funds, rates
+
+
+def _fake(tickers, **kw):
+    return FakeYahoo({t: geometric(260, 0.0005) for t in tickers}, **kw)
+
+
+def test_planted_missing_fx_rate_is_an_error_naming_the_currency(tmp_path):
+    u = _universe("AAA", "B1.ST", "B2.ST", "C.HE")
+    fake = _fake([s.ticker for s in u], fx={"EUR": 1.08})          # no SEK rate
+    prices, funds, rates = _pull(fake, u, tmp_path)
+    got = check_fx_rates(u, prices, funds, rates)
+    assert [(i.ticker, i.check, i.severity) for i in got] == [("SEK", "fx_missing", "error")]
+    assert "2 stocks" in got[0].detail and "B1.ST" in got[0].detail
+    assert check_fx_rates(u, prices, funds, None) == []              # FX not fetched (demo): nothing to check
+    assert check_fx_rates(u, prices, funds, {**rates, "SEK": 0.095}) == []
+
+
+def test_pence_listing_needs_a_gbp_rate(tmp_path):
+    u = _universe("AAA", "X.L")
+    fake = _fake(["AAA", "X.L"], fx={})
+    prices, funds, rates = _pull(fake, u, tmp_path)
+    assert [i.ticker for i in check_fx_rates(u, prices, funds, rates)] == ["GBP"]
+
+
+def test_dropped_exchange_suffix_is_reported_once_for_the_exchange(tmp_path):
+    u = _universe("AAA", "BBB", "S1.ST", "S2.ST", "S3.ST", "H1.HE")
+    fake = _fake([s.ticker for s in u if not s.ticker.endswith(".ST")])     # Yahoo returned nothing for .ST
+    prices, funds, rates = _pull(fake, u, tmp_path)
+    got = check_exchange_coverage(u, prices)
+    assert [(i.ticker, i.check, i.severity) for i in got] == [(".ST", "exchange_missing", "error")]
+    assert "3 .ST" in got[0].detail and "Stockholm" in got[0].detail
+    full = validate_run(u, prices, funds, Settings(), TODAY)
+    assert sum(i.check == "exchange_missing" for i in full) == 1
+    assert {i.ticker for i in full if i.check == "no_data"} == {"S1.ST", "S2.ST", "S3.ST"}
+
+
+def test_a_single_ticker_exchange_is_not_an_exchange_outage():
+    u = _universe("AAA", "H1.HE")
+    assert check_exchange_coverage(u, {"AAA": (geometric(50, 0.001), None)}) == []
+
+
+def test_low_fundamentals_coverage_is_an_error_and_threshold_is_configurable(tmp_path):
+    tks = [f"T{i}" for i in range(10)]
+    u = _universe(*tks)
+    fake = _fake(tks, fail=())
+    prices, funds, _ = _pull(fake, u, tmp_path)
+    for t in tks[:3]:
+        funds[t] = {}                                               # 3 of 10 came back empty: 70% coverage
+    got = check_fundamentals_coverage(u, prices, funds)
+    assert [(i.ticker, i.check, i.severity) for i in got] == [("*", "fundamentals_coverage", "error")]
+    assert "7 of 10" in got[0].detail and "80%" in got[0].detail
+    assert check_fundamentals_coverage(u, prices, funds, min_share=0.7) == []
+
+
+def test_one_thin_exchange_is_only_a_warning(tmp_path):
+    tks = [f"T{i}" for i in range(20)] + ["A.ST", "B.ST", "C.ST"]
+    u = _universe(*tks)
+    prices, funds, _ = _pull(_fake(tks), u, tmp_path)
+    funds["A.ST"] = funds["B.ST"] = {}
+    got = check_fundamentals_coverage(u, prices, funds)
+    assert [(i.ticker, i.severity) for i in got] == [(".ST", "warn")]
+
+
+def test_has_fundamentals_needs_a_real_number():
+    assert has_fundamentals({"marketCap": 1e9}) and not has_fundamentals({"currency": "USD"}) and not has_fundamentals(None)
+    assert not has_fundamentals({"marketCap": float("nan")}) and not has_fundamentals({"marketCap": True})
+
+
+def test_holiday_where_all_peers_share_the_last_date_is_not_flagged():
+    old = geometric(100, 0.001, end="2026-10-27")                   # the whole exchange was shut on the 28th and 29th
+    prices = {f"{c}.PA": (old, None) for c in "ABCD"}
+    assert check_lagging_vs_peers(prices) == []
+
+
+def test_one_stock_behind_its_exchange_peers_is_flagged_with_the_gap():
+    now_ = geometric(100, 0.001, end="2026-10-29")
+    late = geometric(100, 0.001, end="2026-10-27")
+    prices = {"A.PA": (now_, None), "B.PA": (now_, None), "C.PA": (now_, None), "D.PA": (late, None),
+              "US1": (late, None), "US2": (late, None)}             # US peers all share the older date: fine there
+    got = check_lagging_vs_peers(prices)
+    assert [(i.ticker, i.check, i.severity) for i in got] == [("D.PA", "lagging_vs_peers", "warn")]
+    assert "2 weekday" in got[0].detail and "2026-10-29" in got[0].detail
+
+
+def test_too_few_peers_are_not_judged():
+    prices = {"A.PA": (geometric(50, 0.001, end="2026-10-29"), None), "B.PA": (geometric(50, 0.001, end="2026-10-27"), None)}
+    assert check_lagging_vs_peers(prices) == []
+
+
+def test_partial_bar_is_judged_by_each_exchanges_own_close_time():
+    bar = geometric(50, 0.001, end="2026-10-29")
+    prices = {"SAP.DE": (bar, None), "AAPL": (bar, None)}
+    # 2026-10-29 15:00 UTC = 16:00 in Berlin (Xetra closes 17:30), 11:00 in New York (closes 16:00): both still open
+    open_ = check_partial_bars(prices, datetime(2026, 10, 29, 15, 0, tzinfo=timezone.utc))
+    assert {i.ticker for i in open_} == {"SAP.DE", "AAPL"} and all(i.check == "partial_bar" for i in open_)
+    # 17:00 UTC = 18:00 Berlin (closed), 13:00 New York (open)
+    mid = check_partial_bars(prices, datetime(2026, 10, 29, 17, 0, tzinfo=timezone.utc))
+    assert [i.ticker for i in mid] == ["AAPL"] and "16:00" in mid[0].detail
+    # exactly at the close the grace window still applies, after it the bar is trusted
+    assert [i.ticker for i in check_partial_bars({"SAP.DE": (bar, None)}, datetime(2026, 10, 29, 16, 40, tzinfo=timezone.utc))] == ["SAP.DE"]  # 17:40 Berlin
+    assert check_partial_bars({"SAP.DE": (bar, None)}, datetime(2026, 10, 29, 16, 50, tzinfo=timezone.utc)) == []                             # 17:50 Berlin
+    # the nightly run at 00:15 Helsinki on the 30th: every bar dated the 29th is final
+    night = datetime(2026, 10, 30, 0, 15, tzinfo=ZoneInfo("Europe/Helsinki"))
+    assert check_partial_bars(prices, night) == []
+
+
+def test_validate_run_with_now_uses_exchange_time_and_includes_all_guards(tmp_path):
+    u = _universe("AAA", "BBB")
+    prices, funds, rates = _pull(_fake(["AAA", "BBB"]), u, tmp_path)
+    mid_session = datetime(2026, 10, 29, 15, 0, tzinfo=timezone.utc)                 # 11:00 in New York
+    got = validate_run(u, prices, funds, Settings(), date(2026, 10, 29), now=mid_session, fx_rates=rates)
+    assert {i.ticker for i in got if i.check == "partial_bar"} == {"AAA", "BBB"}
+    after = datetime(2026, 10, 30, 0, 15, tzinfo=ZoneInfo("Europe/Helsinki"))
+    assert not [i for i in validate_run(u, prices, funds, Settings(), date(2026, 10, 30), now=after, fx_rates=rates) if i.severity != "info"]

@@ -4,14 +4,16 @@ from __future__ import annotations
 import csv
 import io
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
 
 from .config import Settings, Stock
-from .exchanges import EXCHANGES, exchange_for
+from .exchanges import EXCHANGES, exchange_for, suffix_of
+from .fx import PENCE
 from .fsio import atomic_write_text
 from .screen import is_stale
 
@@ -21,6 +23,12 @@ SPIKE_NEIGHBOUR_TOL = 0.05
 SPIKE_LOW_VOLUME = 0.6      # a bad tick trades on thin volume; a real market-wide reversal day does not
 MAX_GAP_WEEKDAYS = 5     # a longer hole between bars means missing data (holiday gaps are at most 4)
 MAX_MISSING_SHARE = 0.05
+
+MIN_FUNDAMENTALS_SHARE = 0.8   # share of screened stocks with fundamentals; below it the run reports an error (request: move to [data] in settings.toml)
+MIN_EXCHANGE_TICKERS = 2       # a "whole exchange missing" needs at least this many universe tickers on the suffix
+MIN_PEERS = 3                  # "lagging versus peers" and per-exchange shares need at least this many tickers on the exchange
+PARTIAL_GRACE_MINUTES = 15     # a bar dated today is trusted this long after the exchange's regular close
+FUND_KEYS = ("returnOnEquity", "profitMargins", "debtToEquity", "freeCashflow", "revenueGrowth", "marketCap")
 
 SUFFIX_CURRENCY = {s: e.currency for s, e in EXCHANGES.items() if s and e.currency}   # derived view of the exchange registry
 
@@ -106,6 +114,158 @@ def check_partial_bar(ticker: str, close: pd.Series, today: date) -> list[Issue]
     return []
 
 
+def _label(suffix: str) -> str:
+    return suffix or "US"
+
+
+def _bars_date(close) -> date | None:
+    """Date of the newest non-empty close, or None when there is none."""
+    try:
+        c = close.dropna()
+        return pd.Timestamp(c.index[-1]).date() if len(c) else None
+    except Exception:
+        return None
+
+
+def check_partial_bars(prices: dict, now: datetime) -> list[Issue]:
+    """Partial bars judged by each exchange's own close time. A bar dated the exchange's local day is flagged only while
+    that exchange is still open (local time before its close plus PARTIAL_GRACE_MINUTES). `now` should be timezone-aware;
+    a naive value is taken as UTC. A suffix with no registry entry falls back to the plain "dated today" rule."""
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    out: list[Issue] = []
+    for t, (close, *_rest) in sorted(prices.items()):
+        last = _bars_date(close)
+        if last is None:
+            continue
+        ex = exchange_for(t)
+        if ex is None:
+            if last >= now.date():
+                out.append(Issue(t, "partial_bar", "warn", f"last bar is dated {last}, today: the session may still be open"))
+            continue
+        local = now.astimezone(ZoneInfo(ex.tz))
+        cutoff = datetime.combine(local.date(), ex.close) + timedelta(minutes=PARTIAL_GRACE_MINUTES)
+        if last >= local.date() and local.replace(tzinfo=None) < cutoff:
+            out.append(Issue(t, "partial_bar", "warn",
+                             f"last bar is dated {last} but {ex.name} closes at {ex.close:%H:%M} local time "
+                             f"({local:%H:%M} there now): the session may still be open"))
+    return out
+
+
+def lagging_vs_peers(last_dates: dict[str, date]) -> dict[str, tuple[date, int]]:
+    """Tickers whose newest bar is older than the reference date of their own exchange.
+    The reference is the newest date that a strict majority of the exchange's tickers have reached. Needs at least
+    MIN_PEERS tickers on the exchange. If all peers share one last date (an exchange holiday) nobody is returned.
+    Result: {ticker: (reference date, weekdays behind)}."""
+    groups: dict[str, list[tuple[str, date]]] = {}
+    for t, d in last_dates.items():
+        groups.setdefault(suffix_of(t), []).append((t, d))
+    out: dict[str, tuple[date, int]] = {}
+    for members in groups.values():
+        if len(members) < MIN_PEERS:
+            continue
+        ref = sorted((d for _, d in members), reverse=True)[len(members) // 2]
+        for t, d in members:
+            behind = int(np.busday_count(d, ref)) if d < ref else 0
+            if behind >= 1:
+                out[t] = (ref, behind)
+    return out
+
+
+def check_lagging_vs_peers(prices: dict) -> list[Issue]:
+    """'Lagging versus peers': the stock's last bar is older than that of most stocks on the same exchange."""
+    last = {t: d for t, v in prices.items() if (d := _bars_date(v[0])) is not None}
+    return [Issue(t, "lagging_vs_peers", "warn",
+                  f"last bar {last[t]} is {n} weekday(s) behind most {_label(suffix_of(t))} stocks ({ref}); the data may be late")
+            for t, (ref, n) in sorted(lagging_vs_peers(last).items())]
+
+
+def has_fundamentals(d) -> bool:
+    """True when the entry carries at least one of the numbers the quality score reads."""
+    if not isinstance(d, dict):
+        return False
+    for k in FUND_KEYS:
+        v = d.get(k)
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and v == v:
+            return True
+    return False
+
+
+def _has_bars(prices: dict, t: str) -> bool:
+    return t in prices and _bars_date(prices[t][0]) is not None
+
+
+def check_exchange_coverage(universe: list[Stock], prices: dict) -> list[Issue]:
+    """A whole exchange missing: at least MIN_EXCHANGE_TICKERS universe tickers share a suffix and none has any bars.
+    Usually a wrong suffix, a Yahoo outage for that market or a dropped batch, not 8 separate bad tickers."""
+    groups: dict[str, list[str]] = {}
+    for s in universe:
+        groups.setdefault(suffix_of(s.ticker), []).append(s.ticker)
+    out = []
+    for suffix, tks in sorted(groups.items()):
+        if len(tks) >= MIN_EXCHANGE_TICKERS and not any(_has_bars(prices, t) for t in tks):
+            ex = EXCHANGES.get(suffix)
+            out.append(Issue(_label(suffix), "exchange_missing", "error",
+                             f"no price bars for any of the {len(tks)} {_label(suffix)} stocks"
+                             f"{f' ({ex.name})' if ex else ''}: the whole exchange is missing from this run"))
+    return out
+
+
+def check_fundamentals_coverage(universe: list[Stock], prices: dict, funds: dict,
+                                min_share: float = MIN_FUNDAMENTALS_SHARE) -> list[Issue]:
+    """Share of stocks that have bars AND usable fundamentals. Below `min_share` overall is an error (the quality
+    score is mostly 'no data'); a single exchange below it, while the whole is fine, is a warning."""
+    screened = [s.ticker for s in universe if _has_bars(prices, s.ticker)]
+    if not screened:
+        return []
+    have = [t for t in screened if has_fundamentals(funds.get(t))]
+    share = len(have) / len(screened)
+    if share < min_share:
+        return [Issue("*", "fundamentals_coverage", "error",
+                      f"only {len(have)} of {len(screened)} stocks ({share:.0%}) have fundamentals; minimum {min_share:.0%}. "
+                      f"Quality scores for the rest read 'no data'")]
+    out = []
+    groups: dict[str, list[str]] = {}
+    for t in screened:
+        groups.setdefault(suffix_of(t), []).append(t)
+    for suffix, tks in sorted(groups.items()):
+        if len(tks) < MIN_PEERS:
+            continue
+        n = sum(has_fundamentals(funds.get(t)) for t in tks)
+        if n / len(tks) < min_share:
+            out.append(Issue(_label(suffix), "fundamentals_coverage", "warn",
+                             f"only {n} of {len(tks)} {_label(suffix)} stocks have fundamentals; minimum {min_share:.0%}"))
+    return out
+
+
+def _fx_code(ccy: str | None) -> str | None:
+    if not ccy:
+        return None
+    return "GBP" if ccy in PENCE else ccy.upper()
+
+
+def check_fx_rates(universe: list[Stock], prices: dict, funds: dict, rates: dict | None) -> list[Issue]:
+    """A currency in use (reported by fundamentals, else implied by the suffix) with no USD rate. `rates` is the dict from
+    fx.fetch_fx_to_usd; None means FX was not fetched at all (demo mode) and nothing is checked."""
+    if rates is None:
+        return []
+    used: dict[str, list[str]] = {}
+    for s in universe:
+        if s.ticker not in prices:
+            continue
+        ccy = _fx_code((funds.get(s.ticker) or {}).get("currency")) or _fx_code(expected_currency(s.ticker))
+        if ccy and ccy != "USD":
+            used.setdefault(ccy, []).append(s.ticker)
+    out = []
+    for ccy, tks in sorted(used.items()):
+        if not rates.get(ccy):
+            shown = ", ".join(tks[:4]) + (f" and {len(tks) - 4} more" if len(tks) > 4 else "")
+            out.append(Issue(ccy, "fx_missing", "error",
+                             f"no USD rate for {ccy} ({len(tks)} stocks: {shown}): their market cap cannot be converted, "
+                             f"so the size check reads 'no data'"))
+    return out
+
+
 def validate_currency(ticker: str, fund_currency: str | None) -> list[Issue]:
     exp = expected_currency(ticker)
     if exp is None:
@@ -148,18 +308,29 @@ def fetch_issues(reasons: dict[str, str], prices: dict, fund_status: dict | None
     return out
 
 
-def validate_run(universe: list[Stock], prices: dict, funds: dict, settings: Settings, today: date) -> list[Issue]:
+def validate_run(universe: list[Stock], prices: dict, funds: dict, settings: Settings, today: date,
+                 now: datetime | None = None, fx_rates: dict | None = None) -> list[Issue]:
+    """All per-ticker and run-level checks. `now` (timezone-aware) switches the partial-bar test to each exchange's close
+    time; without it the old "dated today" rule runs. `fx_rates` is the dict from fx.fetch_fx_to_usd (None = not fetched,
+    no FX check). The fundamentals minimum comes from settings.data.min_fundamentals_share when that field exists."""
     issues = check_duplicate_listings(universe)
     for s in universe:
         if s.ticker not in prices:
             issues.append(Issue(s.ticker, "no_data", "error", "ticker missing from the price pull"))
             continue
         issues += validate_prices(s.ticker, prices[s.ticker][0], today, settings.data.max_stale_trading_days, prices[s.ticker][1])
-        issues += check_partial_bar(s.ticker, prices[s.ticker][0], today)
+        if now is None:
+            issues += check_partial_bar(s.ticker, prices[s.ticker][0], today)
         if s.ticker in funds:
             issues += validate_currency(s.ticker, funds[s.ticker].get("currency"))
         else:
             issues.append(Issue(s.ticker, "no_fundamentals", "warn", "no fundamentals returned"))
+    if now is not None:
+        issues += check_partial_bars({s.ticker: prices[s.ticker] for s in universe if s.ticker in prices}, now)
+    issues += check_lagging_vs_peers({s.ticker: prices[s.ticker] for s in universe if s.ticker in prices})
+    issues += check_exchange_coverage(universe, prices)
+    issues += check_fundamentals_coverage(universe, prices, funds, getattr(settings.data, "min_fundamentals_share", MIN_FUNDAMENTALS_SHARE))
+    issues += check_fx_rates(universe, prices, funds, fx_rates)
     return issues
 
 

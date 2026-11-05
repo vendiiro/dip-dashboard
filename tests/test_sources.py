@@ -115,7 +115,7 @@ def test_tz_aware_mode_still_validates_by_date():
     prices, _ = pull_prices(list(y.prices), y.download, sleep=nosleep)
     assert prices["AAA"][0].index.tz is not None
     universe = [Stock("AAA", "AAA", "US")]
-    issues = validate_run(universe, {"AAA": prices["AAA"]}, {"AAA": {"currency": "USD"}}, Settings(), TODAY)
+    issues = validate_run(universe, {"AAA": prices["AAA"]}, {"AAA": {"currency": "USD", "marketCap": 1e11}}, Settings(), TODAY)
     assert issues == []
 
 
@@ -158,7 +158,7 @@ def test_fundamentals_seam_uses_cache_and_reports_missing_currency(tmp_path):
     n = len(y.called("info"))
     fetch_fundamentals(list(y.prices), path, fetch_info=y.info, sleep=nosleep)
     assert len(y.called("info")) == n + 3                        # only the failed ticker is asked again (1 try + 2 retries)
-    issues = validate_run([Stock("DDD", "DDD", "US")], {"DDD": (series(), None)}, {"DDD": f["DDD"]}, Settings(), TODAY)
+    issues = validate_run([Stock("DDD", "DDD", "US")], {"DDD": (series(), None)}, {"DDD": {**f["DDD"], "marketCap": 1e11}}, Settings(), TODAY)
     assert [(i.check, i.severity) for i in issues] == [("currency_missing", "warn")]
 
 
