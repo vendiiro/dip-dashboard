@@ -20,23 +20,26 @@ Some in-sample intervals excluded zero; none did out of sample. The report expla
 ## Level 1: look only (5 minutes, nothing to install)
 1. Open `docs/sample-output/dashboard-demo.html` in a browser (the canonical demo page, synthetic data). Click rows, change filters, sort columns, resize to phone width, switch your system to dark mode.
 2. Read `docs/sample-output/backtest/report.md` (charts are next to it). Read "How much to trust this" and "Changes after the first look" first.
-3. Read `docs/sample-output/digest_example_midsession_2026-11-02.md` and `docs/decisions.md` (every decision, correction and known gap, dated).
+3. Read `docs/sample-output/digest_example_midsession_2026-11-02.md` and `docs/decisions.md` (a topic index of every decision, correction and known gap; each one is a dated file in `docs/decisions/`).
 
 ## Level 2: run it (15 minutes, no network needed)
 Python 3.11+. In a terminal in this folder:
 ```
 python -m venv .venv
 .venv\Scripts\activate            (Windows)   or   source .venv/bin/activate   (macOS/Linux)
-pip install pandas numpy pytest yfinance matplotlib
+pip install -r requirements-dev.txt
+python -m playwright install chromium
 python -m pytest -q
 python src/dip_screener.py --demo --out output/demo.html --history
 ```
 Expected: the full suite passes (browser tests skip unless Playwright and a Chromium are installed), then `output/demo.html`, `output/digest.md`, `output/data_quality.demo.csv`, and dated copies in `output/history/`.
-`requirements.txt` also lists `openbb` (about 1 GB, only used for the second-source price cross-check) and `playwright` (browser tests and screenshots). Both are optional:
+`requirements-dev.txt` holds the exact versions that tests and CI use (with Playwright, without `openbb`); the second line downloads the Chromium the browser tests and screenshots need.
+`requirements.txt` is for the live run (Level 3). It adds `openbb` (about 1 GB, only used for the second-source price cross-check), which is optional:
 without `openbb` the live run prints "Cross-check skipped" and carries on (the digest then says no cross-check was run).
 
 ## Level 3: live data (needs internet)
 ```
+pip install -r requirements.txt
 python src/dip_screener.py --out output/dashboard.html --history --open
 python scripts/run_backtest.py
 ```

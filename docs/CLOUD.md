@@ -3,7 +3,9 @@
 ## Setup (Linux or macOS container)
 ```bash
 uv venv && source .venv/bin/activate          # Python 3.11+
-uv pip install -r requirements.txt            # openbb is large and optional for tests; yfinance is the working data source
+uv pip install -r requirements-dev.txt        # exact pins used by tests and CI (no openbb)
+python -m playwright install chromium          # browser for tests/test_browser.py and screenshots
+# live run only: uv pip install -r requirements.txt  (adds openbb, large and optional; yfinance is the working data source)
 export PYTHONPATH=src
 pytest -q                                      # full suite, offline; tests/test_browser.py skips without Playwright
 python -m dipdash --demo --out /tmp/demo.html  # synthetic data, no network
@@ -25,7 +27,7 @@ Do NOT set `PYTHONUTF8=1` on a machine whose user folder contains non-ASCII char
 
 ## Where things are
 `src/dipdash/` package (data, metrics, quality, screen, residual, earnings, alerts, backtest, dashboard, digest, cli) · `src/template.html` dashboard shell ·
-`config/` universe, settings, alerts · `tests/` · `docs/decisions.md` dated decision log · `docs/AGENTS.md` agent tree and rules · `docs/BACKLOG.md` open work · `snapshots/` data and EDA.
+`config/` universe, settings, alerts · `tests/` · `docs/decisions.md` topic index of the decision log (one dated file per decision in `docs/decisions/`; add a file, then run `python tests/test_decisions_index.py --write`) · `docs/AGENTS.md` agent tree and rules · `docs/BACKLOG.md` open work · `snapshots/` data and EDA.
 
 ## Open items (from the 2026-11-04 verification)
 Earnings dates missing for 49 stocks (mostly European) · negative fitted betas floored at 0 for 49 stocks (is the S&P 500 the right single factor?) · 22 stocks under the 20B USD market-cap check ·
