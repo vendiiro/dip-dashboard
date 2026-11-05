@@ -108,27 +108,36 @@ header.top{display:flex;flex-direction:column;gap:4px}
 .mkt .h{font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em}
 .mkt .num{text-align:right}
 
-.controls{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
-.ctl{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--ink-2);min-width:0}
-.ctl .v{color:var(--ink);font-family:var(--f-data)}
+/* Desktop: labels sit beside their control, so the filters fit in two short rows (Show, Region, Search, Hide falling knives / window, minimum drop, quality). Phone: stacked, inside the Filters panel. */
+.controls{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 14px}
+.ctl{display:flex;flex-direction:row;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-2);min-width:0}
+.ctl .v{color:var(--ink);font-family:var(--f-data);min-width:3ch}
 .seg{display:flex;background:var(--sunken);border-radius:7px;padding:2px;gap:2px;flex-wrap:wrap}
-.seg button{border:0;background:none;padding:6px 10px;border-radius:5px;cursor:pointer;color:var(--ink-2);min-height:40px}
+.seg button{border:0;background:none;padding:6px 8px;border-radius:5px;cursor:pointer;color:var(--ink-2);min-height:40px}
 .seg .ct{color:var(--ink-3);font-family:var(--f-data);font-size:11.5px;margin-left:4px}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.1)}
 select,input[type=search]{background:var(--bg);border:1px solid var(--line-strong);border-radius:6px;padding:7px 9px;min-height:40px}
-input[type=range]{width:150px;accent-color:var(--accent);min-height:40px}
+input[type=search]{width:130px}
+input[type=range]{width:120px;accent-color:var(--accent);min-height:40px}
 .tablehead .ttl{display:flex;align-items:baseline;gap:4px 12px;flex-wrap:wrap}
 .check{flex-direction:row;align-items:center;gap:8px;min-height:40px;color:var(--ink);cursor:pointer}
 .check input{width:18px;height:18px;accent-color:var(--accent);margin:0;cursor:pointer}
 
-.tablecard{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+/* overflow:clip, not hidden: hidden would make the card a scroll container and the sticky header could not follow the page scroll. */
+.tablecard{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;overflow:clip}
 .tablehead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;padding:12px 14px 8px}
 .tablehead .muted{font-size:12.5px}
 /* Right-edge shadow while more columns are hidden off-screen (CSS only: it vanishes once scrolled to the end). */
 .scroll{overflow-x:auto;background:
   linear-gradient(to left,var(--surface),var(--surface)) 100% 0/24px 100% no-repeat local,
   linear-gradient(to left,rgba(20,24,33,.16),rgba(20,24,33,0)) 100% 0/18px 100% no-repeat scroll}
-table{border-collapse:collapse;width:100%;min-width:900px}
+/* The table is not its own scroller while it fits: that lets the header (position:sticky, top:0) follow the page scroll.
+   When it is wider than the card (More columns, narrow windows) JS adds .hs: the box scrolls sideways and the header is pinned with --pin instead. */
+.scroll:not(.hs){overflow:visible;background:none}
+.scroll.hs thead th{transform:translateY(var(--pin,0px))}
+table{border-collapse:separate;border-spacing:0;width:100%;min-width:900px}
+thead th{position:sticky;top:0;z-index:3;box-shadow:inset 0 -1px 0 var(--line)}
+thead th:first-child{z-index:4}
 table.wide{min-width:1120px}
 .brief{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px;display:flex;flex-direction:column;gap:2px}
 .brief h2{font-size:14px;font-weight:600}
@@ -188,7 +197,7 @@ td.detail{white-space:normal;text-align:left;padding:14px;position:static;backgr
 .more{align-self:flex-start;border:1px solid var(--line-strong);background:var(--surface);border-radius:6px;padding:6px 12px;min-height:40px;cursor:pointer;font-size:13px;color:var(--accent)}
 .more:hover{background:var(--sunken)}
 .dqpanel .t{white-space:normal}
-.dropnote{font-size:12.5px;color:var(--ink-2);max-width:230px;align-self:center;line-height:1.35}
+.dropnote{font-size:12.5px;color:var(--ink-2);flex:1 1 260px;min-width:0;line-height:1.35}
 .cards{display:none;flex-direction:column}
 .sc{border-top:1px solid var(--line)}
 .sc.open{background:var(--sunken)}
@@ -200,8 +209,11 @@ td.detail{white-space:normal;text-align:left;padding:14px;position:static;backgr
 .schead .mets .v{font-family:var(--f-data);font-variant-numeric:tabular-nums}
 .schead .bdrow{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
 .scdetail{padding:0 10px 14px}
-.cardsmore{margin:4px 14px 14px;align-self:stretch;font:inherit;font-size:13.5px;min-height:44px;border:1px solid var(--line-strong);background:var(--surface);border-radius:8px;color:var(--accent);cursor:pointer}
-.cardsmore:hover{background:var(--sunken)}
+/* One button style for "Show all N stocks": under the phone cards and under the desktop table. */
+.showall{margin:4px 14px 14px;align-self:stretch;font:inherit;font-size:13.5px;min-height:44px;border:1px solid var(--line-strong);background:var(--surface);border-radius:8px;color:var(--accent);cursor:pointer}
+.showall:hover{background:var(--sunken)}
+.rowsmore{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;padding:10px 14px;border-top:1px solid var(--line);font-size:12.5px;color:var(--ink-3)}
+.rowsmore .showall{margin:0;padding:0 18px}
 .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink-2)}
 .legend i{display:inline-block;width:14px;height:0;border-top:2px solid;vertical-align:middle;margin-right:5px}
 
@@ -241,9 +253,13 @@ footer dd.hit,footer dt.hit{background:var(--line);border-radius:4px}
   .brief p{font-size:13.5px}
   .seg button{min-height:40px;padding:6px 12px}
   .ctl select,.ctl input{min-height:40px}
-  .ctl{flex:1 1 100%}
-  .dropnote{max-width:none;align-self:stretch}
+  input[type=search]{width:auto}
+  .controls{gap:12px 20px;padding:12px 14px;align-items:flex-end}
+  .ctl{flex:1 1 100%;flex-direction:column;align-items:stretch;gap:4px}
+  .ctl.check{flex-direction:row;align-items:center;gap:8px}
+  .dropnote{flex:1 1 100%}
   .tablehead .muted{font-size:12px}
+  .tablehead{padding:10px 14px 6px}
   .meta{gap:6px 12px}
   .dq{min-height:40px}
   .controls .sortctl{display:flex}
@@ -262,6 +278,10 @@ footer dd.hit,footer dt.hit{background:var(--line);border-radius:4px}
   .brief .sub{display:block;margin-top:2px}
   .brief .sub .subrest,.brief .sub .dot{display:none}
   .tile .big{font-size:24px}
+  .brief .idxline{display:none}   /* the index moves are in the Market context tile; the phone brief keeps the first sentence */
+  .wrap{padding:12px 12px 32px;gap:12px}
+  .demo{display:block;padding:6px 10px;font-size:12px;line-height:1.4}
+  .demo b{margin-right:6px}
   input[type=range]{width:100%}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -298,6 +318,11 @@ footer dd.hit,footer dt.hit{background:var(--line);border-radius:4px}
         <button data-v="all" aria-pressed="false">All stocks</button>
       </div>
     </div>
+    <div class="ctl">Region
+      <div class="seg" id="region"></div>
+    </div>
+    <label class="ctl" for="q">Search<input type="search" id="q" placeholder="Ticker or name"></label>
+    <label class="ctl check" for="hideknife"><input type="checkbox" id="hideknife"> Hide falling knives</label>
     <label class="ctl" for="win">Drop measured over
       <select id="win"></select></label>
     <label class="ctl" for="drop" id="droplab">Minimum drop <span class="v" id="dropv"></span>
@@ -305,11 +330,6 @@ footer dd.hit,footer dt.hit{background:var(--line);border-radius:4px}
     <div class="dropnote" id="dropnote" hidden></div>
     <label class="ctl" for="qmin">Minimum quality score <span class="v" id="qv"></span>
       <input type="range" id="qmin" min="0" max="100" step="10" value="60"></label>
-    <div class="ctl">Region
-      <div class="seg" id="region"></div>
-    </div>
-    <label class="ctl check" for="hideknife"><input type="checkbox" id="hideknife"> Hide falling knives</label>
-    <label class="ctl" for="q">Search<input type="search" id="q" placeholder="Ticker or name"></label>
     <label class="ctl sortctl" for="sortsel">Sort by <select id="sortsel"></select></label>
   </div>
 
@@ -321,6 +341,7 @@ footer dd.hit,footer dt.hit{background:var(--line);border-radius:4px}
       <thead><tr id="head"></tr></thead>
       <tbody id="body"></tbody>
     </table></div>
+    <div class="rowsmore" id="rowsmore" hidden></div>
     <div class="empty" id="empty" hidden>No stocks match. Lower the minimum drop, lower the minimum quality score, or switch “Show” to All dips. <button type="button" class="resetbtn" id="resetbtn">Reset filters</button></div>
   </div>
 
@@ -625,7 +646,7 @@ function brief(all) {
   const sub = h.lastChild; sub.append(el('span', 'dot', ' · '), 'a description of the latest close, not a forecast.'); const rest = el('span', 'subrest', ' Dip and quality counts follow the window and quality settings; the rest covers all screened stocks.'); sub.append(rest);
   const p1 = el('p'), dl = el('a', null, 'Definitions'); dl.href = '#def-q';
   p1.append(`${dips.length} of ${all.length} screened stocks are flagged as dips; ${qd.length} of them meet the check thresholds (see `, dl, `)${newQ.length ? ' and ' + newQ.length + ' ' + (newQ.length === 1 ? 'is' : 'are') + ' new since the previous close' : ''}.`);
-  const p2 = el('p');
+  const p2 = el('p', 'idxline');
   const ix = (DATA.indices || []).slice(0, 2).filter(i => i.r1 != null);
   const r5s = all.map(r => r.r5).filter(v => v != null).sort((a, b) => a - b);
   if (ix.length) {
@@ -857,9 +878,9 @@ function render() {
   $('sortnote').hidden = !!S.sortKey;               // the note describes the default order only
   $('tabletitle').textContent = {quality: 'Dips meeting the check thresholds', dips: 'All dips', all: 'All stocks'}[S.show] + ` · ${list.length}`;
   S.list = list;
-  // Phone cards: first CARDS_FIRST, then a "Show all" button. Any change of filter or sort folds the list back.
+  // Phone cards (first 10) and desktop rows (first 25), then a "Show all" button; both share S.showAll. Any change of filter or sort folds the list back.
   const sig = JSON.stringify([S.show, S.region, qs, $('hideknife').checked, $('qmin').value, win, $('drop').value, S.sortKey, S.sortDir]);
-  if (sig !== S.sig) { S.sig = sig; S.cardsAll = false; }
+  if (sig !== S.sig) { S.sig = sig; S.showAll = false; }
 
   const head = $('head'); head.replaceChildren();
   $('body').parentElement.classList.toggle('wide', S.more);
@@ -877,7 +898,8 @@ function render() {
   });
 
   const body = $('body'); body.replaceChildren(); $('empty').hidden = list.length > 0;
-  list.forEach(r => guard('table row', () => {     // a row that cannot be drawn is skipped and named, never silent
+  // The desktop table rows are built only on desktop and the phone cards only on phone, so a 348-stock page does not carry the hidden layout.
+  if (!mq.matches) visibleOf(list).forEach(r => guard('table row', () => {     // a row that cannot be drawn is skipped and named, never silent
     const tr = el('tr', 'row' + (S.open === r.t ? ' open' : '')); tr.dataset.t = r.t;
     visCols().forEach(c => { const td = c.cell(r); td.dataset.k = c.k; tr.append(td); });
     tr.onclick = () => { S.open = S.open === r.t ? null : r.t; S.focus = 'tr.row[data-t="' + r.t + '"] .tkbtn'; render(); };
@@ -885,11 +907,29 @@ function render() {
     if (S.open === r.t && !mq.matches) { const d = el('tr'); const td = el('td', 'detail'); td.colSpan = visCols().length; td.append(safeDetail(r)); d.append(td); body.append(d); }
   }, r.t));
   guard('the phone cards', () => renderCards(list));
+  guard('the show-all button', () => renderRowsMore(list));
+  fitScroll();
   syncSort();
   if (S.focus) { const f = document.querySelector(S.focus); S.focus = null; if (f) f.focus(); }
-  $('tablehint').textContent = mq.matches ? 'Tap a stock for details. Sparkline: 90 days, each stock scaled to its own min–max.' : 'Click a row for details. Click a column to sort. Sparkline: 90 days, each row scaled to its own min–max.';
+  $('tablehint').textContent = mq.matches ? 'Tap a stock for details. Sparkline: 90 days, own scale.' : 'Click a row for details. Click a column to sort. Sparkline: 90 days, each row scaled to its own min–max.';
   guard('the distribution chart', () => hist(all)); guard('the sector chart', () => sectors(all));
 }
+// Sticky header. While the table fits the card it is not a scroller and `position: sticky` follows the page scroll.
+// Wider than the card (More columns, narrow windows): the box scrolls sideways (.hs), and the header is pinned by JS with --pin.
+const scrollBox = document.querySelector('.scroll');
+function pinHead() {
+  if (!scrollBox.classList.contains('hs')) { scrollBox.style.removeProperty('--pin'); return; }
+  const t = scrollBox.querySelector('table').getBoundingClientRect(), h = $('head').offsetHeight;
+  scrollBox.style.setProperty('--pin', Math.round(Math.min(Math.max(0, -t.top), Math.max(0, t.height - h))) + 'px');
+}
+function fitScroll() {
+  scrollBox.classList.remove('hs');
+  if (!mq.matches && scrollBox.querySelector('table').getBoundingClientRect().width > scrollBox.parentElement.clientWidth + 1) scrollBox.classList.add('hs');
+  pinHead();
+}
+let pinQueued = false;
+addEventListener('scroll', () => { if (pinQueued) return; pinQueued = true; requestAnimationFrame(() => { pinQueued = false; pinHead(); }); }, {passive: true});
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (window.__dipDrawn) fitScroll(); });
 mq.addEventListener('change', () => render());
 // Charts are sized to the window when drawn, so redraw after a resize. Width changes only: a phone's address bar showing or
 // hiding while scrolling changes the height, and that must not redraw (it would also close nothing, but it costs time).
@@ -906,13 +946,31 @@ function syncSort() {
   }
   sel.value = S.sortKey || '';
 }
-const CARDS_FIRST = 10;
+const CARDS_FIRST = 10, ROWS_FIRST = 25;   // phone cards / desktop rows shown before "Show all N stocks"
+const capNow = () => mq.matches ? CARDS_FIRST : ROWS_FIRST;
+// The rows (or cards) to draw: the first few, or all of them after "Show all"; an open stock outside the first few stays in view.
+function visibleOf(list) {
+  const shown = S.showAll ? list : list.slice(0, capNow());
+  if (S.open && !shown.some(r => r.t === S.open)) { const o = list.find(r => r.t === S.open); if (o) return [...shown, o]; }
+  return shown;
+}
+// The one "Show all N stocks" button for phone and desktop: same state (S.showAll), same style, own test id.
+function showAllBtn(testid, list) {
+  const cap = capNow(), mb = el('button', 'showall', S.showAll ? 'Show the first ' + cap + ' only' : 'Show all ' + list.length + ' stocks');
+  mb.type = 'button'; mb.dataset.testid = testid; mb.setAttribute('aria-expanded', String(!!S.showAll));
+  mb.onclick = () => { S.showAll = !S.showAll; render(); const nb = document.querySelector('[data-testid=' + testid + ']'); if (nb) nb.focus(); };
+  return mb;
+}
+function renderRowsMore(list) {
+  const box = $('rowsmore'); box.replaceChildren();
+  box.hidden = mq.matches || list.length <= ROWS_FIRST;
+  if (box.hidden) return;
+  box.append(el('span', null, S.showAll ? `Showing all ${list.length} stocks.` : `Showing the first ${ROWS_FIRST} of ${list.length} stocks.`), showAllBtn('rows-more', list));
+}
 function renderCards(list) {
   const box = $('cards'); box.replaceChildren();
   if (!mq.matches) return;
-  const shown = S.cardsAll ? list : list.slice(0, CARDS_FIRST);
-  if (S.open && !shown.some(r => r.t === S.open) && list.some(r => r.t === S.open)) shown.push(list.find(r => r.t === S.open));   // keep an open card in view
-  shown.forEach((r, i) => guard('phone card', () => {
+  visibleOf(list).forEach((r, i) => guard('phone card', () => {
     const open = S.open === r.t, id = 'sc-' + i;
     const card = el('div', 'sc' + (open ? ' open' : ''));
     const b = el('button', 'schead'); b.type = 'button'; b.setAttribute('aria-expanded', String(open)); b.setAttribute('aria-controls', id + '-d');
@@ -932,12 +990,7 @@ function renderCards(list) {
     if (open) { const d = el('div', 'scdetail'); d.id = id + '-d'; d.append(safeDetail(r)); card.append(d); }
     box.append(card);
   }, r.t));
-  if (list.length > CARDS_FIRST) {
-    const mb = el('button', 'cardsmore', S.cardsAll ? 'Show the first ' + CARDS_FIRST + ' only' : 'Show all ' + list.length + ' stocks');
-    mb.type = 'button'; mb.dataset.testid = 'cards-more'; mb.setAttribute('aria-expanded', String(!!S.cardsAll));
-    mb.onclick = () => { S.cardsAll = !S.cardsAll; render(); const nb = document.querySelector('[data-testid=cards-more]'); if (nb) nb.focus(); };
-    box.append(mb);
-  }
+  if (list.length > CARDS_FIRST) box.append(showAllBtn('cards-more', list));
 }
 
 // ---------- row detail ----------

@@ -21,8 +21,9 @@ The "Used by" column says which file would break: `browser` = `tests/test_browse
 | `id:brief` | browser | "Today in brief" paragraph |
 | `id:head` | browser | Table header row (column count, sort clicks) |
 | `id:sortsel` | browser | Phone sort select; its first option is "Size of drop (default)" |
-| `id:body` | browser, visual | Table body; rows are `tr.row` |
-| `id:cards` | browser, visual | Phone card list (shown at 600 px and below) |
+| `id:body` | browser, visual | Table body; rows are `tr.row`. Built on desktop only (empty on a phone), and only the first 25 rows until "Show all N stocks" is pressed |
+| `id:cards` | browser, visual | Phone card list (shown at 600 px and below). Built on a phone only (empty on desktop); first 10 cards until "Show all N stocks" |
+| `id:rowsmore` | browser | Bar under the desktop table with "Showing the first 25 of N stocks." and the show-all button; hidden when the list has 25 rows or fewer, and on a phone |
 | `id:empty` | browser, visual | Written empty state ("No stocks match ...") |
 | `id:resetbtn` | browser | "Reset filters" button inside the empty state |
 | `id:activebar` | browser | Chips for filters that differ from the default |
@@ -30,6 +31,7 @@ The "Used by" column says which file would break: `browser` = `tests/test_browse
 | `id:sortnote` | browser | "Sorted by size of drop" beside the table title; visible only while no column is chosen (`S.sortKey` null) |
 | `id:alerts` | browser | Trigger alerts section; each alert shows a badge worded from `context.setup_text` |
 | `id:colbtn` | browser | "More columns" / "Fewer columns" toggle |
+| `id:controls` | browser | The filter box; two short rows on desktop, the panel behind `#ctltoggle` on a phone |
 | `id:show` | browser | Show filter (dips meeting the check thresholds / all dips / all stocks), buttons carry `data-v` |
 | `id:region` | browser, visual | Region filter, buttons carry `data-v` |
 | `id:win` | browser, visual | "Drop measured over" select (`any`, `r1`, ...) |
@@ -67,7 +69,8 @@ The "Used by" column says which file would break: `browser` = `tests/test_browse
 | `testid:defs` | browser | The Definitions `<details>` (same element as `#defs`) |
 | `testid:defs-toggle` | browser | Its `<summary>` ("Definitions", at least 40 px tall) |
 | `testid:foot-always` | browser | Sources and "Not investment advice", always visible outside the toggle |
-| `testid:cards-more` | browser | "Show all N stocks" button under the phone cards |
+| `testid:cards-more` | browser | "Show all N stocks" button under the phone cards (first 10 shown; label "Show the first 10 only" when expanded) |
+| `testid:rows-more` | browser | The same button under the desktop table (first 25 rows shown; "Show the first 25 only" when expanded). Same state and style as `cards-more`; any filter or sort change folds the list back; an open row outside the first 25 stays drawn |
 
 ## Data attributes
 
@@ -88,6 +91,8 @@ The "Used by" column says which file would break: `browser` = `tests/test_browse
 | `class:detail` | browser, visual | The detail cell under an open row (`td.detail`) |
 | `class:tkbtn` | browser | The ticker button in a row (tap target of at least 40 px) |
 | `class:sc` | browser, visual | One phone card |
+| `class:scroll` | browser | Wrapper of the table. While the table fits the card it is not a scroller and the header is plain CSS `position: sticky; top: 0` on the page scroll |
+| `class:hs` | browser | Added to `.scroll` when the table is wider than the card (More columns, narrow windows): it scrolls sideways and the header is pinned by JS (`--pin`) instead |
 | `class:schead` | visual | The tappable head of a phone card |
 | `class:tile` | browser, shots | A summary tile |
 | `class:big` | browser | The large number in a tile |
@@ -125,6 +130,14 @@ Meaning and types are in `docs/payload.md`; only the integrator renames them.
 | `data:hist` | browser | One-year history of a row (`c` = closes) |
 | `data:asof` | browser | Date of the last bar of a row |
 | `data:ccy` | browser | Price currency of a row |
+
+## Layout limits the browser tests pin (FE-1, FE-2)
+
+- 1280 x 800, demo page: the first table row starts below 900 px from the page top (755 px now; 707 px on the 4 Nov snapshot data); the filters take two rows (`#controls` under 130 px tall).
+- 390 x 844, demo page with its Demo banner: the first card starts below 844 px from the top (831 px now; 808 px on the snapshot data).
+- The header row `#head th` stays at the top of the viewport while the page scrolls, light and dark, also with More columns.
+- Only the layout in use is built: desktop has `tr.row` and no `.sc`, phone has `.sc` and no `tr.row`; `#head` is built on both.
+- Tests that read every row on desktop press `rows-more` first (helper `expand_rows` in `tests/test_browser.py`).
 
 ## Visual baselines
 

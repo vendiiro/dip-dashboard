@@ -42,13 +42,20 @@ def open_page(browser, url, w=1280, h=900, scheme="light"):
     return page, errors
 
 
+def expand_rows(page):
+    """Desktop shows the first 25 rows; press "Show all N stocks" when there is such a button (a filter change folds the list back)."""
+    more = page.locator("[data-testid=rows-more]")
+    if more.count():
+        more.click()
+
+
 @pytest.mark.parametrize("w, h", [(1280, 900), (390, 844)])
 @pytest.mark.parametrize("scheme", ["light", "dark"])
 def test_renders_without_errors_or_sideways_scroll(browser, demo_html, w, h, scheme):
     page, errors = open_page(browser, demo_html, w, h, scheme)
     assert errors == []
     assert page.evaluate("document.documentElement.scrollWidth - innerWidth") <= 0
-    assert page.locator("#body tr.row").count() > 0
+    assert page.locator("#body tr.row" if w > 600 else "#cards .sc").count() > 0      # the other layout is not built
     page.close()
 
 
@@ -82,13 +89,15 @@ def test_brief_and_compact_columns(browser, demo_html):
 def test_show_filter_changes_the_row_count(browser, demo_html):
     page, _ = open_page(browser, demo_html)
     rowsel = page.locator("#body tr.row")
-    dips = rowsel.count()                                   # the page is drawn at load; later reads wait for the redraw
+    dips = page.evaluate("DATA.rows.filter(r => r.dip).length")    # the table shows at most 25 of them; "Show all" is pressed below where the count matters
     total = page.evaluate("DATA.rows.length")
     page.click("#show button[data-v=all]")
+    expand_rows(page)
     pw.expect(rowsel).to_have_count(total)
     assert total > dips
     pw.expect(page.locator("#show button[data-v=all] .ct")).to_have_text(str(total))
     page.click("#show button[data-v=quality]")
+    expand_rows(page)
     n_quality = page.evaluate("DATA.rows.filter(r => window.__dipView(r.t).rank === 4).length")
     pw.expect(rowsel).to_have_count(n_quality)
     assert 0 < n_quality <= dips
@@ -107,6 +116,7 @@ def test_search_and_region_filters(browser, demo_html):
     assert page.is_visible("#empty") and "No stocks match" in page.inner_text("#empty")
     page.fill("#q", "")
     page.click("#region button[data-v=Nordic]")
+    expand_rows(page)
     nordic = page.evaluate("DATA.rows.filter(r => r.region === 'Nordic').length")
     assert page.locator("#body tr.row").count() == nordic
     assert 0 < nordic < page.evaluate("DATA.rows.length")
@@ -140,7 +150,9 @@ def test_sorting_toggles_direction_and_marks_the_header(browser, demo_html):
     page, _ = open_page(browser, demo_html)
     page.click("#show button[data-v=all]")
     page.click("#head th:has-text('Price')")
-    prices = lambda: [float(t.split()[0]) for t in page.locator("#body tr.row td[data-k=price]").all_inner_texts()]
+    def prices():
+        expand_rows(page)
+        return [float(t.split()[0]) for t in page.locator("#body tr.row td[data-k=price]").all_inner_texts()]
     desc = prices()
     assert desc == sorted(desc, reverse=True)
     page.click("#head th:has-text('Price')")
@@ -181,6 +193,7 @@ def test_default_dip_count_equals_the_python_rule(browser, demo_html):
     """The page and the nightly digest must agree: rows shown under 'All dips' are exactly the payload rows flagged `dip`."""
     page, _ = open_page(browser, demo_html)
     expected = page.evaluate("DATA.rows.filter(r => r.dip).map(r => r.t).sort()")
+    expand_rows(page)
     shown = sorted(t for t, _ in page.evaluate(SHOWN))
     assert shown == expected and len(expected) > 0
     page.close()
@@ -189,6 +202,7 @@ def test_default_dip_count_equals_the_python_rule(browser, demo_html):
 def test_new_since_yesterday_tile_matches_the_rows_marked_new(browser, demo_html):
     page, _ = open_page(browser, demo_html)
     tile = page.locator("[data-testid=tile-new]")
+    expand_rows(page)
     more = tile.locator("[data-testid=tile-chip-more]")
     if more.count():                                    # the tile shows 8 chips; open "+N more" to read them all
         more.click()
@@ -393,6 +407,7 @@ def test_payload_setup_stays_a_string_and_the_view_is_separate(browser, demo_htm
 def test_end_dots_are_coloured_by_direction(browser, demo_html):
     page, _ = open_page(browser, demo_html)
     page.click("#show button[data-v=all]")
+    expand_rows(page)
     up = page.evaluate("DATA.rows.find(r => r.hist.c.at(-1) > r.hist.c[0] && r.spark.at(-1) > r.spark[0]).t")
     down = page.evaluate("DATA.rows.find(r => r.hist.c.at(-1) < r.hist.c[0] && r.spark.at(-1) < r.spark[0]).t")
     for t, d in ((up, "up"), (down, "down")):
@@ -492,6 +507,7 @@ def test_distorted_and_no_fundamentals_states_render(browser, demo_html):
     page, errors = open_page(browser, demo_html)
     page.evaluate("""() => { const r = DATA.rows.find(x => x.dip && x.q != null && !x.knife); r.q_status = 'distorted'; r.q_why = 'ROE and debt/equity are both missing'; window.__t = r.t; document.getElementById('q').dispatchEvent(new Event('input')); }""")
     t = page.evaluate("window.__t")
+    expand_rows(page)
     badge = page.locator(f"#body tr.row[data-t='{t}'] .badge")
     assert "Dip · data looks unreliable" in badge.inner_text() and "ROE and debt/equity are both missing" in badge.get_attribute("title")
     title = badge.get_attribute("title")
@@ -662,4 +678,173 @@ def test_phone_filters_summary_says_quality_score(browser, demo_html):
     page, _ = open_page(browser, demo_html, 390, 844)
     assert "Quality score ≥ " in page.text_content("#ctlsum")
     assert "quality ≥" not in page.text_content("#ctlsum").lower()
+    page.close()
+
+
+# ---------- FE-1 / FE-2: table near the top, sticky header, 25 rows then "Show all N stocks", no hidden layout ----------
+ROWS_FIRST = 25
+
+
+def test_desktop_shows_25_rows_then_show_all_and_the_count_stays_right(browser, demo_html):
+    page, errors = open_page(browser, demo_html, 1280, 800)
+    n = page.evaluate("DATA.rows.filter(r => r.dip).length")
+    assert n > ROWS_FIRST
+    assert page.locator("#body tr.row").count() == ROWS_FIRST
+    more = page.locator("[data-testid=rows-more]")
+    assert more.inner_text() == f"Show all {n} stocks" and more.get_attribute("aria-expanded") == "false" and more.bounding_box()["height"] >= 40
+    assert page.inner_text("#rowsmore").startswith(f"Showing the first {ROWS_FIRST} of {n} stocks")
+    assert page.inner_text("#tabletitle").endswith(f"· {n}")                               # the title counts the list, not the drawn rows
+    more.focus()
+    page.keyboard.press("Enter")
+    assert page.locator("#body tr.row").count() == n
+    assert more.inner_text() == f"Show the first {ROWS_FIRST} only" and page.inner_text("#rowsmore").startswith(f"Showing all {n} stocks")
+    assert page.evaluate("document.activeElement.dataset.testid") == "rows-more"           # focus stays on the button
+    assert page.inner_text("#tabletitle").endswith(f"· {n}")
+    page.click("#region button[data-v=US]")                                                  # a filter change folds the list back
+    n_us = page.evaluate("DATA.rows.filter(r => r.dip && r.region === 'US').length")
+    assert n_us > ROWS_FIRST and page.locator("#body tr.row").count() == ROWS_FIRST
+    assert page.inner_text("[data-testid=rows-more]") == f"Show all {n_us} stocks"
+    page.click("#region button[data-v=Nordic]")                                              # a short list has no button at all
+    assert page.locator("#body tr.row").count() <= ROWS_FIRST and page.is_hidden("#rowsmore") and page.locator("[data-testid=rows-more]").count() == 0
+    assert page.locator("#cards .sc").count() == 0                                           # the phone cards are not built on desktop
+    assert errors == []
+    page.close()
+
+
+def test_sorting_and_opening_a_row_work_with_the_row_cap(browser, demo_html):
+    page, _ = open_page(browser, demo_html, 1280, 800)
+    page.click("#head th:has-text('Price')")                                                 # sorts the whole list, then shows its first 25
+    prices = [float(t.split()[0]) for t in page.locator("#body tr.row td[data-k=price]").all_inner_texts()]
+    all_prices = sorted(page.evaluate("DATA.rows.filter(r => r.dip).map(r => r.price)"), reverse=True)
+    assert prices == all_prices[:ROWS_FIRST]
+    assert page.locator("[data-testid=rows-more]").count() == 1                              # the sort did not expand the list
+    page.locator("#body tr.row").nth(2).click()                                              # opening a detail keeps the cap
+    assert page.locator("td.detail").count() == 1 and page.locator("#body tr.row").count() == ROWS_FIRST
+    page.close()
+
+
+def test_a_row_beyond_the_first_25_is_found_by_expanding_or_by_searching(browser, demo_html):
+    page, _ = open_page(browser, demo_html, 1280, 800)
+    shown = page.evaluate("[...document.querySelectorAll('#body tr.row')].map(tr => tr.dataset.t)")
+    hidden = page.evaluate("(shown) => DATA.rows.filter(r => r.dip).map(r => r.t).filter(t => !shown.includes(t))", shown)
+    assert len(hidden) > 0
+    t = hidden[-1]
+    assert page.locator(f"#body tr.row[data-t='{t}']").count() == 0
+    page.fill("#q", t)                                                                       # by filtering: no need to expand
+    assert page.locator(f"#body tr.row[data-t='{t}']").count() == 1 and page.locator("[data-testid=rows-more]").count() == 0
+    page.fill("#q", "")
+    assert page.locator(f"#body tr.row[data-t='{t}']").count() == 0
+    page.click("[data-testid=rows-more]")                                                    # by expanding
+    assert page.locator(f"#body tr.row[data-t='{t}']").count() == 1
+    page.close()
+
+
+def test_phone_search_finds_a_card_beyond_the_first_ten(browser, demo_html):
+    page, _ = open_page(browser, demo_html, 390, 844)
+    shown = page.evaluate("[...document.querySelectorAll('#cards .sc')].map(c => c.dataset.t)")
+    t = page.evaluate("(shown) => DATA.rows.filter(r => r.dip).map(r => r.t).filter(t => !shown.includes(t)).at(-1)", shown)
+    assert page.locator(f"#cards .sc[data-t='{t}']").count() == 0
+    page.click("#ctltoggle")
+    page.fill("#q", t)
+    assert page.locator(f"#cards .sc[data-t='{t}']").count() == 1
+    page.close()
+
+
+def test_an_open_row_outside_the_cap_stays_visible(browser, demo_html):
+    page, _ = open_page(browser, demo_html, 1280, 800)
+    page.click("[data-testid=rows-more]")
+    last = page.locator("#body tr.row").last
+    t = last.get_attribute("data-t")
+    last.click()
+    page.click("[data-testid=rows-more]")                                                    # fold back to 25: the open row remains
+    assert page.locator(f"#body tr.row.open[data-t='{t}']").count() == 1 and page.locator("td.detail").count() == 1
+    page.close()
+
+
+@pytest.mark.parametrize("scheme", ["light", "dark"])
+def test_table_header_stays_at_the_top_while_the_page_scrolls(browser, demo_html, scheme):
+    page, errors = open_page(browser, demo_html, 1280, 800, scheme)
+    top = lambda: page.evaluate("document.querySelector('#head th').getBoundingClientRect().top")
+    assert top() > 300                                                                       # at the top of the page the header is in the table
+    assert page.evaluate("getComputedStyle(document.querySelector('#head th')).position") == "sticky"
+    assert page.evaluate("document.querySelector('.scroll').classList.contains('hs')") is False   # default columns fit: plain CSS sticky
+    page.mouse.wheel(0, 900)
+    page.wait_for_function("scrollY > 800")
+    assert abs(top()) <= 1
+    bg = page.evaluate("getComputedStyle(document.querySelector('#head th')).backgroundColor")
+    assert bg not in ("rgba(0, 0, 0, 0)", "transparent")                                    # opaque, so rows do not show through (light and dark)
+    page.click("[data-testid=rows-more]")                                                    # a long list: still pinned a long way down
+    page.evaluate("scrollTo(0, 2200)")
+    assert abs(top()) <= 1
+    assert errors == []
+    page.close()
+
+
+def test_sticky_header_keeps_the_sideways_scroll_of_more_columns(browser, demo_html):
+    page, errors = open_page(browser, demo_html, 1280, 800)
+    page.click("#colbtn")
+    assert page.evaluate("document.querySelector('.scroll').classList.contains('hs')")      # wider than the card: its own sideways scroller
+    sw = page.evaluate("(() => { const s = document.querySelector('.scroll'); return [s.scrollWidth, s.clientWidth]; })()")
+    assert sw[0] > sw[1]
+    page.evaluate("scrollTo(0, 900)")
+    page.wait_for_function("scrollY > 800")
+    page.wait_for_function("Math.abs(document.querySelector('#head th').getBoundingClientRect().top) <= 2")
+    page.evaluate("document.querySelector('.scroll').scrollLeft = 300")
+    assert page.evaluate("document.querySelector('.scroll').scrollLeft") > 0               # still scrolls sideways
+    th = page.evaluate("document.querySelector('#head th:nth-child(5)').getBoundingClientRect().top")
+    assert abs(th) <= 2
+    assert page.evaluate("document.documentElement.scrollWidth - innerWidth") <= 0
+    page.evaluate("scrollTo(0, document.body.scrollHeight)")                                 # at the very bottom the header does not leave the table
+    page.wait_for_timeout(100)
+    assert page.evaluate("document.querySelector('#head th').getBoundingClientRect().bottom <= document.querySelector('table').getBoundingClientRect().bottom + 1")
+    assert errors == []
+    page.close()
+
+
+@pytest.mark.parametrize("w, h, sel, limit", [(1280, 800, "#body tr.row", 900), (390, 844, "#cards .sc", 844)])
+def test_first_row_sits_near_the_top(browser, demo_html, w, h, sel, limit):
+    """FE-1: on the demo page (with its Demo banner) the first row or card starts above the fold; the real page has less above it."""
+    page, _ = open_page(browser, demo_html, w, h)
+    y = page.evaluate("(sel) => document.querySelector(sel).getBoundingClientRect().top + scrollY", sel)
+    assert y < limit, y
+    page.close()
+
+
+def test_desktop_filters_fit_in_two_short_rows(browser, demo_html):
+    page, _ = open_page(browser, demo_html, 1280, 800)
+    assert page.evaluate("document.getElementById('controls').getBoundingClientRect().height") < 130
+    tops = sorted(page.evaluate("[...document.querySelectorAll('#controls > *')].filter(e => e.offsetParent).map(e => e.getBoundingClientRect().top)"))
+    rows = 1 + sum(1 for a, b in zip(tops, tops[1:]) if b - a > 20)                          # controls in one row differ by a few px at most
+    assert rows <= 2
+    page.close()
+
+
+COUNT = "document.getElementsByTagName('*').length"
+
+
+def test_only_the_layout_in_use_is_built_and_the_page_stays_small(browser, demo_html):
+    """FE-2: 'All stocks' (348 here) used to build a 348-row table and, on a phone, 348 hidden cards or rows. Measured nodes on the demo page,
+    dips list / All stocks: desktop 1934 / 10433 before, 1053 / 1055 now; phone 2258 / 10757 before, 647 / 649 now."""
+    d, _ = open_page(browser, demo_html, 1280, 800)
+    d.click("#show button[data-v=all]")
+    assert d.locator("#body tr.row").count() == ROWS_FIRST and d.locator("#cards .sc").count() == 0
+    assert d.evaluate(COUNT) < 3000
+    d.close()
+    p, _ = open_page(browser, demo_html, 390, 844)
+    p.click("#ctltoggle")
+    p.click("#show button[data-v=all]")
+    assert p.locator("#cards .sc").count() == 10 and p.locator("#body tr.row").count() == 0
+    assert p.evaluate(COUNT) < 1500
+    p.close()
+
+
+def test_switching_between_phone_and_desktop_width_builds_the_other_layout(browser, demo_html):
+    page, errors = open_page(browser, demo_html, 1280, 800)
+    assert page.locator("#body tr.row").count() == ROWS_FIRST and page.locator("#cards .sc").count() == 0
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.wait_for_function("document.querySelectorAll('#cards .sc').length === 10")
+    assert page.locator("#body tr.row").count() == 0 and page.is_hidden("#rowsmore")
+    page.set_viewport_size({"width": 1280, "height": 800})
+    page.wait_for_function("document.querySelectorAll('#body tr.row').length === 25")
+    assert page.locator("#cards .sc").count() == 0 and errors == []
     page.close()
