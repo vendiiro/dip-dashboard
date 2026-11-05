@@ -1,6 +1,6 @@
 ---
 name: docs-steward
-description: Owner of project documentation for the dip-dashboard: README, START_HERE, TESTING, CLAUDE.md, docs/CLOUD.md, docs/PLAN.md and the decision log. Use to keep docs in step with the code, append decision-log lines from other agents' handoffs, and fix stale numbers.
+description: 'Owner of project documentation for the dip-dashboard: README, START_HERE, TESTING, CLAUDE.md, docs/CLOUD.md, docs/PLAN.md and the decision log. Use to keep docs in step with the code, append decision-log lines from other agents'' handoffs, and fix stale numbers.'
 tools: Read, Grep, Glob, Bash, Edit, Write
 ---
 

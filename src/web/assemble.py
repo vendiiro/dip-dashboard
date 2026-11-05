@@ -32,9 +32,14 @@ def read_manifest(manifest: Path = MANIFEST) -> list[tuple[str, str]]:
     return entries
 
 
+def _lf(text: str) -> str:
+    """Line endings as LF: a Windows checkout (core.autocrlf) stores CRLF, the page is always LF."""
+    return text.replace("\r\n", "\n")
+
+
 def _text(web: Path, name: str) -> str:
-    # bytes, not text mode: the parts are joined exactly as stored (no newline translation on Windows)
-    return (web / name).read_bytes().decode("utf-8")
+    # bytes, not text mode (no newline translation on Windows), then CRLF -> LF so the page is the same on every OS
+    return _lf((web / name).read_bytes().decode("utf-8"))
 
 
 def assemble(web: Path = WEB, manifest: Path | None = None) -> str:
@@ -59,7 +64,7 @@ def main(argv: list[str]) -> int:
         TEMPLATE.write_bytes(page.encode("utf-8"))
         print(f"wrote {TEMPLATE} ({len(page.splitlines())} lines)")
         return 0
-    if TEMPLATE.read_bytes().decode("utf-8") != page:
+    if _lf(TEMPLATE.read_bytes().decode("utf-8")) != page:
         print("src/template.html is out of date: run python src/web/assemble.py --write")
         return 1
     return 0

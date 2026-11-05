@@ -21,3 +21,9 @@ The 7 test_browser.py failures share one error: `OSError: [Errno 22] Invalid arg
 
 Skipped:
 - tests/visual/test_visual.py (whole module, 1 skip): baselines were made on Linux, this is Windows. Baselines not regenerated.
+
+## After Task 1 (line-ending fix, agent-file YAML fix, new tests/test_agent_files.py)
+
+`7 failed, 1018 passed, 1 skipped in 351.72s (0:05:51)`
+
+The 3 line-ending failures now pass and the new agent-file test passes. The remaining 7 failures are the test_browser.py path errors listed above, and the skip is the Linux-only visual baselines.

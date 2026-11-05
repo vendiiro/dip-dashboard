@@ -1,6 +1,6 @@
 ---
 name: screen-logic
-description: Owner of the screening rules for the dip-dashboard: metrics, the quality score, dip and falling-knife rules, the market-adjusted residual, and config/settings.toml thresholds. Use for any change to what gets flagged and why.
+description: 'Owner of the screening rules for the dip-dashboard: metrics, the quality score, dip and falling-knife rules, the market-adjusted residual, and config/settings.toml thresholds. Use for any change to what gets flagged and why.'
 tools: Read, Grep, Glob, Bash, Edit, Write
 ---
 

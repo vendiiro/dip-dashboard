@@ -1,6 +1,6 @@
 ---
 name: test-engineer
-description: Owner of shared test infrastructure and repo hygiene for the dip-dashboard: pytest config, synthetic data helpers, CI workflow, dependency pins, .gitignore, the file-ownership test and task commands. Use for flaky or stale tests, CI, and making the repo easy to run for any agent.
+description: 'Owner of shared test infrastructure and repo hygiene for the dip-dashboard: pytest config, synthetic data helpers, CI workflow, dependency pins, .gitignore, the file-ownership test and task commands. Use for flaky or stale tests, CI, and making the repo easy to run for any agent.'
 tools: Read, Grep, Glob, Bash, Edit, Write
 ---
 

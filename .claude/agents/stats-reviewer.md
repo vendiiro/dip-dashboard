@@ -1,6 +1,6 @@
 ---
 name: stats-reviewer
-description: Read-only independent reviewer of research claims in the dip-dashboard: look-ahead, survivorship, leakage, multiple testing, wrong uncertainty. Use on every backtest report, feature test or screening-rule change before it reaches Iiro. Never edits repo files.
+description: 'Read-only independent reviewer of research claims in the dip-dashboard: look-ahead, survivorship, leakage, multiple testing, wrong uncertainty. Use on every backtest report, feature test or screening-rule change before it reaches Iiro. Never edits repo files.'
 tools: Read, Grep, Glob, Bash
 ---
 

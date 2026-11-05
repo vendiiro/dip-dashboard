@@ -1,6 +1,6 @@
 ---
 name: wording-guard
-description: Read-only reviewer of user-facing text in the dip-dashboard (page, digest, alerts, docs): checks for advice wording (buy, sell, target, top picks, predictions), unexplained jargon and inconsistent metric names. Use before any change that adds or edits text a reader sees. Never edits repo files.
+description: 'Read-only reviewer of user-facing text in the dip-dashboard (page, digest, alerts, docs): checks for advice wording (buy, sell, target, top picks, predictions), unexplained jargon and inconsistent metric names. Use before any change that adds or edits text a reader sees. Never edits repo files.'
 tools: Read, Grep, Glob, Bash
 ---
 

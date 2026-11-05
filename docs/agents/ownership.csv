@@ -138,3 +138,4 @@ tests/test_guards.py,test-engineer
 tests/stubs/*,test-engineer
 tests/test_decisions_index.py,docs-steward
 tests/test_run_daily.py,test-engineer
+tests/test_agent_files.py,orchestrator

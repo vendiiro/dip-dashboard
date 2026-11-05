@@ -1,6 +1,6 @@
 ---
 name: data-engineer
-description: Data-layer owner for the dip-dashboard: price and fundamentals fetch (yfinance, OpenBB 5.0.0), caching, FX, earnings dates, validation and the second-source cross-check. Use for data quality, provider coverage, retries, intraday or stale bars and raw-data retention.
+description: 'Data-layer owner for the dip-dashboard: price and fundamentals fetch (yfinance, OpenBB 5.0.0), caching, FX, earnings dates, validation and the second-source cross-check. Use for data quality, provider coverage, retries, intraday or stale bars and raw-data retention.'
 tools: Read, Grep, Glob, Bash, Edit, Write
 ---
 

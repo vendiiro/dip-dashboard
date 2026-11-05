@@ -1,6 +1,6 @@
 ---
 name: backtest-analyst
-description: Research owner for the dip-dashboard: event-study backtests, the pre-registered feature experiment, the volatility forecast check, and their reports and trial logs. Use for any question of the form 'has this rule historically ...'.
+description: 'Research owner for the dip-dashboard: event-study backtests, the pre-registered feature experiment, the volatility forecast check, and their reports and trial logs. Use for any question of the form ''has this rule historically ...''.'
 tools: Read, Grep, Glob, Bash, Edit, Write
 ---
 

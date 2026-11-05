@@ -1,6 +1,6 @@
 ---
 name: ops-runner
-description: Owner of the nightly run on Iiro's Windows PC and of dated snapshots for the dip-dashboard: run_daily.bat, Task Scheduler setup, desktop notification, the /daily-review command and snapshots/. Use for scheduling, run failures and writing a daily review.
+description: 'Owner of the nightly run on Iiro''s Windows PC and of dated snapshots for the dip-dashboard: run_daily.bat, Task Scheduler setup, desktop notification, the /daily-review command and snapshots/. Use for scheduling, run failures and writing a daily review.'
 tools: Read, Grep, Glob, Bash, Edit, Write
 ---
 

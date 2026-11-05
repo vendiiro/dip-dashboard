@@ -19,7 +19,7 @@ PARTS = sorted(p.name for p in WEB.iterdir() if p.suffix in {".css", ".js", ".ht
 
 
 def test_template_is_the_assembled_parts():
-    assert TEMPLATE.read_bytes().decode("utf-8") == assemble.assemble(), \
+    assert assemble._lf(TEMPLATE.read_bytes().decode("utf-8")) == assemble.assemble(), \
         "src/template.html is out of date: edit the parts in src/web/, then run python src/web/assemble.py --write"
 
 

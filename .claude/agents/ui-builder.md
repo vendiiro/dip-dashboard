@@ -1,6 +1,6 @@
 ---
 name: ui-builder
-description: Front-end builder for the dip-dashboard. Use for any change to the dashboard page (src/template.html): layout, tables, charts, filters, phone layout, light/dark themes, accessibility fixes, and the browser tests and screenshot script.
+description: 'Front-end builder for the dip-dashboard. Use for any change to the dashboard page (src/template.html): layout, tables, charts, filters, phone layout, light/dark themes, accessibility fixes, and the browser tests and screenshot script.'
 tools: Read, Grep, Glob, Bash, Edit, Write
 ---
 

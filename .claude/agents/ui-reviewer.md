@@ -1,6 +1,6 @@
 ---
 name: ui-reviewer
-description: Read-only design and usability reviewer for the dip-dashboard. Use after every ui-builder change, or to audit the page: renders it at desktop and phone width in light and dark, runs an accessibility check and returns a ranked list of problems. Never edits repo files.
+description: 'Read-only design and usability reviewer for the dip-dashboard. Use after every ui-builder change, or to audit the page: renders it at desktop and phone width in light and dark, runs an accessibility check and returns a ranked list of problems. Never edits repo files.'
 tools: Read, Grep, Glob, Bash
 ---
 
