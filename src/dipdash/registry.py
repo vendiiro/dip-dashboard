@@ -2,7 +2,7 @@
 
 Rules (backtest-hygiene rule 1, made testable):
 - `spec_hash` is the one canonical hash: sha256 of the sorted-key JSON of the spec, first 16 hex characters. Descriptive keys
-  (per kind, see EXCLUDED) and the `registration` block are left out, so editing a note never changes the identity of an analysis.
+  (per kind, see EXCLUDED), the `registration` block and the `provenance` block are left out, so editing a note never changes the identity of an analysis.
 - `register` runs BEFORE any return is computed. It checks the required fields, writes `spec_<hash>.json` once (never
   overwritten), appends a row to `registry.csv` and returns a `Registration` token.
 - `status` in `registry.csv`: `registered` when the row is written, `complete` once the runner calls `mark_complete` after the trial
@@ -40,7 +40,7 @@ EXCLUDED: dict[str, frozenset[str]] = {                     # descriptive keys p
     "features": frozenset({"notes"}),
     "forecast": frozenset({"notes"}),
 }
-ALWAYS_EXCLUDED = frozenset({"spec_hash", "registration"})  # the hash itself and the registry's own block
+ALWAYS_EXCLUDED = frozenset({"spec_hash", "registration", "provenance"})  # the hash itself, the registry's own block, code/package/settings provenance
 REGISTRY_FILE, TRIALS_FILE = "registry.csv", "trials_all.csv"
 REGISTRY_COLS = ["registered_at", "kind", "family_id", "spec_hash", "source", "split_cutoff", "oos_start", "oos_end", "horizons",
                  "raw_sha256", "planned_cells", "note", "status"]

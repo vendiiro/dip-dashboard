@@ -21,6 +21,7 @@ from .backtest import (EU, PERIODS, US, VARIANTS, Cell, add_events, add_peer_ret
 from . import registry
 from .backtest_notes import revisions_for
 from .config import Settings, Stock
+from .provenance import build_provenance
 from .validate import validate_prices
 
 INDEX_SYMBOLS = {US: "^GSPC", EU: "^STOXX"}
@@ -129,6 +130,7 @@ def run_backtest(prices: dict, index_close: dict, universe: list[Stock], quality
     spec = freeze_spec(s, universe, data_meta, calendar)
     cut = pd.Timestamp(spec["split"]["cutoff"])
     oos = [d for d in calendar if d > cut]
+    spec["provenance"] = build_provenance(s, Path(__file__).resolve().parent)                      # not hashed; set before register so the archive holds it
     reg = registry.register("backtest", spec, out_dir, root,                                       # before any result exists
                             fields={"family_id": registry.BACKTEST_FAMILY, "oos_start": oos[0], "oos_end": oos[-1]})
     spec["registration"] = registry.registration_block(reg)                                         # not hashed

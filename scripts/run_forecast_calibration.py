@@ -33,7 +33,8 @@ from dipdash import registry  # noqa: E402
 from dipdash.backtest import cluster_bootstrap, group_of, split_cutoff  # noqa: E402
 from dipdash.backtest_run import clean_bars, sha256  # noqa: E402
 from dipdash.cache import load_raw_prices  # noqa: E402
-from dipdash.config import load_universe  # noqa: E402
+from dipdash.config import load_settings, load_universe  # noqa: E402
+from dipdash.provenance import build_provenance  # noqa: E402
 
 H = 21
 STEP = 21
@@ -90,6 +91,12 @@ def forecast_spec(raw: Path, tickers: list[str], cutoff: pd.Timestamp, limit: in
         "notes": "the criterion was first written in the forecast.py docstring before any calibration result; this spec freezes it as data",
     }
     spec["spec_hash"] = registry.hash_for("forecast", spec)
+    return spec
+
+
+def attach_provenance(spec: dict, s) -> dict:
+    """Record code, package versions and settings-section hashes in the spec. Not hashed (registry.ALWAYS_EXCLUDED)."""
+    spec["provenance"] = build_provenance(s, ROOT / "src" / "dipdash")
     return spec
 
 
@@ -361,6 +368,7 @@ def main(argv: list[str] | None = None) -> int:
                   f"({'missing' if have is None else 'differs'}). Run without --reuse.")
             return 2
     oos_dates = [d for d in all_dates if d > cutoff]
+    attach_provenance(spec, load_settings())                                                   # not hashed; set before register so the archive holds it
     reg = registry.register("forecast", spec, out, out_root, fields={"oos_start": oos_dates[0], "oos_end": oos_dates[-1]})   # BEFORE any origin
     spec["registration"] = registry.registration_block(reg)                                                                 # not hashed
     (out / "spec_forecast.json").write_text(json.dumps(spec, indent=2, default=str), encoding="utf-8")

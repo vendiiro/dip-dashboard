@@ -25,6 +25,16 @@ from dipdash.config import load_settings, load_universe  # noqa: E402
 from dipdash.quality import score_universe  # noqa: E402
 
 
+def build_data_meta(raw: Path, start: str, prices: dict, removed: dict, universe: list, idx: dict) -> dict:
+    """The spec's `data` block. No whole-file settings hash: every setting the test uses is in the spec by value (see provenance.py)."""
+    return {"source": "yfinance, dividend-adjusted daily closes", "raw_file": raw.name, "raw_sha256": sha256(raw),
+            "history_from": start, "n_series": len(prices), "last_bar": str(max(c.index[-1] for c in prices.values()).date()),
+            "missing_tickers": [u.ticker for u in universe if u.ticker not in prices],
+            "zero_volume_bars_removed": {"total": sum(removed.values()), "tickers": len(removed), "of_bars": sum(len(c) for c in prices.values()) + sum(removed.values())},
+            "index_last_bar": {g: str(c.index[-1].date()) for g, c in idx.items()},
+            "universe_sha256": sha256(ROOT / "config" / "universe.csv")}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--refresh", action="store_true", help="download a fresh history even if one is cached")
@@ -70,12 +80,7 @@ def main() -> int:
     scored = score_universe(funds, [u for u in universe if u.ticker in prices], s.quality, fx, use_sector=False)
     q = {t: r.score for t, r in scored.items()}
 
-    meta = {"source": "yfinance, dividend-adjusted daily closes", "raw_file": raw.name, "raw_sha256": sha256(raw),
-            "history_from": start, "n_series": len(prices), "last_bar": str(max(c.index[-1] for c in prices.values()).date()),
-            "missing_tickers": [u.ticker for u in universe if u.ticker not in prices],
-            "zero_volume_bars_removed": {"total": sum(removed.values()), "tickers": len(removed), "of_bars": sum(len(c) for c in prices.values()) + sum(removed.values())},
-            "index_last_bar": {g: str(c.index[-1].date()) for g, c in idx.items()},
-            "universe_sha256": sha256(ROOT / "config" / "universe.csv"), "settings_sha256": sha256(ROOT / "config" / "settings.toml")}
+    meta = build_data_meta(raw, start, prices, removed, universe, idx)
     out_dir = Path(a.out_root) / date.today().isoformat()
     run = run_backtest(prices, idx, universe, q, s, out_dir, meta, volumes=volumes)
     path = write_report(run, s, out_dir)
