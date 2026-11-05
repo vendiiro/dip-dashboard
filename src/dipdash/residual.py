@@ -22,6 +22,12 @@ Method (pure numpy/pandas, no new dependencies)
 - res5z = res5 / (sd_resid * sqrt(5)), sd_resid = sample std (ddof=1) of the daily residuals rs - beta*ri in the
   estimation window. sqrt(h) scaling assumes uncorrelated daily residuals and ignores fat tails, so treat z as a
   ranking aid, not a p-value.
+- "vs index" means this residual: the stock's move minus beta times the index move over the same dates. It is never
+  a raw comparison of the stock with the index.
+- beta_se = standard error of the OLS slope (unclipped fit with intercept, estimation window), rounded to 3 places.
+  market_adjusted is True only if the residual is computed with an unclipped beta and beta_se <= 0.25
+  (BETA_SE_UNCERTAIN). The 0.25 threshold is a judgement call, not tested on returns: at 0.25 the 95% interval
+  for beta is about 1.0 wide.
 """
 from __future__ import annotations
 
@@ -35,8 +41,10 @@ EXCLUDE = 5
 MIN_OBS = 120
 BETA_CLIP = (0.0, 3.0)
 
+BETA_SE_UNCERTAIN = 0.25
+
 _NONE = {"res1": None, "res5": None, "res5z": None, "beta": None, "beta_raw": None, "beta_clipped": False,
-         "n_obs": 0, "asof": None}
+         "beta_se": None, "market_adjusted": False, "n_obs": 0, "asof": None}
 
 
 def _fail(reason: str, **extra) -> dict:
@@ -47,6 +55,16 @@ def _day_index(idx) -> pd.DatetimeIndex:
     """Calendar dates as naive midnight timestamps (Yahoo returns exchange-local, sometimes tz-aware, stamps)."""
     d = pd.DatetimeIndex(idx)
     return (d.tz_localize(None) if d.tz is not None else d).normalize()
+
+
+def slope_se(x, y, slope: float) -> float:
+    """Standard error of the OLS slope in y = a + slope*x (intercept fitted, residuals unclipped). Unrounded."""
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    intercept = float(y.mean() - slope * x.mean())
+    e = y - intercept - slope * x
+    sxx = float(np.sum((x - x.mean()) ** 2))
+    return float(np.sqrt(np.sum(e ** 2) / (len(x) - 2) / sxx))
 
 
 def residual_move(stock_close: pd.Series, index_close: pd.Series, *, window: int = WINDOW, exclude: int = EXCLUDE,
@@ -75,13 +93,17 @@ def residual_move(stock_close: pd.Series, index_close: pd.Series, *, window: int
     raw = float(est["s"].cov(est["i"]) / var_i)
     beta = min(max(raw, beta_clip[0]), beta_clip[1])
     sd = float((est["s"] - beta * est["i"]).std(ddof=1))
+    se = slope_se(est["i"].to_numpy(), est["s"].to_numpy(), raw)
 
     def move(h: int) -> float:
         return float(both["s"].iloc[-1] / both["s"].iloc[-1 - h] - 1) - beta * float(both["i"].iloc[-1] / both["i"].iloc[-1 - h] - 1)
 
     res1, res5 = move(1), move(5)
     z = res5 / (sd * np.sqrt(5)) if sd > 0 else None
+    clipped = bool(beta != raw)
+    adjusted = z is not None and not clipped and se <= BETA_SE_UNCERTAIN
     return {"res1": clean(res1), "res5": clean(res5), "res5z": clean(z, 2) if z is not None else None,
-            "beta": clean(beta, 3), "beta_raw": clean(raw, 3), "beta_clipped": bool(beta != raw),
+            "beta": clean(beta, 3), "beta_raw": clean(raw, 3), "beta_clipped": clipped,
+            "beta_se": clean(se, 3), "market_adjusted": adjusted,
             "beta_side": ("floor" if raw < beta_clip[0] else "cap") if beta != raw else None, "n_obs": len(est),
             "asof": str(last.date()), "reason": None if z is not None else "residual volatility is zero"}

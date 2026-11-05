@@ -167,3 +167,62 @@ def test_high_beta_is_capped_and_says_which_side():
     out = residual_move(_stock_from(ix, beta=3.6), ix)
     assert out["beta"] == 3.0 and out["beta_side"] == "cap"
     assert residual_move(_stock_from(ix, beta=1.2), ix)["beta_side"] is None
+
+
+# ---- RES-9: standard error of beta -------------------------------------------------------------------------------
+def test_beta_se_matches_statsmodels():
+    sm = pytest.importorskip("statsmodels.api")
+    from dipdash.residual import slope_se
+    rng = np.random.default_rng(7)
+    x = rng.normal(0, 0.01, 252)
+    y = 1.1 * x + rng.normal(0, 0.012, 252)
+    res = sm.OLS(y, sm.add_constant(x)).fit()
+    beta = float(res.params[1])
+    assert abs(slope_se(x, y, beta) - float(res.bse[1])) < 1e-9
+
+
+def test_beta_se_covers_true_beta_about_95_percent():
+    rng = np.random.default_rng(20261106)
+    n = 258                                   # 257 returns, minus the 5 excluded -> 252 estimation returns
+    idx = dates(n)
+    hits = 0
+    for _ in range(1000):
+        ri = rng.normal(0, 0.01, n - 1)
+        rs = 1.2 * ri + rng.normal(0, 0.01, n - 1)
+        ix = pd.Series(100 * np.cumprod(np.r_[1.0, 1 + ri]), index=idx)
+        st = pd.Series(100 * np.cumprod(np.r_[1.0, 1 + rs]), index=idx)
+        out = residual_move(st, ix)
+        assert out["reason"] is None and out["n_obs"] == 252
+        hits += abs(out["beta_raw"] - 1.2) <= 1.96 * out["beta_se"]
+    assert 0.93 <= hits / 1000 <= 0.97
+
+
+def test_clipped_beta_is_not_market_adjusted():
+    ix = _index()
+    out = residual_move(_stock_from(ix, 5.0, noise=0.001), ix)
+    assert out["beta"] == 3.0 and out["beta_clipped"] is True
+    assert out["market_adjusted"] is False
+
+
+def test_noisy_beta_is_not_market_adjusted():
+    from dipdash.residual import BETA_SE_UNCERTAIN
+    ix = _index()
+    out = residual_move(_stock_from(ix, 1.2, noise=0.06), ix)     # residual sd ~6x the index sd
+    assert out["reason"] is None
+    assert out["beta_se"] > BETA_SE_UNCERTAIN == 0.25
+    assert out["beta_clipped"] is False and out["beta"] == out["beta_raw"]    # raw beta is unclipped
+    assert out["market_adjusted"] is False
+
+
+def test_clean_beta_is_market_adjusted():
+    ix = _index()
+    out = residual_move(_stock_from(ix, 1.5, noise=0.002), ix)
+    assert out["reason"] is None and out["beta_se"] is not None and out["beta_se"] < 0.25
+    assert out["market_adjusted"] is True
+
+
+def test_failure_returns_none_and_false():
+    ix = _index(100)
+    out = residual_move(_stock_from(ix), ix)
+    assert out["beta_se"] is None and out["market_adjusted"] is False
+    assert out["reason"] is not None
