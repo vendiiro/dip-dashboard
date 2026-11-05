@@ -147,3 +147,11 @@ def test_report_states_the_definition_change_and_no_ship_without_a_decision(tmp_
     assert "(0.725, 95% interval 0.623 to 0.819)" in txt and f"splits dates from {s.backtest.start_date}" in txt
     decision = next(l for l in txt.splitlines() if l.startswith("- **Decision:"))
     assert "without Iiro's decision" in decision
+
+
+def test_ship_text_carries_the_qualifier_in_every_branch():
+    mod = load_script()
+    ok, bad = {"pass": True}, {"pass": False}
+    for v1, v2, head in ((ok, bad, "RANGE MAY SHIP (attempt 1"), (bad, ok, "RANGE MAY SHIP ONLY WITH THE ATTEMPT-2"), (bad, bad, "RANGE DOES NOT SHIP")):
+        txt = mod.ship_text(v1, v2)
+        assert txt.startswith(head) and txt.endswith("without Iiro's decision."), txt

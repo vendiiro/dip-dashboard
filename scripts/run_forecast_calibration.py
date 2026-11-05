@@ -269,6 +269,20 @@ DEFINITION_CHANGE = (
     "run is a descriptive re-check, not a third pre-stated attempt, and it cannot by itself reverse the decision not to show the range.")
 
 
+NOT_SHOWN = "The range is not shown on the dashboard without Iiro's decision."
+
+
+def ship_text(v1: dict, v2: dict) -> str:
+    """The verdict wording, used by the report and the console so they always agree."""
+    if v1["pass"]:
+        head = "RANGE MAY SHIP (attempt 1, raw model, passes both pre-stated tests)"
+    elif v2["pass"]:
+        head = "RANGE MAY SHIP ONLY WITH THE ATTEMPT-2 SCALE FACTOR (raw model failed, recalibrated model passes both tests)"
+    else:
+        head = "RANGE DOES NOT SHIP (both attempts fail the pre-stated criterion)"
+    return f"{head}. {NOT_SHOWN}"
+
+
 def write_report(out: Path, res: pd.DataFrame, meta: dict, v1: dict, v2: dict, ship: str) -> None:
     def table(att):
         r = res[res.attempt == att]
@@ -302,7 +316,7 @@ def write_report(out: Path, res: pd.DataFrame, meta: dict, v1: dict, v2: dict, s
 Educational screen output. This tests whether a volatility RANGE is honest. It says nothing about direction and is not a price target.
 
 ## Result first
-- **Decision: {ship}. The range is not shown on the dashboard without Iiro's decision.**
+- **Decision: {ship}**
 - {DEFINITION_CHANGE.format(start_date=meta['start_date'])}
 - {line(v1, 'Attempt 1 (raw GARCH-t FHS)')}
 - {line(v2, f'Attempt 2 (global scale factor k = {k:.3f} fitted in-sample only)')}
@@ -421,12 +435,7 @@ def main(argv: list[str] | None = None) -> int:
     ks2 = {m: scale_factor(ins, m) for m in METHODS}
     res = pd.concat([evaluate(oos, ks1, 1), evaluate(oos, ks2, 2)], ignore_index=True)
     v1, v2 = verdict(res, 1), verdict(res, 2)
-    if v1["pass"]:
-        ship = "RANGE MAY SHIP (attempt 1, raw model, passes both pre-stated tests)"
-    elif v2["pass"]:
-        ship = "RANGE MAY SHIP ONLY WITH THE ATTEMPT-2 SCALE FACTOR (raw model failed, recalibrated model passes both tests)"
-    else:
-        ship = "RANGE DOES NOT SHIP (both attempts fail the pre-stated criterion)"
+    ship = ship_text(v1, v2)
     registry.record_trials(reg, trial_rows(res))                       # ledger first, then any result file
     if not (a.reuse and p.exists()):
         df.drop(columns=["group"]).to_csv(p, index=False)
