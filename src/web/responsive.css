@@ -1,0 +1,47 @@
+@media (max-width:1100px){
+  th,td{padding-left:5px;padding-right:5px}
+  td .badge{white-space:normal;min-width:150px;max-width:200px;text-align:left}   /* the longest setup text wraps to two lines instead of widening the table */
+}
+@media (max-width:900px){
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ctx,.dgrid{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:600px){
+  .scroll,.colbtn{display:none}
+  .cards{display:flex}
+  .brief p{font-size:13.5px}
+  .seg button{min-height:40px;padding:6px 12px}
+  .ctl select,.ctl input{min-height:40px}
+  input[type=search]{width:auto}
+  .controls{gap:12px 20px;padding:12px 14px;align-items:flex-end}
+  .ctl{flex:1 1 100%;flex-direction:column;align-items:stretch;gap:4px}
+  .ctl.check{flex-direction:row;align-items:center;gap:8px}
+  .dropnote{flex:1 1 100%}
+  .tablehead .muted{font-size:12px}
+  .tablehead{padding:10px 14px 6px}
+  .meta{gap:6px 12px}
+  .dq{min-height:40px}
+  .controls .sortctl{display:flex}
+  .alerts.empty.unavail .sub{display:block}
+  .ctltoggle{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;min-height:44px;text-align:left;font:inherit;font-size:14px;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 14px;cursor:pointer}
+  .ctltoggle .sum{font-size:12.5px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  .controls:not(.open){display:none}
+  .chipmore,.mktmore{min-height:40px;display:inline-flex;align-items:center}
+}
+@media (max-width:480px){
+  h1{font-size:22px}
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .tiles .tile:nth-child(1),.tiles .tile:nth-child(4){grid-column:1 / -1}
+  .tile{padding:10px 12px}
+  .tile .foot,.tile:not(:first-child) .chips{display:none}
+  .brief .sub{display:block;margin-top:2px}
+  .brief .sub .subrest,.brief .sub .dot{display:none}
+  .tile .big{font-size:24px}
+  .mktline{display:block}
+  .brief .idxline{display:none}   /* the index moves are in the Market context tile; the phone brief keeps the first sentence */
+  .wrap{padding:12px 12px 32px;gap:12px}
+  .demo{display:block;padding:6px 10px;font-size:12px;line-height:1.4}
+  .demo b{margin-right:6px}
+  input[type=range]{width:100%}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}

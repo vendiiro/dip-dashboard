@@ -1,0 +1,24 @@
+/* Layout: one scanning column. Header, summary tiles, filters, candidate table, context charts, definitions.
+   The fonts above are optional: offline the page falls back to system fonts and stays readable. */
+:root{
+  --bg:#f6f7f9; --surface:#ffffff; --sunken:#eef0f4; --line:#dde1e8; --line-strong:#c4cad4;
+  --ink:#141821; --ink-2:#4a5263; --ink-3:#5d6576;
+  --accent:#4a3fb5; --accent-soft:#e9e7f8;
+  --up:#2366c9; --down:#c3372f; --down-soft:#f8e3e1; --neutral-bar:#b9c0cc;
+  --good:#116a2b; --warn:#855500; --serious:#9c4018; --crit:#ab2d26;
+  --good-bg:#e3f3e8; --warn-bg:#fbf0d9; --serious-bg:#fbe7dc; --crit-bg:#f8e3e1;
+  --demo-bg:#fff5d6; --demo-ink:#6b4a00;
+  --f-display:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-data:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+/* Dark tokens, once. Light is forced with <html data-theme="light">. (A second copy for data-theme="dark" was removed: nothing sets it.) */
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#12141a; --surface:#1a1d25; --sunken:#22262f; --line:#2c313c; --line-strong:#3c4250;
+  --ink:#eceef3; --ink-2:#b4bbc8; --ink-3:#8a92a2;
+  --accent:#a69cf2; --accent-soft:#2a2747;
+  --up:#6aa5ff; --down:#ff7a6e; --down-soft:#3a2120; --neutral-bar:#4a5161;
+  --good:#5fcf83; --warn:#f0b54a; --serious:#f28a5a; --crit:#ff7a6e;
+  --good-bg:#18301f; --warn-bg:#33280f; --serious-bg:#38231a; --crit-bg:#3a2120;
+  --demo-bg:#33290c; --demo-ink:#f3d27a; color-scheme:dark}}

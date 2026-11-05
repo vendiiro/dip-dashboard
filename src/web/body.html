@@ -1,0 +1,108 @@
+<body>
+<main class="wrap">
+  <div class="demo" id="demo" role="note" hidden><b>Demo</b><span>Synthetic prices and fundamentals. The layout and the screening logic are real; none of these numbers are market data.</span></div>
+  <noscript><div class="fail"><span class="ic" aria-hidden="true">!</span><p>This dashboard needs JavaScript. Open the same file in a current browser. Daily digest: output/digest.md.</p></div></noscript>
+  <div class="stale" id="stale" role="status" data-testid="stale" hidden></div>
+  <div class="fail" id="fail" role="alert" data-testid="fail" hidden></div>
+
+  <header class="top">
+    <h1>Dip Screen</h1>
+    <div class="meta">
+      <span>US close <b id="m-us">–</b></span>
+      <span>Europe close <b id="m-eu">–</b></span>
+      <span>Generated <b id="m-gen"></b></span>
+      <button type="button" class="dq s-ok" id="dqbtn" aria-expanded="false" aria-controls="dqpanel"><span class="ic" id="dqic"></span><span id="dqlabel"></span></button>
+    </div>
+  </header>
+  <div class="dqpanel" id="dqpanel" hidden></div>
+
+  <section class="brief" id="brief" aria-labelledby="brief-h"></section>
+
+  <div class="tiles" id="tiles"></div>
+
+  <button type="button" class="ctltoggle" id="ctltoggle" aria-expanded="false" aria-controls="controls"><span>Filters</span><span class="sum" id="ctlsum"></span></button>
+  <div class="controls" id="controls">
+    <div class="ctl">Show
+      <div class="seg" id="show">
+        <button data-v="quality" aria-pressed="false">Dips meeting the check thresholds</button>
+        <button data-v="dips" aria-pressed="true">All dips</button>
+        <button data-v="all" aria-pressed="false">All stocks</button>
+      </div>
+    </div>
+    <div class="ctl">Region
+      <div class="seg" id="region"></div>
+    </div>
+    <label class="ctl" for="q">Search<input type="search" id="q" placeholder="Ticker or name"></label>
+    <label class="ctl check" for="hideknife"><input type="checkbox" id="hideknife"> Hide falling knives</label>
+    <label class="ctl" for="win">Drop measured over
+      <select id="win"></select></label>
+    <label class="ctl" for="drop" id="droplab">Minimum drop <span class="v" id="dropv"></span>
+      <input type="range" id="drop" min="1" max="30" step="1" value="7"></label>
+    <div class="dropnote" id="dropnote" hidden></div>
+    <label class="ctl" for="qmin">Minimum quality score <span class="v" id="qv"></span>
+      <input type="range" id="qmin" min="0" max="100" step="10" value="60"></label>
+    <label class="ctl sortctl" for="sortsel">Sort by <select id="sortsel"></select></label>
+  </div>
+
+  <div class="tablecard">
+    <div class="tablehead"><div class="ttl"><h2 id="tabletitle">Candidates</h2><span class="muted sortnote" id="sortnote">Sorted by size of drop</span></div><div class="tools"><span class="muted" id="tablehint">Click a row for details. Click a column to sort. Mini chart: last 90 days, each row scaled to its own low and high.</span><button type="button" class="colbtn" id="colbtn" aria-pressed="false">More columns</button></div></div>
+    <div class="activebar" id="activebar" hidden></div>
+    <div class="cards" id="cards"></div>
+    <div class="scroll"><table>
+      <thead><tr id="head"></tr></thead>
+      <tbody id="body"></tbody>
+    </table></div>
+    <div class="rowsmore" id="rowsmore" hidden></div>
+    <div class="empty" id="empty" hidden>No stocks match the current filters. Try a smaller minimum drop, a lower minimum quality score, or “Show: All dips”. <button type="button" class="resetbtn" id="resetbtn">Reset filters</button></div>
+  </div>
+
+  <section class="alerts" id="alerts" aria-labelledby="alerts-h"></section>
+
+  <div class="ctx">
+    <div class="card">
+      <h2 id="histtitle">Where today’s moves sit</h2>
+      <p id="histcap"></p>
+      <div id="hist"></div>
+    </div>
+    <div class="card">
+      <h2>Fallers by sector</h2>
+      <p>Stocks currently flagged as a dip, by sector. If one sector dominates, the cause may be sector news rather than company news.</p>
+      <div id="sect"></div>
+    </div>
+  </div>
+
+  <footer aria-label="Definitions, sources and notes">
+    <details class="defs" id="defs" data-testid="defs">
+    <summary data-testid="defs-toggle">Definitions</summary>
+    <div class="defgrid">
+    <dl>
+      <dt>Dip</dt><dd id="def-dip"></dd>
+      <dt>Quality score</dt><dd id="def-q"></dd>
+      <dt>Scored on n/6</dt><dd>How many of the six quality checks had data for this stock. A check with no data is left out, not counted as failed, so a score built on 4 of 6 checks rests on less evidence than one built on 6 of 6. Banks and insurers have fewer applicable checks, so their count is out of 4.</dd>
+      <dt>Distorted</dt><dd>The fundamentals look unreliable, so the stock is labelled “Dip · data looks unreliable” instead of showing a score-based label: return on equity above 100%, or both return on equity and debt/equity missing (which often means negative equity). The stored score is left as computed.</dd>
+      <dt>Net margin above 0</dt><dd>A loss-making company (net margin of 0 or less) is shown in the “Dip, fewer checks passed” group whatever its score. A missing net margin is listed as missing, not as failed. This is separate from the six-check score, whose margin check needs 8% or more.</dd>
+      <dt>Setup label</dt><dd id="def-setup">“Dip · passes 5 of 6 scored checks” says how many of the checks that had data the stock passed; “(2 no data)” counts the applicable checks that had no data. “Dip, no fundamentals” means no check could be scored. It describes the checks, not whether the stock is a good or bad candidate. The default order of the table is the size of the drop, biggest first, not the score.</dd>
+      <dt>Definitions, not tests</dt><dd>The checks, the distorted rule and the net-margin rule are definitions. They are not filters that have been tested on past data, and free fundamentals are not point-in-time.</dd>
+    </dl>
+    <dl>
+      <dt>Falling knife</dt><dd id="def-knife"></dd>
+      <dt>RSI</dt><dd>14-day Relative Strength Index, 0–100. Under 30 means the stock has fallen fast relative to its recent moves.</dd>
+      <dt>Vol ×</dt><dd>Today’s volume divided by the average of the previous 20 days.</dd>
+      <dt>Trigger alerts</dt><dd>Plain notices that a research condition turned true at the latest close, for example the close moving back above its 20-day average, RSI(14) moving back above 30, a new 60-day low, or an earnings date coming up. Each fires once, when the condition changes from false to true. They use daily closes only, the thresholds are untested defaults you can change in config/alerts.toml, and nothing here predicts returns or suggests an action.</dd>
+      <dt>5d vs index</dt><dd id="def-idx">The stock’s 5-day move minus the move of its own country’s index where one is configured (matched by ticker suffix), otherwise its regional index, otherwise STOXX 600. Index types are mixed: the DAX is a total-return index (it includes dividends) and the Stockholm and Oslo indices are all-share, not large-cap. A big negative number means the drop is not just the market.</dd>
+      <dt>5d vs index, beta-adjusted (residual)</dt><dd id="def-res">The part of the stock’s 5-day move left over after removing the index move, scaled by the stock’s usual sensitivity to it (beta, defined next). A large negative number means the stock fell by more than the index move and the stock’s usual sensitivity to it would account for. The “in standard deviations” figure expresses it in units of the stock’s typical daily variation (standard deviation). It describes today’s move only; it has not been backtested and is not a signal. Not the same as “5d vs index”, which is the plain difference without the beta adjustment.</dd>
+      <dt>Beta</dt><dd id="def-beta">How strongly a stock usually moves with its index: 1.0 means about the same size of move, 1.5 means about one and a half times as large, 0 means no link. It is estimated from the previous year of daily moves, excluding the last 5 days, so it is noisy: a different year of data can give a clearly different value. Values are kept between 0 and 3: a negative estimate is floored at 0, so that stock gets no index adjustment.</dd>
+      <dt>Earnings tag</dt><dd>Shown when a company reported within the last 5 trading days or reports within the next 10. A drop right after a report is a different situation from a drop with no news. Dates come from a free source, can be missing or off by a day, and are not point-in-time, so they are never used in the backtest.</dd>
+    </dl>
+    </div>
+    </details>
+    <div class="endgrid" data-testid="foot-always">
+    <dl>
+      <dt>Sources</dt><dd id="def-src"></dd>
+      <dt>Not investment advice</dt><dd>This is an educational research tool. It lists screen results (candidates to research), not advice. A price drop alone does not show that a company is in good shape. Read the news and filings to judge whether the cause is temporary.</dd>
+    </dl>
+    </div>
+  </footer>
+</main>
+<div class="tip" id="tip" hidden></div>
+

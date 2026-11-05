@@ -1,0 +1,33 @@
+# Build order of the dashboard page. One part per line: "<role> <file>". Lines starting with # are comments.
+# Run `python src/web/assemble.py --write` after editing a part; it regenerates src/template.html.
+# Roles (the assembler adds only the tags around them):
+#   head    markup from <!doctype> to the font links          (no <style> tag: css parts are wrapped by the assembler)
+#   css     style rules, inside one <style>; ORDER MATTERS (later rules win): tokens, base, components, then media queries
+#   body    markup from <body> to the tooltip element, no script
+#   js      one script, inside one (() => { ... })(); the order is the order of the file, so keep it
+#   fallback  a second, independent <script> that runs if the first never ran
+# `data.js` holds the one __DATA__ placeholder; it sits before the wrapper so the page's JSON becomes `const DATA = {...};`.
+# core.js opens the wrapper `(() => {`; helpers.js opens `try {`; main.js closes both (catch, finally, `})();`).
+head head.html
+css tokens.css
+css layout.css
+css components.css
+css responsive.css
+body body.html
+data data.js
+js core.js
+js helpers.js
+js header.js
+js footer.js
+js setup.js
+js brief.js
+js alerts.js
+js tiles.js
+js filters.js
+js table.js
+js cards.js
+js detail.js
+js charts.js
+js controls.js
+js main.js
+fallback fallback.js

@@ -22,6 +22,7 @@
   --f-data:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
   color-scheme:light;
 }
+/* Dark tokens, once. Light is forced with <html data-theme="light">. (A second copy for data-theme="dark" was removed: nothing sets it.) */
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#12141a; --surface:#1a1d25; --sunken:#22262f; --line:#2c313c; --line-strong:#3c4250;
   --ink:#eceef3; --ink-2:#b4bbc8; --ink-3:#8a92a2;
@@ -30,14 +31,6 @@
   --good:#5fcf83; --warn:#f0b54a; --serious:#f28a5a; --crit:#ff7a6e;
   --good-bg:#18301f; --warn-bg:#33280f; --serious-bg:#38231a; --crit-bg:#3a2120;
   --demo-bg:#33290c; --demo-ink:#f3d27a; color-scheme:dark}}
-:root[data-theme="dark"]{
-  --bg:#12141a; --surface:#1a1d25; --sunken:#22262f; --line:#2c313c; --line-strong:#3c4250;
-  --ink:#eceef3; --ink-2:#b4bbc8; --ink-3:#8a92a2;
-  --accent:#a69cf2; --accent-soft:#2a2747;
-  --up:#6aa5ff; --down:#ff7a6e; --down-soft:#3a2120; --neutral-bar:#4a5161;
-  --good:#5fcf83; --warn:#f0b54a; --serious:#f28a5a; --crit:#ff7a6e;
-  --good-bg:#18301f; --warn-bg:#33280f; --serious-bg:#38231a; --crit-bg:#3a2120;
-  --demo-bg:#33290c; --demo-ink:#f3d27a; color-scheme:dark}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 body{background:var(--bg);color:var(--ink);font:14px/1.5 var(--f-body);margin:0}
@@ -73,7 +66,7 @@ header.top{display:flex;flex-direction:column;gap:4px}
 .dq.s-ok .ic{color:var(--good)} .dq.s-warn .ic{color:var(--warn)} .dq.s-crit .ic{color:var(--crit)}
 .dqpanel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;font-size:13px;display:flex;flex-direction:column;gap:8px}
 .dqpanel ul{margin:2px 0 0;padding-left:18px;display:grid;gap:2px}
-.dqpanel .t{font-family:var(--f-data);font-size:12px;font-weight:500}
+.dqpanel .t{font-family:var(--f-data);font-size:12px;font-weight:500;white-space:normal}
 
 .alerts{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
 .alerts h2{font-size:14px;font-weight:600;margin:0 0 2px}
@@ -88,7 +81,6 @@ header.top{display:flex;flex-direction:column;gap:4px}
 .alerts .k.caution{color:var(--warn);background:var(--warn-bg)}
 .alerts .d{grid-column:2;font-size:12.5px;color:var(--ink-3)}
 .alerts .more{margin-top:8px;font:inherit;font-size:12.5px;background:none;border:0;padding:4px 0;color:var(--accent);cursor:pointer;text-decoration:underline;min-height:40px}
-.alerts .more:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 .tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:4px;min-width:0}
 .tile .lab{font-size:12.5px;color:var(--ink-2)}
@@ -161,8 +153,7 @@ table.wide{min-width:1120px}
 .tablehead .tools{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 th,td{padding:8px 7px;border-bottom:1px solid var(--line);white-space:nowrap;text-align:right;vertical-align:middle}
 td.n{font-family:var(--f-data);font-variant-numeric:tabular-nums}
-th{font-size:11.5px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;background:var(--surface);user-select:none}
-th{padding-top:11px;padding-bottom:11px}
+th{font-size:11.5px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;background:var(--surface);user-select:none;padding-top:11px;padding-bottom:11px}
 th.sortable{cursor:pointer;min-width:40px} th.sortable:hover{color:var(--ink)}
 th.hw{white-space:normal;min-width:84px;max-width:110px;line-height:1.25}   /* long header names wrap instead of widening the column */
 th .arr{color:var(--accent)}
@@ -203,7 +194,6 @@ td.detail{white-space:normal;text-align:left;padding:14px;position:static;backgr
 .news .src{color:var(--ink-3);font-size:12px}
 .more{align-self:flex-start;border:1px solid var(--line-strong);background:var(--surface);border-radius:6px;padding:6px 12px;min-height:40px;cursor:pointer;font-size:13px;color:var(--accent)}
 .more:hover{background:var(--sunken)}
-.dqpanel .t{white-space:normal}
 .dropnote{font-size:12.5px;color:var(--ink-2);flex:1 1 260px;min-width:0;line-height:1.35}
 .cards{display:none;flex-direction:column}
 .sc{border-top:1px solid var(--line)}
@@ -566,9 +556,6 @@ $('def-knife').textContent = `Price below a ${ST.knife.below_200d_falling ? 'fal
 $('def-src').textContent = DATA.demo ? 'Synthetic demo data.' : 'Daily adjusted prices and fundamentals from Yahoo Finance via yfinance. Random tickers are cross-checked against Nasdaq and Nasdaq Nordic through OpenBB (see the data-quality badge). Fundamentals are cached for 7 days.';
 });
 
-// Chart width in px: the drawing is as wide as the space it gets, so text keeps its size on a phone.
-const chartW = (max, reserve) => Math.max(260, Math.min(max, innerWidth - reserve));
-
 // ---------- definitions toggle: links to #def-... open it first ----------
 const defs = $('defs');
 function openDef(id) {
@@ -586,12 +573,6 @@ document.addEventListener('click', e => {
 });
 window.addEventListener('hashchange', () => openDef(location.hash.slice(1)));
 if (location.hash) openDef(location.hash.slice(1));
-
-// ---------- tooltip ----------
-const tip = $('tip');
-function showTip(e, nodes) { tip.replaceChildren(...nodes); tip.hidden = false; const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8), y = Math.min(e.clientY + 14, innerHeight - tip.offsetHeight - 8); tip.style.left = x + 'px'; tip.style.top = y + 'px'; }
-const hideTip = () => { tip.hidden = true; };
-
 // ---------- setup label under the current controls ----------
 // The key (`label`) stays the stable enum the nightly screen uses; the words a reader sees come from `text` (setup_text in the payload).
 const SETUP_TIP = {
@@ -1081,6 +1062,14 @@ function detail(r) {
   }
   return wrap;
 }
+// Chart width in px: the drawing is as wide as the space it gets, so text keeps its size on a phone.
+const chartW = (max, reserve) => Math.max(260, Math.min(max, innerWidth - reserve));
+
+// ---------- tooltip ----------
+const tip = $('tip');
+function showTip(e, nodes) { tip.replaceChildren(...nodes); tip.hidden = false; const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8), y = Math.min(e.clientY + 14, innerHeight - tip.offsetHeight - 8); tip.style.left = x + 'px'; tip.style.top = y + 'px'; }
+const hideTip = () => { tip.hidden = true; };
+
 function priceChart(r) {
   // hist has no dates of its own: item i sits on DATA.chart_dates[hist.o + i], prices are integer hundredths (DATA.price_scale).
   // A null close is an axis day without a bar for this stock (a holiday): it is dropped, so the chart draws the same points as before.

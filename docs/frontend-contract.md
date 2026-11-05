@@ -1,9 +1,31 @@
 # Frontend contract: the hooks that tests and scripts depend on
 
+## Where the page lives and how to edit it
+
+`src/template.html` is **generated**. Edit the parts in `src/web/`, then run `python src/web/assemble.py --write` and commit both.
+`tests/test_web_build.py` fails when the template is out of date or a part is missing from `src/web/manifest.txt`.
+The page stays one self-contained file (CSS and JavaScript inlined), so `dashboard.render_html` is unchanged.
+
+| Part | Holds |
+|---|---|
+| `head.html` | `<!doctype>` to the font links |
+| `tokens.css` | colour, font and dark-mode variables (dark defined once) |
+| `layout.css` | reset, page width, headings, focus ring |
+| `components.css` | every component, in the order of the page (later rules win, so keep the order) |
+| `responsive.css` | media queries (1100, 900, 600, 480 px, reduced motion); must stay last |
+| `body.html` | the markup, `<body>` to the tooltip element |
+| `data.js` | the one `const DATA = __DATA__;` line |
+| `core.js` ... `main.js` | one script in a single `(() => { try { ... } })()`; `core.js` opens the wrapper, `helpers.js` opens `try {`, `main.js` closes both. Sections: `core` (failure box, `guard`), `helpers` (state, formatters, windows), `header` (data quality, stale banner), `footer` (definitions), `setup`, `brief`, `alerts`, `tiles`, `filters` (active chips), `table`, `cards` (phone), `detail`, `charts` (tooltip, price chart, histogram, sectors), `controls`, `main` (first draw) |
+| `fallback.js` | second script that reports a data file that could not be read |
+| `manifest.txt` | build order; each part exactly once |
+
+To add a part: create the file, add a line to `manifest.txt` (`css`/`js` role), run the assembler. Parts are not valid files on their own
+(the wrapper braces open and close across files), so check the assembled page: `node --check` does not apply, the browser tests do.
+
 Tests (`tests/test_browser.py`, `tests/visual/`) and `scripts/screenshots.py` find things on the page through the hooks below.
 `tests/visual/test_contract.py` checks this file against `src/template.html` and the tests, so the two cannot drift:
 
-- every hook listed here must exist in `src/template.html` (or, for `data:`, in `docs/payload.md`);
+- every hook listed here must exist in `src/template.html` (the generated page; its source is `src/web/`) (or, for `data:`, in `docs/payload.md`);
 - every `#id`, `data-testid` and `data-*` attribute that a test or script uses must be listed here.
 
 **Rule: change, rename or remove a listed hook only together with the test that uses it, in the same commit, and update this file.**
