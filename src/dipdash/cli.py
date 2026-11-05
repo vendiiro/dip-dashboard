@@ -15,6 +15,7 @@ from .dashboard import build_payload, write_dashboard
 from .digest import build_digest, history_dates, latest_backtest_line
 from .fsio import atomic_write_text
 from .screen import needs_news
+from .sources import Sources
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -104,7 +105,7 @@ def _alerts(payload: dict, prices: dict, asof: str, out_path: Path, data_dir: Pa
         return None
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, sources: Sources | None = None) -> int:
     a = make_parser().parse_args(argv)
     settings = load_settings(a.settings)
     if a.news_threshold is not None:
@@ -125,28 +126,40 @@ def main(argv: list[str] | None = None) -> int:
         indices = demo_indices(settings.indices)
         source: dict[str, str] = {}
     else:
-        try:
-            import yfinance  # noqa: F401
-            # yfinance re-enables its own deprecation notices when imported, so this filter has to come after the import
-            warnings.filterwarnings("ignore", module=r"yfinance(\.|$)")
-        except ImportError:
-            sys.exit("yfinance is not installed. Run: pip install -r requirements.txt")
-        from . import openbb_source
+        if sources is None:                             # injected bundles (tests) never touch the real libraries
+            try:
+                import yfinance  # noqa: F401
+                # yfinance re-enables its own deprecation notices when imported, so this filter has to come after the import
+                warnings.filterwarnings("ignore", module=r"yfinance(\.|$)")
+            except ImportError:
+                sys.exit("yfinance is not installed. Run: pip install -r requirements.txt")
         from .cache import save_raw_prices
-        from .data import fetch_fundamentals, fetch_indices, fetch_news, fetch_prices, pull_prices
+        from .data import fetch_indices, pull_prices
         from .fx import fetch_fx_to_usd
+        from .sources import live_sources
 
+        bundle = sources or live_sources()
         print(f"Downloading 2y daily prices for {len(tickers)} tickers...")
         start = str(today - timedelta(days=730))
-        prices, source = pull_prices(tickers, fetch_prices, lambda t: openbb_source.fetch_bars(t, start, str(today)))
-        for src in ("primary", "fallback"):
-            part = {t: v for t, v in prices.items() if source[t] == src}
+        try:
+            prices, source = pull_prices(tickers, bundle.prices, lambda t: bundle.fallback_bars(t, start, str(today)))
+        except Exception as exc:
+            # The batch call itself raised (network down, library error), so there is nothing to screen. This is the same kind of
+            # failure as a half-empty pull: keep yesterday's files, say why, and exit 2 so the batch file retries later.
+            from .validate import Issue as _Issue, write_quality_log as _wql
+            _wql([_Issue("*", "price_source", "error", f"price download failed: {type(exc).__name__}: {exc}")],
+                 Path(a.out).parent / "data_quality.failed.csv")
+            print(f"FAILED: the price download raised {type(exc).__name__}: {exc}. "
+                  f"The dashboard, digest and history were left as they were; see data_quality.failed.csv.")
+            return 2
+        for kind in ("primary", "fallback"):
+            part = {t: v for t, v in prices.items() if source[t] == kind}
             if part:
-                path = save_raw_prices(part, "yfinance" if src == "primary" else "openbb_fallback", data_dir / "raw")
+                path = save_raw_prices(part, "yfinance" if kind == "primary" else "openbb_fallback", data_dir / "raw")
                 print(f"  raw pull saved: {path}")
-        funds = fetch_fundamentals(list(prices), data_dir / "fundamentals.json")
-        fx = fetch_fx_to_usd(f.get("currency") for f in funds.values())
-        indices = fetch_indices(settings.all_indices, history=idx_hist)
+        funds = bundle.fundamentals(list(prices), data_dir / "fundamentals.json")
+        fx = fetch_fx_to_usd((f.get("currency") for f in funds.values()), fetch_last=bundle.fx)
+        indices = fetch_indices(settings.all_indices, fetch_close=bundle.index, history=idx_hist)
         from .earnings import load_earnings
         # Each stock is judged against ITS OWN last bar date: a US stock whose last bar is Tuesday must not be counted as if it
         # were Wednesday just because the European bars are already in. The cache is shared, so later groups fetch nothing new.
@@ -158,11 +171,11 @@ def main(argv: list[str] | None = None) -> int:
                 continue
         for d, group in sorted(by_date.items()):
             try:
-                earnings.update(load_earnings(group, data_dir / "earnings.json", d, settings.earnings,
+                earnings.update(load_earnings(group, data_dir / "earnings.json", d, settings.earnings, fetch=bundle.earnings,
                                               raw_dir=data_dir / "raw" / "yfinance_earnings"))
             except Exception as exc:                    # earnings are context; their failure must not stop the run
                 print(f"earnings: skipped for {len(group)} stocks ({type(exc).__name__}: {exc})")
-        news_fn = fetch_news
+        news_fn = bundle.news
 
     from .validate import Issue, validate_run, write_quality_log
     issues = validate_run(universe, prices, funds, settings, today)
@@ -172,7 +185,7 @@ def main(argv: list[str] | None = None) -> int:
         issues += [Issue(i.name, "index_missing", "warn", f"no data for {i.symbol}; no market context from it for region {i.region}")
                    for i in settings.all_indices if i.symbol not in {x["symbol"] for x in indices}]
         if not a.no_crosscheck:
-            issues += _crosscheck(tickers, prices, today)
+            issues += _crosscheck(tickers, prices, today, bundle)
 
     payload = build_payload(universe, prices, funds, settings, news_fn=news_fn, demo=a.demo, today=today, fx_to_usd=fx,
                             indices=indices, issues=issues, index_history=idx_hist, earnings=earnings)
@@ -218,24 +231,25 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _crosscheck(tickers: list[str], prices: dict, today: date, n: int = 5) -> list:
+def _crosscheck(tickers: list[str], prices: dict, today: date, bundle: Sources | None = None, n: int = 5) -> list:
     """Compare five random tickers with an independent source (US via Nasdaq, Nordic via Nasdaq Nordic)."""
     import importlib.util
 
     from . import openbb_source
     from .crosscheck import pick_sample, run_crosscheck, to_issues
-    from .data import fetch_raw_closes
+    from .sources import live_sources
 
     if importlib.util.find_spec("openbb") is None:                  # OpenBB is optional (about 1 GB); say so instead of pretending to compare
         print("Cross-check skipped: OpenBB is not installed (pip install openbb==5.0.0 to enable it).")
         return []
 
+    bundle = bundle or live_sources()
     eligible = [t for t in tickers if t in prices and openbb_source.source_for(t)]
     sample = pick_sample(eligible, n, seed=int(today.strftime("%Y%m%d")))
     print(f"Cross-checking {len(sample)} tickers against a second source: {', '.join(sample)}")
 
     def other(t):
         src = openbb_source.source_for(t)
-        return (src, lambda s, e: (lambda b: b[0] if b else None)(openbb_source.fetch_bars(t, s, e))) if src else None
+        return (src, lambda s, e: (lambda b: b[0] if b else None)(bundle.fallback_bars(t, s, e))) if src else None
 
-    return to_issues(run_crosscheck(sample, fetch_ref=fetch_raw_closes, fetch_other=other, today=today))
+    return to_issues(run_crosscheck(sample, fetch_ref=bundle.raw_closes, fetch_other=other, today=today))
