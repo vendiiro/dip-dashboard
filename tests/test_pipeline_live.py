@@ -158,3 +158,42 @@ def test_no_bundle_and_no_yfinance_exits_with_install_hint(env):
     with pytest.raises(SystemExit) as e:
         cli.main(["--universe", str(uni), "--out", str(tmp / "o" / "d.html"), "--data-dir", str(tmp / "data")])
     assert "yfinance is not installed" in str(e.value)
+
+
+def test_live_run_records_the_ledger(env):
+    tmp, uni = env
+    assert run(env, make_fake()) == 0
+    import pandas as pd
+    led = pd.read_csv(tmp / "data" / "ledger" / "flags.csv", dtype=str)
+    assert set(led["ticker"]) == set(ALL) and led["asof"].nunique() == 1
+    import hashlib
+    assert set(led["universe_hash"]) == {hashlib.sha256(uni.read_bytes()).hexdigest()}
+    before = (tmp / "data" / "ledger" / "flags.csv").read_bytes()
+    assert run(env, make_fake()) == 0                                   # a second run on the same data adds nothing
+    assert (tmp / "data" / "ledger" / "flags.csv").read_bytes() == before
+
+
+def test_demo_run_writes_no_ledger(env):
+    tmp, _ = env
+    assert cli.main(["--demo", "--out", str(tmp / "output" / "dashboard.html"), "--data-dir", str(tmp / "data")]) == 0
+    assert not (tmp / "data" / "ledger").exists()
+
+
+def test_locked_ledger_keeps_exit_code_and_page(env, capsys):
+    tmp, _ = env
+    (tmp / "data" / "ledger" / "flags.csv").mkdir(parents=True)         # a directory where the file should be: cannot be opened
+    assert run(env, make_fake()) == 0
+    assert (tmp / "output" / "dashboard.html").stat().st_size > 0 and (tmp / "output" / "run_meta.json").exists()
+    assert "Ledger not updated" in capsys.readouterr().out
+    assert (tmp / "data" / "ledger" / "flags.csv").is_dir()             # nothing was replaced
+
+
+def test_ledger_failure_by_exception_keeps_exit_code(env, capsys, monkeypatch):
+    tmp, _ = env
+    from dipdash import ledger
+
+    def boom(*a, **k):
+        raise OSError("disk full")
+    monkeypatch.setattr(ledger, "append_rows", boom)
+    assert run(env, make_fake()) == 0
+    assert "Ledger not updated" in capsys.readouterr().out

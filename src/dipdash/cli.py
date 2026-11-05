@@ -10,7 +10,7 @@ from dataclasses import asdict
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from .config import ROOT, load_settings, load_universe
+from .config import CONFIG_DIR, ROOT, load_settings, load_universe
 from .dashboard import build_payload, write_dashboard
 from .digest import build_digest, history_dates, latest_backtest_line
 from .fsio import atomic_write_text
@@ -252,6 +252,13 @@ def main(argv: list[str] | None = None, sources: Sources | None = None) -> int:
                 "coverage": {"summary": coverage_summary, "rows": coverage_rows}}
         atomic_write_text(out_path.parent / "run_meta.json", json.dumps(meta, indent=2, ensure_ascii=False) + "\n")
         print(coverage_summary)
+    if not a.demo:
+        try:                                            # the forward record must never stop the run or the page
+            from . import ledger
+            n_new = ledger.record_run(payload, settings, a.universe or CONFIG_DIR / "universe.csv", data_dir / "ledger" / "flags.csv")
+            print(f"Ledger: {n_new} new row(s) -> {data_dir / 'ledger' / 'flags.csv'}")
+        except Exception as exc:
+            print(f"Ledger not updated: {type(exc).__name__}: {exc}")
     log = write_quality_log(issues, out_path.parent / ("data_quality.demo.csv" if a.demo else "data_quality.csv"))   # a demo run must not replace a real log
     n = {k: sum(i.severity == k for i in issues) for k in ("error", "warn", "info")}
     print(f"Data quality: {n['error']} error(s), {n['warn']} warning(s) -> {log}")
