@@ -1,5 +1,7 @@
 # Working on this repo with several agents
 
+Current state, done work and next steps: docs/STATUS.md (read it first).
+
 Thirteen agents, one owner per file, independent reviewers, and a backlog split into waves that can run at the same time.
 Definitions live in `.claude/agents/*.md` (Claude Code loads them as subagents). File ownership lives in
 `docs/agents/ownership.csv` and is enforced by `tests/test_ownership.py`. Open work is in `docs/BACKLOG.md`.
