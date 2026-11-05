@@ -453,3 +453,47 @@ def test_phone_shows_ten_cards_then_a_show_all_button(browser, demo_html):
     assert page.locator("#cards .sc").count() == 1 and page.locator("[data-testid=cards-more]").count() == 0
     assert errors == []
     page.close()
+
+
+def test_setup_label_shows_setup_text_and_keys_on_the_enum(browser, demo_html):
+    page, _ = open_page(browser, demo_html)
+    page.click("#show button[data-v=all]")
+    for t, text in page.evaluate("DATA.rows.map(r => [r.t, r.setup_text])")[:40]:
+        badge = page.locator(f"#body tr.row[data-t='{t}'] td[data-k=setup] .badge")
+        if badge.count():
+            assert text in badge.inner_text()
+    assert "Quality dip" not in page.inner_text("#body")                              # the enum is a key, not a label
+    assert page.evaluate("DATA.rows.some(r => /^Dip · passes \\d+ of \\d+ checks$/.test(r.setup_text))")
+    page.close()
+
+
+def test_default_order_is_size_of_drop_and_user_sort_still_works(browser, demo_html):
+    page, _ = open_page(browser, demo_html)
+    page.click("#show button[data-v=all]")
+    vals = page.evaluate("[...document.querySelectorAll('#body tr.row')].map(tr => DATA.rows.find(r => r.t === tr.dataset.t).r5).filter(v => v != null)")
+    assert len(vals) > 5 and vals == sorted(vals)                                     # biggest drop first, whatever the label
+    assert "Size of drop (default)" in page.inner_html("#sortsel")
+    page.click("#head th:has-text('Price')")
+    assert page.locator("#head th[aria-sort=descending], #head th[aria-sort=ascending]").count() == 1
+    page.close()
+
+
+def test_footer_explains_scored_distorted_and_net_margin(browser, demo_html):
+    page, _ = open_page(browser, demo_html)
+    foot = page.inner_text("footer").lower()
+    for need in ("scored on n/6", "distorted", "above 100%", "net margin above 0", "listed as missing, not as failed", "definitions, not tests"):
+        assert need in foot
+    assert not any(w in foot for w in ("top pick", "recommend", "you should buy"))
+    page.close()
+
+
+def test_distorted_and_no_fundamentals_states_render(browser, demo_html):
+    page, errors = open_page(browser, demo_html)
+    page.evaluate("""() => { const r = DATA.rows.find(x => x.dip && x.q != null && !x.knife); r.q_status = 'distorted'; r.q_why = 'ROE and debt/equity are both missing'; window.__t = r.t; document.getElementById('q').dispatchEvent(new Event('input')); }""")
+    t = page.evaluate("window.__t")
+    badge = page.locator(f"#body tr.row[data-t='{t}'] .badge")
+    assert "Dip, no fundamentals" in badge.inner_text() and "ROE and debt/equity are both missing" in badge.get_attribute("title")
+    page.locator(f"#body tr.row[data-t='{t}']").click()
+    assert "distorted" in page.inner_text("td.detail").lower()
+    assert errors == []
+    page.close()

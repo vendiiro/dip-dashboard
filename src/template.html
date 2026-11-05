@@ -281,7 +281,7 @@ footer dd{margin:0}
   <div class="controls" id="controls">
     <div class="ctl">Show
       <div class="seg" id="show">
-        <button data-v="quality" aria-pressed="false">Quality dips</button>
+        <button data-v="quality" aria-pressed="false">Passing the checks</button>
         <button data-v="dips" aria-pressed="true">All dips</button>
         <button data-v="all" aria-pressed="false">All stocks</button>
       </div>
@@ -331,6 +331,11 @@ footer dd{margin:0}
     <dl>
       <dt>Dip</dt><dd id="def-dip"></dd>
       <dt>Quality score</dt><dd id="def-q"></dd>
+      <dt>Scored on n/6</dt><dd>How many of the six quality checks had data for this stock. A check with no data is left out, not counted as failed, so a score built on 4 of 6 checks rests on less evidence than one built on 6 of 6. Banks and insurers have fewer applicable checks, so their count is out of 4.</dd>
+      <dt>Distorted</dt><dd>The fundamentals look unreliable, so the stock is shown as “Dip, no fundamentals” instead of being read as passing: return on equity above 100%, or both return on equity and debt/equity missing (which often means negative equity). The stored score is left as computed.</dd>
+      <dt>Net margin above 0</dt><dd>A loss-making company (net margin of 0 or less) is shown as “Dip, low quality” whatever its score. A missing net margin is listed as missing, not as failed. This is separate from the six-check score, whose margin check needs 8% or more.</dd>
+      <dt>Setup label</dt><dd id="def-setup">“Dip · passes 5 of 6 checks” says how many of the applicable checks the stock passed. It describes the checks, not whether the stock is a good or bad candidate. The default order of the table is the size of the drop, biggest first, not the score.</dd>
+      <dt>Definitions, not tests</dt><dd>The checks, the distorted rule and the net-margin rule are definitions. They are not filters that have been tested on past data, and free fundamentals are not point-in-time.</dd>
     </dl>
     <dl>
       <dt>Falling knife</dt><dd id="def-knife"></dd>
@@ -503,7 +508,7 @@ guard('the data-quality badge', function dataQuality() {
 // ---------- footer definitions from the settings actually used ----------
 guard('the footer definitions', () => {
 $('def-dip').textContent = `Fell at least the minimum drop over the chosen window. Defaults: 1 day ≤ ${MINUS}${(ST.dip.drop_1d * 100).toFixed(0)}%, 5 days ≤ ${MINUS}${(ST.dip.drop_5d * 100).toFixed(0)}%, or ≥ ${(ST.dip.drawdown_20d * 100).toFixed(0)}% below the 20-day high. Untested defaults.`;
-$('def-q').textContent = `Share of the checks that apply and have data (six in total) that passed: ROE ≥ ${(ST.quality.roe_min * 100).toFixed(0)}%, net margin ≥ ${(ST.quality.margin_min * 100).toFixed(0)}%, debt/equity ≤ ${ST.quality.debt_to_equity_max}%, positive free cash flow, positive revenue growth, market cap ≥ ${(ST.quality.market_cap_min / 1e9).toFixed(0)}B USD. Needs at least three checks with data. Banks and insurers skip the debt and free-cash-flow checks, and utilities and real-estate companies use a debt/equity limit of 300%. Free fundamentals can be stale or wrong.`;
+$('def-q').textContent = `Share of the checks that apply and have data (six in total) that passed: ROE ≥ ${(ST.quality.roe_min * 100).toFixed(0)}%, net margin ≥ ${(ST.quality.margin_min * 100).toFixed(0)}%, debt/equity ≤ ${ST.quality.debt_to_equity_max}%, positive free cash flow, positive revenue growth, market cap ≥ ${(ST.quality.market_cap_min / 1e9).toFixed(0)}B USD. Needs at least three checks with data; each stock shows how many it was scored on. Banks and insurers skip the debt and free-cash-flow checks, and utilities and real-estate companies use a debt/equity limit of 300%. Free fundamentals can be stale or wrong.`;
 $('def-knife').textContent = `Price below a ${ST.knife.below_200d_falling ? 'falling ' : ''}200-day average and at least ${(ST.knife.drawdown_52w * 100).toFixed(0)}% under the 52-week high. A long slide, not a one-off drop.`;
 $('def-src').textContent = DATA.demo ? 'Synthetic demo data.' : 'Daily adjusted prices and fundamentals from Yahoo Finance via yfinance. Random tickers are cross-checked against Nasdaq and Nasdaq Nordic through OpenBB (see the data-quality badge). Fundamentals are cached for 7 days.';
 });
@@ -517,21 +522,42 @@ function showTip(e, nodes) { tip.replaceChildren(...nodes); tip.hidden = false; 
 const hideTip = () => { tip.hidden = true; };
 
 // ---------- setup label under the current controls ----------
+// The key (`label`) stays the stable enum the nightly screen uses; the words a reader sees come from `text` (setup_text in the payload).
 const SETUP_TIP = {
-  'Quality dip': 'Fell past your drop limit and passed enough quality checks. A candidate to research, not a signal.',
+  'Quality dip': 'Fell past your drop limit and passed enough quality checks (and net margin is above 0). A candidate to research, not a signal. The checks are definitions, not tested filters.',
   'Falling knife': 'Dipping inside a long downtrend: below a falling 200-day average and far under the 52-week high.',
-  'Dip, low quality': 'Fell past your drop limit but passed too few quality checks.',
-  'Dip, no fundamentals': 'Fell past your drop limit, but too few fundamentals came back to score quality.',
+  'Dip, low quality': 'Fell past your drop limit but passed too few quality checks, or net margin is not above 0.',
+  'Dip, no fundamentals': 'Fell past your drop limit, but the fundamentals are missing, too thin to score, or look distorted, so the checks cannot be read.',
   'No dip': 'Has not fallen past your drop limit.',
 };
 function setupOf(r, m) {
   const w = $('win').value, drop = -(+$('drop').value) / 100, v = m[w];
   const isDip = w === 'any' ? !!m.dip : (v != null && v <= drop);    // 'any' = the rules in settings.toml (1d, 5d or 20d high)
-  if (!isDip) return {label: 'No dip', rank: 0, cls: 'b-none', icon: '·'};
-  if (m.knife) return {label: 'Falling knife', rank: 1, cls: 'b-crit', icon: '⚠'};
-  if (r.q == null) return {label: 'Dip, no fundamentals', rank: 2, cls: 'b-warn', icon: '?'};
-  if (r.q >= +$('qmin').value) return {label: 'Quality dip', rank: 4, cls: 'b-good', icon: '✓'};
-  return {label: 'Dip, low quality', rank: 2, cls: 'b-serious', icon: '✗'};
+  const mk = (label, rank, cls, icon) => ({label, rank, cls, icon, text: setupText(label, r)});
+  if (!isDip) return mk('No dip', 0, 'b-none', '·');
+  if (m.knife) return mk('Falling knife', 1, 'b-crit', '⚠');
+  if (r.q == null) return mk('Dip, no fundamentals', 2, 'b-warn', '?');
+  if (r.q_status === 'distorted') return mk('Dip, no fundamentals', 2, 'b-warn', '?');   // same order as screen.setup_label
+  if ((r.q_must_failed || []).length) return mk('Dip, low quality', 2, 'b-serious', '✗');
+  if (r.q >= +$('qmin').value) return mk('Quality dip', 4, 'b-good', '✓');
+  return mk('Dip, low quality', 2, 'b-serious', '✗');
+}
+// Reader-facing text. At the nightly label the payload's own setup_text is used; under other controls the same wording is built here.
+function setupText(label, r) {
+  if (r.setup === label && r.setup_text) return r.setup_text;
+  if ((label === 'Quality dip' || label === 'Dip, low quality') && r.q_passed != null && r.q_applicable != null) return `Dip · passes ${r.q_passed} of ${r.q_applicable} checks`;
+  return label;
+}
+// One sentence on the evidence behind the checks: how many had data, and why a score may not be readable.
+function evidenceNote(r) {
+  const bits = [];
+  if (r.q_scored != null && r.q_applicable != null) bits.push(`scored on ${r.q_scored}/${r.q_applicable}`);
+  if (r.q_status === 'distorted') bits.push('distorted' + (r.q_why ? ': ' + r.q_why : ''));
+  else if (r.q_status === 'thin') bits.push('fewer checks had data than apply');
+  else if (r.q_status === 'no_data') bits.push('too few checks had data');
+  if ((r.q_must_failed || []).length) bits.push('net margin is not above 0');
+  if ((r.q_must_missing || []).length) bits.push('net margin missing (listed as missing, not failed)');
+  return bits.join(' · ');
 }
 const wasQualityDip = r => r.prev ? setupOf(r, r.prev).rank === 4 : null;   // null = no history to say
 // The label under the current controls lives in this Map, not on the row: the payload's own `r.setup` (the nightly screen's
@@ -539,8 +565,8 @@ const wasQualityDip = r => r.prev ? setupOf(r, r.prev).rank === 4 : null;   // n
 const VIEW = new Map(), vw = r => VIEW.get(r);
 window.__dipView = t => { const r = rows.find(x => x.t === t); return r && VIEW.get(r) ? {...VIEW.get(r)} : null; };
 function badge(r) {
-  const v = vw(r), bd = el('span', 'badge ' + v.cls, v.icon + ' ' + v.label);
-  bd.title = SETUP_TIP[v.label] + (r.setup && r.setup !== v.label ? ` At the default settings the nightly screen labels it “${r.setup}”.` : '');
+  const v = vw(r), bd = el('span', 'badge ' + v.cls, v.icon + ' ' + v.text), ev = evidenceNote(r);
+  bd.title = SETUP_TIP[v.label] + (ev && v.rank > 0 ? ' Evidence: ' + ev + '.' : '') + (r.setup && r.setup !== v.label ? ` At the default settings the nightly screen labels it “${r.setup_text || r.setup}”.` : '');
   return bd;
 }
 
@@ -552,7 +578,7 @@ function brief(all) {
   const h = el('h2', null, 'Today in brief'); h.id = 'brief-h';
   h.append(el('span', 'sub'));
   const sub = h.lastChild; sub.append(el('span', 'dot', ' · '), 'a description of the latest close, not a forecast.'); const rest = el('span', 'subrest', ' Dip and quality counts follow the window and quality settings; the rest covers all screened stocks.'); sub.append(rest);
-  const p1 = el('p', null, `${dips.length} of ${all.length} screened stocks are flagged as dips; ${qd.length} of them pass the quality bar${newQ.length ? ' and ' + newQ.length + ' ' + (newQ.length === 1 ? 'is' : 'are') + ' new since the previous close' : ''}.`);
+  const p1 = el('p', null, `${dips.length} of ${all.length} screened stocks are flagged as dips; ${qd.length} of them pass the quality checks${newQ.length ? ' and ' + newQ.length + ' ' + (newQ.length === 1 ? 'is' : 'are') + ' new since the previous close' : ''}.`);
   const p2 = el('p');
   const ix = (DATA.indices || []).slice(0, 2).filter(i => i.r1 != null);
   const r5s = all.map(r => r.r5).filter(v => v != null).sort((a, b) => a - b);
@@ -623,8 +649,8 @@ function tiles(all) {
     }
     if (foot) t.append(el('div', 'foot', foot)); box.append(t);
   };
-  mk('tile-quality', 'Quality dips', qd.length, `${$('win').value === 'any' ? 'Dip under the default rules' : 'Dip on the chosen window'} and quality ≥ ${$('qmin').value}`, qd.map(r => r.t));
-  mk('tile-new', 'New since yesterday', newQ.length, newQ.length ? 'Became a quality dip with the latest close' : 'Same quality dips as the previous close', newQ.map(r => r.t));
+  mk('tile-quality', 'Dips passing the checks', qd.length, `${$('win').value === 'any' ? 'Dip under the default rules' : 'Dip on the chosen window'}, score ≥ ${$('qmin').value}, net margin above 0`, qd.map(r => r.t));
+  mk('tile-new', 'New since yesterday', newQ.length, newQ.length ? 'Started passing the checks with the latest close' : 'Same dips passing the checks as the previous close', newQ.map(r => r.t));
   mk('tile-knife', 'Falling-knife flags', kn.length, 'Dipping inside a long downtrend', kn.map(r => r.t));
   const t = el('div', 'tile'); t.dataset.testid = 'tile-market'; t.append(el('div', 'lab', 'Market context'));
   if (DATA.indices && DATA.indices.length) {
@@ -658,7 +684,7 @@ const CLEAR = {
 };
 function activeList() {
   const a = [], q = $('q').value.trim();
-  if (S.show !== 'dips') a.push(['show', 'Showing: ' + (S.show === 'all' ? 'All stocks' : 'Quality dips')]);
+  if (S.show !== 'dips') a.push(['show', 'Showing: ' + (S.show === 'all' ? 'All stocks' : 'Passing the checks')]);
   if (S.region) a.push(['region', 'Region: ' + S.region]);
   if (q) a.push(['q', 'Search: “' + q + '”']);
   if ($('hideknife').checked) a.push(['knife', 'Falling knives hidden']);
@@ -732,8 +758,8 @@ function spark(v) {
   return svg;
 }
 function qnote(r) {   // '4/6' beside the score when fewer than six checks could be scored
-  const used = r.qchecks.filter(c => c.ok !== null).length, s = el('span', 'qn', used < 6 ? used + '/6' : '');
-  if (used < 6) s.title = used + ' of 6 quality checks could be scored (the rest have no data or do not apply to this sector); the score is the share of those that passed.';
+  const used = r.q_scored ?? r.qchecks.filter(c => c.ok !== null).length, of = r.q_applicable ?? 6, s = el('span', 'qn', used < of ? used + '/' + of : '');
+  if (used < of) s.title = 'Scored on ' + used + '/' + of + ': the other checks have no data; the score is the share of the scored checks that passed.';
   return s;
 }
 function qmeter(r) { const s = el('span', 'qm'); r.qchecks.forEach(c => s.append(el('i', c.ok === true ? 'ok' : c.ok === null ? 'na' : ''))); const used = r.qchecks.filter(c => c.ok !== null).length; s.title = r.qchecks.filter(c => c.ok).length + ' of ' + used + ' checks passed' + (used < 6 ? ' (' + (6 - used) + ' with no data or not applicable)' : ''); return s; }
@@ -769,13 +795,17 @@ function render() {
   }));
   activeChips();
   list.sort((a, b) => {
-    if (!S.sortKey) return (vw(b).rank - vw(a).rank) || ((a[W.hist || win] ?? 0) - (b[W.hist || win] ?? 0));
+    if (!S.sortKey) {                               // default order = size of the drop (biggest first), not the quality score
+      const m = W.hist || win, x = a[m], y = b[m];
+      if (x == null || y == null) return x == null ? (y == null ? a.t.localeCompare(b.t) : 1) : -1;
+      return (x - y) || a.t.localeCompare(b.t);
+    }
     const k = S.sortKey, d = S.sortDir;
     if (k === 't') return d * a.t.localeCompare(b.t);
     const x = k === 'setup' ? vw(a).rank : a[k], y = k === 'setup' ? vw(b).rank : b[k];
     if (x == null) return 1; if (y == null) return -1; return d * (x - y);
   });
-  $('tabletitle').textContent = {quality: 'Quality dips', dips: 'All dips', all: 'All stocks'}[S.show] + ` · ${list.length}`;
+  $('tabletitle').textContent = {quality: 'Dips passing the checks', dips: 'All dips', all: 'All stocks'}[S.show] + ` · ${list.length}`;
   S.list = list;
   // Phone cards: first CARDS_FIRST, then a "Show all" button. Any change of filter or sort folds the list back.
   const sig = JSON.stringify([S.show, S.region, qs, $('hideknife').checked, $('qmin').value, win, $('drop').value, S.sortKey, S.sortDir]);
@@ -820,7 +850,7 @@ addEventListener('resize', () => { if (innerWidth === lastW) return; clearTimeou
 function syncSort() {
   const sel = $('sortsel');
   if (!sel.options.length) {
-    sel.append(new Option('Default order', ''));
+    sel.append(new Option('Size of drop (default)', ''));
     COLS.filter(c => !c.nosort).forEach(c => sel.append(new Option(c.l + (c.k === 't' ? ' (A to Z)' : c.dir === 1 ? ' (low to high)' : ' (high to low)'), c.k)));
     sel.onchange = () => { const c = COLS.find(x => x.k === sel.value); S.sortKey = c ? c.k : null; S.sortDir = c ? c.dir : 1; render(); };
   }
@@ -878,6 +908,7 @@ function detail(r) {
   p1.append(lg); g.append(p1);
 
   const p2 = el('div', 'panel'); p2.append(el('h3', null, r.q == null ? 'Quality checks · no score' : `Quality checks · ${r.q}/100`));
+  { const ev = evidenceNote(r); if (ev) p2.append(el('div', 'nm', ev.charAt(0).toUpperCase() + ev.slice(1) + '.')); }
   const ul = el('ul', 'checks');
   r.qchecks.forEach(c => { const li = el('li'); li.append(el('span', c.ok === true ? 'ok' : c.ok === false ? 'bad' : 'na', c.ok === true ? '✓' : c.ok === false ? '✗' : '?'), el('span', null, c.label), el('span', 'val', c.ok === null ? (c.na ? 'n/a for ' + (r.sector || 'sector') : 'no data') : QFMT[c.key](c.value, r))); ul.append(li); });
   p2.append(ul, el('h3', null, 'Falling-knife checklist'));

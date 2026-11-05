@@ -20,6 +20,7 @@ The "Used by" column says which file would break: `browser` = `tests/test_browse
 | `id:tiles` | browser, visual, shots | Container of the summary tiles; the page is "ready" when `#tiles .tile` exists |
 | `id:brief` | browser | "Today in brief" paragraph |
 | `id:head` | browser | Table header row (column count, sort clicks) |
+| `id:sortsel` | browser | Phone sort select; its first option is "Size of drop (default)" |
 | `id:body` | browser, visual | Table body; rows are `tr.row` |
 | `id:cards` | browser, visual | Phone card list (shown at 600 px and below) |
 | `id:empty` | browser, visual | Written empty state ("No stocks match ...") |
@@ -27,7 +28,7 @@ The "Used by" column says which file would break: `browser` = `tests/test_browse
 | `id:activebar` | browser | Chips for filters that differ from the default |
 | `id:tabletitle` | browser | Table heading, changes with the filters |
 | `id:colbtn` | browser | "More columns" / "Fewer columns" toggle |
-| `id:show` | browser | Show filter (quality dips / all dips / all stocks), buttons carry `data-v` |
+| `id:show` | browser | Show filter (passing the checks / all dips / all stocks), buttons carry `data-v` |
 | `id:region` | browser, visual | Region filter, buttons carry `data-v` |
 | `id:win` | browser, visual | "Drop measured over" select (`any`, `r1`, ...) |
 | `id:drop` | browser, visual | Minimum drop slider |
@@ -47,7 +48,7 @@ The "Used by" column says which file would break: `browser` = `tests/test_browse
 |---|---|---|
 | `testid:stale` | browser | The stale banner, visible only when prices are over 2 weekdays old on a non-demo page |
 | `testid:fail` | browser | The failure alert |
-| `testid:tile-quality` | browser | Quality-dips tile; its `.big` equals the rows ranked "Quality dip" |
+| `testid:tile-quality` | browser | Quality-dips tile; its `.big` equals the rows ranked `Quality dip` (shown as "Dips passing the checks") |
 | `testid:tile-new` | browser | New-since-yesterday tile; chips equal the rows marked new |
 | `testid:tile-knife` | browser | Falling-knife tile |
 | `testid:tile-market` | browser | Market-context tile |
@@ -103,7 +104,10 @@ Meaning and types are in `docs/payload.md`; only the integrator renames them.
 | `data:t` | browser | Ticker of a row |
 | `data:region` | browser | Region of a row |
 | `data:dip` | browser, visual | Row passes the default dip rule |
-| `data:setup` | browser | Setup label string of a row |
+| `data:setup` | browser | Stable setup enum of a row (key on it, never show it) |
+| `data:setup_text` | browser | Reader-facing setup text ("Dip · passes 5 of 6 checks"); what the badge shows at the nightly label |
+| `data:q_status` | browser | `ok`, `thin`, `distorted` or `no_data`; the test sets `distorted` to check the page's wording |
+| `data:q_why` | browser | Reason shown in the badge tooltip and the detail when `q_status` is `distorted` |
 | `data:spark` | browser, visual | 90-day sparkline values (set to null by the failure tests) |
 | `data:hist` | browser | One-year history of a row (`c` = closes) |
 | `data:asof` | browser | Date of the last bar of a row |
