@@ -62,7 +62,7 @@ def test_every_origin_has_enough_history():
     assert sig["valid"].iloc[mod.START:].all()                                         # 252 bars needed, origins start at bar 400
     assert not sig["valid"].iloc[:251].any()
     mod.origin_dips(close, S)                                                          # does not raise
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError):
         mod.origin_dips(close.iloc[:300], S)                                           # a short series is refused, not silently False
 
 
@@ -77,6 +77,8 @@ def test_forecast_spec_text_matches_the_rule(tmp_path):
         assert part in txt, (part, txt)
     assert spec["split"]["oos_fraction"] == 0.3
     assert spec["design"]["dip_settings"] == {"drop_1d": 0.05, "drop_5d": 0.08, "drawdown_20d": 0.15}
+    assert "20-day-high rule" in spec["criterion_text"] and "AMENDMENT 2026-11-06" in spec["criterion_text"]
+    assert "5-day return <= -7% or 1-day return <= -4%" in spec["criterion_text"]       # the original text is kept
     assert mod.forecast_spec(raw, ["A"], pd.Timestamp("2020-01-02"), 0, "f", S)["spec_hash"] != spec["spec_hash"]
 
 
@@ -102,3 +104,46 @@ def test_main_uses_shared_cutoff_and_refuses_an_old_cache(tmp_path, monkeypatch)
     old = json.loads(meta_p.read_text())
     meta_p.write_text(json.dumps({**old, "spec_hash": "0" * 16}))                      # an origins cache from the old definition
     assert mod.main(args + ["--reuse"]) == 2
+
+
+def run_main(tmp_path, monkeypatch, bars, uni, s, name="run", extra=()):
+    from dipdash.cache import save_raw_prices
+    mod = load_script()
+    raw = save_raw_prices(bars, "synthetic", tmp_path / "raw")
+    monkeypatch.setattr(mod, "load_settings", lambda: s)
+    monkeypatch.setattr(mod, "load_universe", lambda: uni)
+    monkeypatch.setattr(mod.fc, "all_ranges", fake_ranges)
+    monkeypatch.setattr(mod.fc, "range_forecast", lambda c, *a, **k: None)
+    monkeypatch.setattr(mod, "chart", lambda *a, **k: None)
+    root = tmp_path / "out"
+    assert mod.main(["--raw", str(raw), "--out-root", str(root), "--out", str(root / name), "--workers", "1", *extra]) == 0
+    return root / name
+
+
+def test_cutoff_ignores_stocks_the_forecast_drops(tmp_path, monkeypatch):
+    """A stock too short for the forecast still counts in the calendar, as in the backtest and features runners."""
+    from test_backtest_run import synthetic
+    prices, ix, uni, q, s = synthetic(n_stocks=3)
+    extra = pd.Series(100.0 + np.arange(200), index=pd.bdate_range("2030-01-01", periods=200))   # dates nobody else has; 200 bars < START
+    bars = {t: (c, pd.Series(1000.0, index=c.index)) for t, c in prices.items()}
+    bars["SHORT"] = (extra, pd.Series(1000.0, index=extra.index))
+    out = run_main(tmp_path, monkeypatch, bars, uni, s)
+    spec = json.loads((out / "spec_forecast.json").read_text())
+    clean = {**prices, "SHORT": extra}
+    want = bt.shared_cutoff(clean, s)
+    assert spec["split"]["cutoff"] == str(want.date())
+    assert want != bt.shared_cutoff(prices, s), "the dropped stock must move the cutoff, or this test proves nothing"
+    assert "SHORT" not in spec["data"]["tickers"]
+
+
+def test_report_states_the_definition_change_and_no_ship_without_a_decision(tmp_path, monkeypatch):
+    from test_backtest_run import synthetic
+    prices, ix, uni, q, s = synthetic(n_stocks=3)
+    bars = {t: (c, pd.Series(1000.0, index=c.index)) for t, c in prices.items()}
+    out = run_main(tmp_path, monkeypatch, bars, uni, s)
+    txt = (out / "report_forecast.md").read_text(encoding="utf-8")
+    mod = load_script()
+    assert " ".join(mod.DEFINITION_CHANGE.format(start_date=s.backtest.start_date).split()) in " ".join(txt.split())
+    assert "(0.725, 95% interval 0.623 to 0.819)" in txt and f"splits dates from {s.backtest.start_date}" in txt
+    decision = next(l for l in txt.splitlines() if l.startswith("- **Decision:"))
+    assert "without Iiro's decision" in decision

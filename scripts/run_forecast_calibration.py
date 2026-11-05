@@ -77,8 +77,10 @@ def dip_text(s) -> str:
 def origin_dips(close: pd.Series, s) -> pd.Series:
     """backtest.dip_state of one stock, on the stock's own dates. Every origin (bar START and later) must have 252 bars of history."""
     sig = signals(close, s)
-    assert sig.index.equals(close.index), "signals dropped bars: the dip series would not line up with the origins"
-    assert len(sig) > START and bool(sig["valid"].iloc[START:].all()), "an origin lacks the 252 bars of history the dip rule needs"
+    if not sig.index.equals(close.index):
+        raise ValueError("signals dropped bars: the dip series would not line up with the origins")
+    if not (len(sig) > START and bool(sig["valid"].iloc[START:].all())):
+        raise ValueError("an origin lacks the 252 bars of history the dip rule needs")
     return dip_state(close, s)
 
 
@@ -260,6 +262,13 @@ def trial_rows(res: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+DEFINITION_CHANGE = (
+    "Definition change: this run uses the project's three-part dip rule (it adds the 20-day-high rule) and splits dates from {start_date}, "
+    "while the 2026-11-04 run used only the 1-day and 5-day rules and split all dates, so its dip-state coverage (0.725, 95% interval "
+    "0.623 to 0.819) is not comparable; the change was made after that result was seen and on an overlapping out-of-sample period, so this "
+    "run is a descriptive re-check, not a third pre-stated attempt, and it cannot by itself reverse the decision not to show the range.")
+
+
 def write_report(out: Path, res: pd.DataFrame, meta: dict, v1: dict, v2: dict, ship: str) -> None:
     def table(att):
         r = res[res.attempt == att]
@@ -293,7 +302,8 @@ def write_report(out: Path, res: pd.DataFrame, meta: dict, v1: dict, v2: dict, s
 Educational screen output. This tests whether a volatility RANGE is honest. It says nothing about direction and is not a price target.
 
 ## Result first
-- **Decision: {ship}**
+- **Decision: {ship}. The range is not shown on the dashboard without Iiro's decision.**
+- {DEFINITION_CHANGE.format(start_date=meta['start_date'])}
 - {line(v1, 'Attempt 1 (raw GARCH-t FHS)')}
 - {line(v2, f'Attempt 2 (global scale factor k = {k:.3f} fitted in-sample only)')}
 - Criterion (pre-stated in `src/dipdash/forecast.py` before any result): overall OOS coverage 0.80 +/- 0.04 AND dip-state coverage 0.80 +/- 0.06, judged on the point estimate. Two attempts, no further tuning.
@@ -354,9 +364,11 @@ def main(argv: list[str] | None = None) -> int:
     out.mkdir(parents=True, exist_ok=True)
 
     bars = load_raw_prices(a.raw)
-    prices = {}
+    cleaned, prices = {}, {}
     for t, (c, v) in bars.items():
         c2, _ = clean_bars(c, v)
+        if len(c2):
+            cleaned[t] = c2                          # what the backtest and the feature experiment split on
         bad = ~(np.isfinite(c2) & (c2 > 0))          # e.g. ABI.BR has 70 zero/negative closes that clean_bars (volume rule) keeps
         if bad.any():
             print(f"  {t}: dropped {int(bad.sum())} non-positive/non-finite closes")
@@ -368,8 +380,8 @@ def main(argv: list[str] | None = None) -> int:
         prices = dict(list(prices.items())[: a.limit])
     region = {u.ticker: group_of(u.region) for u in load_universe()}
     s = load_settings()
-    all_dates = shared_calendar(prices, s.backtest.start_date)
-    cutoff = shared_cutoff(prices, s)
+    all_dates = shared_calendar(cleaned, s.backtest.start_date)       # before the forecast-only filters and --limit: same cutoff as the other runners
+    cutoff = shared_cutoff(cleaned, s)
     spec = forecast_spec(Path(a.raw), list(prices), cutoff, a.limit, f"forecast_{date.today().isoformat()}", s)
     p = out / "origins.csv.gz"
     meta_p = out / META_FILE

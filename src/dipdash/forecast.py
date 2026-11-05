@@ -24,6 +24,10 @@ Two attempts in total, no further tuning: attempt 1 = the raw model above; attem
 log-range (lo, hi -> k*lo, k*hi) with k = the in-sample 80th percentile of the outcome-to-range ratio, fitted on in-sample
 origins only, then re-tested once out of sample against the same criterion. If both fail, the range does not ship.
 The criterion is judged on the point estimate (the intervals are reported, not used to relax it).
+AMENDMENT 2026-11-06 (made after the 2026-11-04 result was seen): the dip state in (b) above is the one the 2026-11-04 run used.
+Later runs use the project's three-part dip rule (backtest.dip_state: 1-day, 5-day and the 20-day-high rule, values from settings)
+and split dates from settings backtest.start_date. A run under the amended definition is a descriptive re-check on an overlapping
+out-of-sample period, not a new pre-stated attempt, and cannot by itself reverse the 2026-11-04 decision not to show the range.
 """
 from __future__ import annotations
 

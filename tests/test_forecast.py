@@ -119,7 +119,7 @@ def _load_calibration_script():
 def test_frozen_forecast_criterion_equals_the_docstring_and_the_constants():
     mod = _load_calibration_script()
     doc = " ".join(fc.__doc__.split())
-    assert mod.CRITERION_TEXT and mod.CRITERION_TEXT in doc and mod.CRITERION_TEXT.endswith("relax it).")
+    assert mod.CRITERION_TEXT and mod.CRITERION_TEXT in doc and mod.CRITERION_TEXT.endswith("decision not to show the range.") and "relax it)." in mod.CRITERION_TEXT
     assert f"within {mod.TARGET:.2f} +/- {mod.TOL_ALL:.2f}" in mod.CRITERION_TEXT and f"within {mod.TARGET:.2f} +/- {mod.TOL_DIP:.2f}" in mod.CRITERION_TEXT
     assert "Two attempts in total" in mod.CRITERION_TEXT and mod.ATTEMPTS == (1, 2)
     assert f"<= {mod.TOL_ALL:.2f}" in mod.VERDICT_TEXT and f"<= {mod.TOL_DIP:.2f}" in mod.VERDICT_TEXT
