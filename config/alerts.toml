@@ -5,8 +5,9 @@
 
 [defaults]
 # Which conditions to evaluate. Remove a name to switch it off.
-#   recovery            close back above its sma_days-day average after being below it the day before
-#   rsi_rebound         RSI(14) moves from below rsi_level to rsi_level or above
+#   (The two names below are old internal keys, kept so saved alert state still works. They show as neutral text.)
+#   recovery            shown as "back above its 20-day average": close above its sma_days-day average, below it the day before
+#   rsi_rebound         shown as "RSI back above 30": RSI(14) moves from below rsi_level to rsi_level or above
 #   new_low             close below the lowest close of the previous new_low_days days (shown as a caution)
 #   drop_continues      a further 1-day fall of at least drop_continues for a stock flagged at the previous close (caution)
 #   earnings_window     reported within earnings_recent_days or reports within earnings_soon_days trading days

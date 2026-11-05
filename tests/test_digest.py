@@ -6,6 +6,11 @@ from datetime import date
 
 import pytest
 
+# Same wording as the template footer (agreed with wording-guard).
+FOOTER = ("This is an educational research tool. It lists screen results (candidates to research), not advice. "
+          "A price drop alone does not show that a company is in good shape. "
+          "Read the news and filings to judge whether the cause is temporary.")
+
 from dipdash.config import Settings, load_universe
 from dipdash.digest import (MAX_HEADLINE, STANDING_CAVEAT, build_digest, clean_text, day_name, history_dates, latest_backtest_line,
                             previous_data_date)
@@ -147,7 +152,8 @@ def test_digest_uses_screen_wording_and_never_advice_wording():
     rows = [row("AAA", QUALITY_DIP, prev=NOT), row("KN", FALLING_KNIFE), row("LOW", LOW_QUALITY)]
     text = build_digest(payload(rows), S, backtest_line="Latest backtest (x): something.")
     assert not re.search(r"\bbuy now\b|\bsell\b|price target|will recover|\bguarantee|\bworks?\b|\bundervalued\b", text, re.I)
-    assert "flagged" in text.lower() and "not investment advice" in text
+    assert "flagged" in text.lower()
+    assert FOOTER in text and "reason to buy" not in text
 
 
 def test_demo_and_repeat_banners():

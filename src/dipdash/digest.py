@@ -101,8 +101,10 @@ def build_digest(payload: dict, settings: Settings, *, previous_asof: str | None
     L: list[str] = []
     w = L.append
     w(f"# Daily screen digest · data as of {day_name(asof)}\n")
-    w(f"Generated {payload.get('generated', '')} {payload.get('tz', '')}. Screen results for research, not investment advice. "
-      "A drop is not a reason to buy; read the news and filings first.\n")
+    w(f"Generated {payload.get('generated', '')} {payload.get('tz', '')}. "
+      "This is an educational research tool. It lists screen results (candidates to research), not advice. "
+      "A price drop alone does not show that a company is in good shape. "
+      "Read the news and filings to judge whether the cause is temporary.\n")
     if demo:
         w("> **DEMO DATA.** Synthetic prices and fundamentals. None of this is market data.\n")
     if repeat:

@@ -263,6 +263,44 @@ def test_config_file_loads_and_watch_override(tmp_path):
     assert A.load_alerts_config(tmp_path / "missing.toml").watch == []
 
 
+# ---------- old state keys still load; labels are neutral ----------
+def test_old_state_keys_still_load_and_suppress_repeat(tmp_path):
+    """State written before the label rename (keys 'recovery' and 'rsi_rebound') must load and behave as before."""
+    p = tmp_path / "s.json"
+    old = {"version": 1, "initialized": "2026-11-02", "asof": "2026-11-02",
+           "items": {"AAA|recovery": {"active": True, "first_seen": "2026-11-02", "last_changed": "2026-11-02"},
+                     "AAA|rsi_rebound": {"active": False, "first_seen": "2026-11-02", "last_changed": "2026-11-02"}}}
+    p.write_text(json.dumps(old), encoding="utf-8")
+    st, problem = A.load_state(p)
+    assert problem is None and st == old
+    assert {"recovery", "rsi_rebound"} <= set(A.CONDITIONS)
+    c = ser([100.0] * 30 + [95.0, 110.0])                       # a recovery cross on the data date
+    al, new = A.evaluate_alerts([row("AAA", True, True)], {"AAA": c}, st, cfg(), "2026-11-03")
+    assert not has(al, "recovery")                              # already active in the old state: stays silent
+    assert new["items"]["AAA|recovery"]["first_seen"] == "2026-11-02"
+    assert "AAA|recovery" in new["items"]                       # rsi_rebound needs 40 bars; this series has 32
+
+
+def test_old_config_keys_still_accepted(tmp_path):
+    p = tmp_path / "a.toml"
+    p.write_text('[defaults]\nconditions = ["recovery", "rsi_rebound"]\n', encoding="utf-8")
+    assert A.load_alerts_config(p).defaults.conditions == ("recovery", "rsi_rebound")
+
+
+def test_visible_alert_text_has_no_forecast_words():
+    forecast = re.compile(r"rebound|recover|bounce", re.I)
+    base = [100.0] * 20 + [100.0 - i for i in range(1, 25)]
+    al = []
+    for c in (ser([100.0] * 30 + [95.0, 110.0]), ser(base + [base[-1] + 8])):
+        al += two_days([row()], c)[0]
+    assert has(al, "recovery") and has(al, "rsi_rebound")
+    for a in al:
+        assert not forecast.search(a["headline"] + " " + a["detail"]), a
+    assert not forecast.search(A.alerts_markdown(al)) and not forecast.search(json.dumps(A.notification_text(al)))
+    assert any(a["headline"].endswith("RSI back above 30") for a in has(al, "rsi_rebound"))
+    assert any(a["headline"].endswith("back above its 20-day average") for a in has(al, "recovery"))
+
+
 # ---------- wording ----------
 def test_no_banned_words_anywhere():
     rng = np.random.default_rng(3)

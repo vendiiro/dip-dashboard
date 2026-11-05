@@ -175,7 +175,7 @@ One entry of `rows`. Keys are exactly these.
 |---|---|---|---|---|
 | `ticker` | str | no | | ticker, or `*` for the first-run summary |
 | `name` | str | no | | company name; empty for the summary |
-| `condition` | str | no | | condition name |
+| `condition` | str | no | | internal condition key. `recovery` and `rsi_rebound` are old names kept so saved alert state and `config/alerts.toml` still work; their visible text is "back above its 20-day average" and "RSI back above 30". Show `headline`, not the key |
 | `kind` | str | no | | `info` or `caution` |
 | `headline` | str | no | | one-line text |
 | `detail` | str | no | | why it was raised |

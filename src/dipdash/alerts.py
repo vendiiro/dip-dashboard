@@ -5,8 +5,11 @@ investment advice. Wording is neutral on purpose ("closed back above its 20-day 
 
 Design decisions (also logged in docs/decisions.md)
 - Conditions (all computed from closes up to and including `asof`; later bars are cut off, so there is no look-ahead):
-  recovery (close crosses back above its 20-day simple average, was below it the day before), rsi_rebound (RSI(14),
-  same Wilder convention as metrics.rsi14, moves from below 30 to 30 or above), new_low (close below the lowest close
+  "recovery" (shown as "back above its 20-day average": close crosses back above its 20-day simple average, was below it
+  the day before), "rsi_rebound" (shown as "RSI back above 30": RSI(14), same Wilder convention as metrics.rsi14, moves
+  from below 30 to 30 or above). These two internal keys keep their old names on purpose: they are stored in the alert
+  state file (data/alerts_state.json) and config/alerts.toml, so renaming them would break existing state. Only the
+  user-visible text is neutral. Other conditions: new_low (close below the lowest close
   of the previous N days, default 60; a caution, not an invalidation of anything), drop_continues (a further 1-day fall
   of at least X%, default 4%, for a stock that was already flagged at the previous close; caution), level_cross
   (user-set price level crossed up or down, in the stock's own currency), earnings_window (from the optional
@@ -192,7 +195,7 @@ def _rsi_rebound(c: pd.Series, d: Defaults):
     if np.isnan(prev) or np.isnan(now):
         return False, "", ""
     lvl = d.rsi_level
-    return bool(prev < lvl <= now), f"RSI(14) moved back above {lvl:g}", f"RSI(14) {now:.1f} (day before {prev:.1f}); close {c.iloc[-1]:.2f}"
+    return bool(prev < lvl <= now), f"RSI back above {lvl:g}", f"RSI(14) {now:.1f} (day before {prev:.1f}); close {c.iloc[-1]:.2f}"
 
 
 def _new_low(c: pd.Series, d: Defaults):

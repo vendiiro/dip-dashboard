@@ -81,17 +81,20 @@ def test_brief_and_compact_columns(browser, demo_html):
 
 def test_show_filter_changes_the_row_count(browser, demo_html):
     page, _ = open_page(browser, demo_html)
-    dips = page.locator("#body tr.row").count()
+    rowsel = page.locator("#body tr.row")
+    dips = rowsel.count()                                   # the page is drawn at load; later reads wait for the redraw
     total = page.evaluate("DATA.rows.length")
     page.click("#show button[data-v=all]")
-    assert page.locator("#body tr.row").count() == total > dips
-    assert int(page.locator("#show button[data-v=all] .ct").inner_text()) == total
+    pw.expect(rowsel).to_have_count(total)
+    assert total > dips
+    pw.expect(page.locator("#show button[data-v=all] .ct")).to_have_text(str(total))
     page.click("#show button[data-v=quality]")
-    n_quality = page.locator("#body tr.row").count()
+    n_quality = page.evaluate("DATA.rows.filter(r => window.__dipView(r.t).rank === 4).length")
+    pw.expect(rowsel).to_have_count(n_quality)
     assert 0 < n_quality <= dips
     assert n_quality == page.evaluate("DATA.rows.filter(r => window.__dipView(r.t).rank === 4).length")
     assert n_quality == page.evaluate("DATA.rows.filter(r => r.setup === 'Quality dip').length")   # page and nightly label agree
-    assert n_quality == int(page.locator("[data-testid=tile-quality] .big").inner_text())
+    pw.expect(page.locator("[data-testid=tile-quality] .big")).to_have_text(str(n_quality))
     page.close()
 
 
@@ -340,7 +343,7 @@ def test_a_broken_row_is_skipped_and_named_in_a_visible_alert(browser, demo_html
     assert page.is_visible("[role=alert]#fail") and t in page.inner_text("#fail")
     assert "could not draw part of the screen" in page.inner_text("#fail")
     assert page.locator(f"#body tr.row[data-t='{t}']").count() == 0 and page.locator("#body tr.row").count() > 0
-    assert "s-crit" in page.get_attribute("#dqbtn", "class") and "1 part failed" in page.inner_text("#dqbtn")
+    assert "s-crit" in page.get_attribute("#dqbtn", "class") and "1 stock failed to draw" in page.inner_text("#dqbtn")
     assert page.locator("#hist svg").count() == 1 and page.locator("#sect svg").count() == 1   # the rest is drawn
     page.close()
 

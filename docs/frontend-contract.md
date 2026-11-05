@@ -34,7 +34,7 @@ The "Used by" column says which file would break: `browser` = `tests/test_browse
 | `id:droplab` | browser | Label of the minimum drop slider (hidden under the default rules) |
 | `id:q` | browser, visual | Search box |
 | `id:ctltoggle` | browser, visual | Phone "Filters" button that opens the controls |
-| `id:dqbtn` | browser | Data-quality badge button (also shows "N part failed") |
+| `id:dqbtn` | browser | Data-quality badge button (also shows "N stock(s) failed to draw"; wording for stocks without price data is "N without price data") |
 | `id:dqpanel` | browser | Data-quality panel opened by `#dqbtn` |
 | `id:stale` | browser | Stale-data banner element (FE-3) |
 | `id:fail` | browser, visual | Visible failure alert (FE-4) |
