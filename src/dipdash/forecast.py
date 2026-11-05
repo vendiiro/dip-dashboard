@@ -2,7 +2,7 @@
 
 What it is: from daily adjusted closes only, the 10th / 50th / 90th percentile of the next `horizon`-day return, so
 80% of outcomes are expected inside [lo, hi] if the model is calibrated. What it is not: it says nothing about whether
-the stock will rise or fall. Direction is NOT forecastable with ~80 independent out-of-sample months (see docs/decisions.md);
+the stock goes up or down. Direction is NOT forecastable with ~80 independent out-of-sample months (see docs/decisions.md);
 volatility is (it clusters), so only the SIZE of the move is modelled.
 
 Method (primary, 'garch_t_fhs'): filtered historical simulation. GARCH(1,1) with Student-t innovations (package `arch`,
@@ -10,7 +10,7 @@ percent returns, zero conditional mean) is fitted on the trailing 750 daily log 
 `arch` bootstraps the standardised residuals through the fitted variance recursion for 21 days; the 10/50/90% quantiles of the
 simulated cumulative log returns form the range. DRIFT: the conditional mean is fixed at zero, so the median LOG return is about
 zero (the bootstrapped residuals are mean-zero but negatively skewed, so the simulated median sits about +1% above zero). A neutral
-assumption, not an estimate of expected return: daily drift (~0.03%) is far below its own estimation noise.
+assumption, not an estimate of average return: daily drift (~0.03%) is far below its own estimation noise.
 Baselines in the same module: 'ewma' (RiskMetrics lambda 0.94, normal quantiles) and 'naive' (trailing 60-day realised
 volatility x sqrt(h), normal quantiles). If the GARCH fit fails or looks unstable, the result falls back to EWMA and
 method = 'ewma_fallback'. No network, no files; every function takes pandas Series and only reads values up to the last date.

@@ -56,6 +56,16 @@ VERDICT_TEXT = (f"Judged on garch_t_fhs over the out-of-sample origins, on the p
                 "if attempt 1 passes, else if attempt 2 passes; otherwise it does not ship. No further attempts.")
 
 
+DEFAULT_ROOT = ROOT / "output" / "backtests"
+META_FILE = "origins_meta.json"
+
+
+def origins_meta(spec: dict) -> dict:
+    """What the cached origins.csv.gz was built from: the spec hash plus its raw-file hash, ticker limit and split cutoff."""
+    return {"spec_hash": spec["spec_hash"], "raw_sha256": spec["data"]["raw_sha256"], "limit": spec["data"]["limit"],
+            "cutoff": spec["split"]["cutoff"]}
+
+
 def forecast_spec(raw: Path, tickers: list[str], cutoff: pd.Timestamp, limit: int, family_id: str) -> dict:
     """Pre-registration of the calibration test, built from constants, the raw file's hash and dates only (no outcome enters)."""
     spec = {
@@ -103,8 +113,9 @@ def _one_stock(args):
     return ticker, rows, time.time() - t0
 
 
-def build_origins(prices: dict, workers: int) -> tuple[pd.DataFrame, float]:
-    """workers <= 1 runs in this process (tests, small runs); otherwise a process pool."""
+def build_origins(reg, prices: dict, workers: int) -> tuple[pd.DataFrame, float]:
+    """workers <= 1 runs in this process (tests, small runs); otherwise a process pool. Needs the Registration token."""
+    registry.require_registered(reg)
     jobs = list(prices.items())
     out, secs, nfits = [], 0.0, 0
     if workers <= 1:
@@ -267,6 +278,7 @@ Educational screen output. This tests whether a volatility RANGE is honest. It s
 - Criterion (pre-stated in `src/dipdash/forecast.py` before any result): overall OOS coverage 0.80 +/- 0.04 AND dip-state coverage 0.80 +/- 0.06, judged on the point estimate. Two attempts, no further tuning.
 - Registered as spec `{meta['spec_hash']}` before any origin was computed (`spec_forecast.json`, `registry.csv`); {meta['planned_cells']} cells logged in `trials_all.csv`.
 - **Out-of-sample period used before:** {meta['oos_reuse']}
+{('- **Earlier incomplete runs:** ' + meta['incomplete']) if meta['incomplete'] else ''}
 
 ## Design
 - Universe: {meta['n_stocks']} stocks (current constituents), history {meta['first']} to {meta['last']}. Origins every 21 trading days per stock, model refitted on data up to the origin only (trailing 750 returns, min 400); {meta['n_origins']} origins in total, {meta['n_fallback']} ({pct(meta['fb_rate'])}) used the EWMA fallback because GARCH did not converge.
@@ -337,21 +349,29 @@ def main(argv: list[str] | None = None) -> int:
     all_dates = sorted(set().union(*[set(c.index) for c in prices.values()]))
     cutoff = split_cutoff(all_dates, OOS_FRACTION)
     spec = forecast_spec(Path(a.raw), list(prices), cutoff, a.limit, f"forecast_{date.today().isoformat()}")
+    p = out / "origins.csv.gz"
+    meta_p = out / META_FILE
+    if a.limit and out_root.resolve() == DEFAULT_ROOT.resolve():
+        print("refused: --limit is a smoke test and must not be registered in the real ledger; pass --out-root <scratch folder>.")
+        return 2
+    if a.reuse and p.exists():
+        have = json.loads(meta_p.read_text(encoding="utf-8")) if meta_p.exists() else None
+        if have != origins_meta(spec):
+            print(f"refused: --reuse needs {META_FILE} next to origins.csv.gz matching this run's spec hash, raw-file hash, limit and cutoff "
+                  f"({'missing' if have is None else 'differs'}). Run without --reuse.")
+            return 2
     oos_dates = [d for d in all_dates if d > cutoff]
     reg = registry.register("forecast", spec, out, out_root, fields={"oos_start": oos_dates[0], "oos_end": oos_dates[-1]})   # BEFORE any origin
     spec["registration"] = registry.registration_block(reg)                                                                 # not hashed
     (out / "spec_forecast.json").write_text(json.dumps(spec, indent=2, default=str), encoding="utf-8")
     print(f"spec {reg.spec_hash} registered. {reg.reuse_note()}")
 
-    p = out / "origins.csv.gz"
     if a.reuse and p.exists():
         df = pd.read_csv(p, parse_dates=["origin", "end"])
         spf = float(pd.read_csv(out / "timing.csv").spf.iloc[0]) if (out / "timing.csv").exists() else float("nan")
     else:
         print(f"Walk-forward over {len(prices)} stocks with {a.workers} workers...", flush=True)
-        df, spf = build_origins(prices, a.workers)
-        df.to_csv(p, index=False)
-        pd.DataFrame({"spf": [spf]}).to_csv(out / "timing.csv", index=False)
+        df, spf = build_origins(reg, prices, a.workers)                       # written below, after the trial cells are logged
     df["group"] = df.ticker.map(region).fillna("Other")
     ins = df[df.end <= cutoff]
     oos = df[df.origin > cutoff].reset_index(drop=True)
@@ -372,15 +392,20 @@ def main(argv: list[str] | None = None) -> int:
         ship = "RANGE MAY SHIP ONLY WITH THE ATTEMPT-2 SCALE FACTOR (raw model failed, recalibrated model passes both tests)"
     else:
         ship = "RANGE DOES NOT SHIP (both attempts fail the pre-stated criterion)"
+    registry.record_trials(reg, trial_rows(res))                       # ledger first, then any result file
+    if not (a.reuse and p.exists()):
+        df.drop(columns=["group"]).to_csv(p, index=False)
+        pd.DataFrame({"spf": [spf]}).to_csv(out / "timing.csv", index=False)
+        meta_p.write_text(json.dumps(origins_meta(spec), indent=2), encoding="utf-8")
     res.to_csv(out / "results.csv", index=False)
-    registry.record_trials(reg, trial_rows(res))
     chart(res, out / "calibration.png")
     meta = {"today": date.today().isoformat(), "n_stocks": df.ticker.nunique(), "first": min(all_dates).date(),
             "last": max(all_dates).date(), "n_origins": len(df), "n_fallback": int(df.fallback.sum()), "fb_rate": df.fallback.mean(),
             "cutoff": cutoff.date(), "n_oos": len(oos), "n_is": len(ins), "n_oos_dip": int(oos.dip.sum()),
             "n_oos_months": oos.origin.dt.strftime("%Y-%m").nunique(), "sec_per_fit": spf, "sec_per_stock_now": sec_now,
-            "spec_hash": reg.spec_hash, "planned_cells": PLANNED_CELLS, "oos_reuse": reg.reuse_note()}
+            "spec_hash": reg.spec_hash, "planned_cells": PLANNED_CELLS, "oos_reuse": reg.reuse_note(), "incomplete": reg.incomplete_earlier}
     write_report(out, res, meta, v1, v2, ship)
+    registry.mark_complete(reg)
     print(ship)
     print(v1)
     print(v2)

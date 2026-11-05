@@ -27,6 +27,11 @@ TASKS = _load("tasks", ROOT / "tasks.py")
 # Split like the script, so this file reads cleanly to a human and to the scan.
 BUY_NOW, SELL, PT, RECOVER, GUAR = "bu" + "y now", "se" + "ll", "price tar" + "get", "will reco" + "ver", "guaran" + "teed"
 
+# One planted example per widened phrase (split so the scan does not read this file either).
+NEW_PHRASES = ["should " + "bu" + "y", "should " + "se" + "ll", "should " + "ho" + "ld", "under" + "valued", "bar" + "gain",
+               "bar" + "gains", "will " + "ri" + "se", "will " + "re" + "bound", "will " + "bou" + "nce", "will go " + "up",
+               "expected " + "return", "expected " + "returns", "strong " + "bu" + "y", "top " + "pi" + "ck", "top " + "pi" + "cks"]
+
 
 def _tree(tmp_path: Path, files: dict[str, str]) -> Path:
     for rel, text in files.items():
@@ -45,6 +50,19 @@ def _cli(*args: str) -> subprocess.CompletedProcess:
 @pytest.mark.parametrize("phrase", [BUY_NOW, SELL, PT, RECOVER, GUAR, BUY_NOW.upper(), "bu" + "y   now", SELL + "s"])
 def test_each_advice_phrase_is_found(phrase):
     assert CW.scan_text(f"ok line\nThe stock: {phrase}.\n") == [(2, phrase)]
+
+
+@pytest.mark.parametrize("phrase", NEW_PHRASES + [p.upper() for p in NEW_PHRASES[:3]])
+def test_each_widened_advice_phrase_is_found(phrase):
+    assert CW.scan_text(f"ok line\nSomeone says it is {phrase} today.\n") == [(2, phrase)]
+
+
+@pytest.mark.parametrize("text", [
+    "Target Corp", "tap target 44px", "target_col", "feature target", "a bargaining chip", "returns are not expected",
+    "it should be fine", "will riser", "the price will bounded", "top picked", "overvalue", "holdings",
+])
+def test_bare_target_and_near_misses_are_not_flagged(text):
+    assert CW.scan_text(text) == []
 
 
 @pytest.mark.parametrize("text", [

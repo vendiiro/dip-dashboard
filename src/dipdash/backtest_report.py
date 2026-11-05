@@ -112,8 +112,8 @@ def earlier_specs_line(hist: list[dict], shash: str) -> str:
     if not others:
         return ""
     names = ", ".join(f"`{o}`" for o in others[:5]) + (f" and {len(others) - 5} more" if len(others) > 5 else "")
-    return (f"`registry.csv` also holds runs under {len(others)} earlier spec hash{'es' if len(others) != 1 else ''} ({names}), so the analysis was revised at least "
-            f"{len(others)} time{'s' if len(others) != 1 else ''} after an earlier run. Changes between specs are described below only where they were written into `backtest_notes.py`.")
+    return (f"{len(others)} other spec hash{'es' if len(others) != 1 else ''} {'are' if len(others) != 1 else 'is'} registered (new data, universe or rule changes all alter the hash): {names}. "
+            "Changes between specs are described below only where they were written into `backtest_notes.py`.")
 
 
 def render_report(run: dict, s: Settings, charts: dict[str, str]) -> str:
@@ -265,6 +265,8 @@ def render_report(run: dict, s: Settings, charts: dict[str, str]) -> str:
     earlier = earlier_specs_line(run.get("earlier_specs", []), shash)
     if earlier:
         w(earlier + "\n")
+    if run.get("incomplete_earlier"):
+        w(run["incomplete_earlier"] + "\n")
     if not revs:
         w(f"No changes after the first look are recorded for spec `{shash}`. That is not a statement that none were made: only changes written into `backtest_notes.py` for this spec hash appear here.\n")
     else:

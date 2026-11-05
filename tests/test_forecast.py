@@ -1,4 +1,5 @@
 """Tests for dipdash.forecast: volatility range forecast (not a direction or price-target model)."""
+import json
 import importlib.util
 import sys
 
@@ -149,9 +150,27 @@ def test_calibration_runner_registers_before_any_forecast_and_logs_the_planned_c
         return real(close, horizon, seed=seed)
 
     monkeypatch.setattr(fc, "all_ranges", spy)
+    real_bo, bo_calls = mod.build_origins, []
+
+    def bo_spy(reg, *a, **k):                                            # F1: build_origins is spied and needs the token
+        r = registry.read_registry(root)
+        assert len(r) == 1 and r["kind"].iloc[0] == "forecast", "build_origins called before registration"
+        bo_calls.append(1)
+        return real_bo(reg, *a, **k)
+
+    monkeypatch.setattr(mod, "build_origins", bo_spy)
+    real_rt = registry.record_trials
+
+    def rt_spy(reg, rows_):                                              # F3: ledger before any result file
+        run = tmp_path / "run"
+        assert not (run / "results.csv").exists() and not (run / "origins.csv.gz").exists() and not (run / "report_forecast.md").exists()
+        return real_rt(reg, rows_)
+
+    monkeypatch.setattr(registry, "record_trials", rt_spy)
     assert mod.main(["--raw", str(raw), "--workers", "1", "--out-root", str(root), "--out", str(tmp_path / "run")]) == 0
-    assert calls
+    assert calls and bo_calls == [1]
     reg = registry.read_registry(root)
+    assert reg["status"].tolist() == ["complete"]
     log = registry.read_trials(root)
     assert len(log) == int(reg["planned_cells"].iloc[0]) == mod.PLANNED_CELLS
     prim = log[log["primary"]]
@@ -161,3 +180,31 @@ def test_calibration_runner_registers_before_any_forecast_and_logs_the_planned_c
     assert spec["criterion_text"] == mod.CRITERION_TEXT and spec["spec_hash"] == registry.hash_for("forecast", spec)
     report = (tmp_path / "run" / "report_forecast.md").read_text(encoding="utf-8")
     assert "Out-of-sample period used before:" in report and spec["spec_hash"] in report
+
+
+def test_build_origins_refuses_without_a_registration():
+    from dipdash import registry
+    mod = _load_calibration_script()
+    with pytest.raises(registry.RegistrationError):
+        mod.build_origins(None, {}, 1)
+
+
+def test_reuse_needs_matching_origins_meta_and_limit_is_refused_on_the_default_root(tmp_path, monkeypatch):
+    from dipdash import registry
+    from dipdash.cache import save_raw_prices
+    mod = _load_calibration_script()
+    rng = np.random.default_rng(5)
+    raw = save_raw_prices({f"S{k}": (make_close(rng.normal(0, 0.025, 1000)), None) for k in range(2)}, "synthetic", tmp_path / "raw")
+    args = ["--raw", str(raw), "--workers", "1", "--out-root", str(tmp_path / "out"), "--out", str(tmp_path / "run")]
+    assert mod.main(args) == 0
+    meta_p = tmp_path / "run" / mod.META_FILE
+    meta = json.loads(meta_p.read_text())
+    assert set(meta) == {"spec_hash", "raw_sha256", "limit", "cutoff"}
+    n_before = len(registry.read_registry(tmp_path / "out"))
+    assert mod.main(args + ["--reuse"]) == 0                                           # same spec: accepted
+    meta_p.write_text(json.dumps({**meta, "spec_hash": "0" * 16}))
+    assert mod.main(args + ["--reuse"]) == 2                                           # different spec hash: refused
+    meta_p.unlink()
+    assert mod.main(args + ["--reuse"]) == 2                                           # no meta: refused
+    assert len(registry.read_registry(tmp_path / "out")) == n_before + 1               # refusals did not register anything
+    assert mod.main(["--raw", str(raw), "--limit", "1", "--out", str(tmp_path / "x")]) == 2    # default root + --limit: refused

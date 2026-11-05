@@ -29,6 +29,13 @@ _PHRASES = [
     r"(?<!not a )\b" + "price" + r"\s+tar" + r"gets?\b",   # "not a price target" is the disclaimer itself
     r"\bwill\s+" + "reco" + r"ver\b",
     r"\b" + "guaran" + r"tee(s|d)?\b",
+    r"\bshould\s+(" + "bu" + "y|se" + "ll|ho" + r"ld)\b",
+    r"\b" + "under" + r"valued\b",
+    r"\b" + "bar" + r"gains?\b",
+    r"\bwill\s+(" + "ri" + "se|re" + "bound|bou" + "nce|go\\s+" + r"up)\b",
+    r"\b" + "expected" + r"\s+returns?\b",
+    r"\b" + "strong" + r"\s+" + "bu" + r"y\b",
+    r"\b" + "top" + r"\s+" + "pi" + r"cks?\b",
 ]
 BANNED = re.compile("|".join(_PHRASES), re.I)
 

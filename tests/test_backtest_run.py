@@ -278,13 +278,13 @@ def test_earlier_spec_hashes_in_the_trial_log_are_always_mentioned(tmp_path):
     from dipdash.backtest_report import earlier_specs_line
     assert earlier_specs_line([], "h1") == "" and earlier_specs_line([{"spec_hash": "h1"}], "h1") == ""
     line = earlier_specs_line([{"spec_hash": "old1"}, {"spec_hash": "old1"}, {"spec_hash": "old2"}, {"spec_hash": "h1"}], "h1")
-    assert "2 earlier spec hashes" in line and "old1" in line and "old2" in line
+    assert "2 other spec hashes are registered (new data, universe or rule changes all alter the hash)" in line and "old1" in line and "old2" in line
     prices, ix, uni, q, s = synthetic()
     run = run_backtest(prices, ix, uni, q, s, tmp_path / "r", META)
     assert run["spec"]["revisions_after_first_look"] == []                              # no notes for this hash
     run["earlier_specs"] = [{"spec_hash": "oldhash"}]
     text = render_report(run, s, CH)
-    assert "earlier spec hash" in text and "oldhash" in text                            # shown even without notes for the current hash
+    assert "other spec hash" in text and "oldhash" in text                            # shown even without notes for the current hash
     assert "No changes after the first look are recorded" in text
 
 
@@ -350,7 +350,9 @@ def test_a_crashed_run_still_counts_as_an_earlier_spec_and_the_ledger_is_scoped_
     assert run["earlier_specs"] == [{"spec_hash": crashed}]
     text = render_report(run, s, CH)
     assert crashed in text and "feat0000" not in text.split("## Changes after the first look")[1].split("##")[0]
-    assert "`registry.csv` also holds runs under 1 earlier spec hash" in text
+    assert "1 other spec hash is registered (new data, universe or rule changes all alter the hash)" in text
+    assert "never reached status `complete`" in text and crashed in text.split("never reached status")[1]   # F3: the crashed run is named
+    assert registry.read_registry(tmp_path).query("kind == 'backtest'")["status"].tolist() == ["registered", "complete"]
 
 
 def test_reusing_the_out_of_sample_period_is_printed_in_the_report_and_never_blocks(tmp_path):
@@ -382,3 +384,31 @@ def test_editing_a_note_changes_nothing_in_the_registry(tmp_path, monkeypatch):
     reg = registry.read_registry(tmp_path)
     assert b["spec"]["spec_hash"] == h and set(reg["spec_hash"]) == {h} and len(reg) == 2
     assert b["earlier_specs"] == []
+
+
+def test_backtest_logs_trials_before_any_result_file_and_keys_runs_by_registered_at(tmp_path, monkeypatch):
+    prices, ix, uni, q, s = synthetic()
+    root, seen = tmp_path / "r", []
+    real = registry.record_trials
+
+    def spy(reg, rows):
+        seen.append(sorted(p.name for p in (tmp_path / "r").glob("*.csv")))
+        return real(reg, rows)
+
+    monkeypatch.setattr(registry, "record_trials", spy)
+    run_backtest(prices, ix, uni, q, s, root, META)
+    assert seen and not {"results.csv", "events.csv", "data_validation.csv"} & set(seen[0])    # F3: ledger before result files
+    run_backtest(prices, ix, uni, q, s, root, META)
+    log = registry.read_trials(tmp_path)
+    reg = registry.read_registry(tmp_path)
+    assert log["run_at"].nunique() == 2 and set(log["run_at"]) == set(reg["registered_at"])    # F5: microsecond registration key
+    assert reg["status"].tolist() == ["complete", "complete"]
+
+
+def test_backtest_compute_needs_a_valid_registration(monkeypatch, tmp_path):
+    with pytest.raises(registry.RegistrationError):
+        registry.require_registered(None)
+    prices, ix, uni, q, s = synthetic()
+    monkeypatch.setattr(registry, "register", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("stop")))
+    with pytest.raises(RuntimeError, match="stop"):
+        run_backtest(prices, ix, uni, q, s, tmp_path / "r", META)

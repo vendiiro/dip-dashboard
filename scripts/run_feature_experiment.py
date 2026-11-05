@@ -52,6 +52,19 @@ def trial_rows(res: pd.DataFrame) -> pd.DataFrame:
                          "p_holm": res["p_holm"], "primary": fam})
 
 
+def build_event_table(reg, prices: dict, universe, calendar: list, s, cutoff) -> tuple[pd.DataFrame, dict]:
+    """The first place forward returns are computed. Needs the Registration token: no registration, no computing."""
+    registry.require_registered(reg)
+    dummy = pd.Series(100.0, index=pd.DatetimeIndex(calendar))
+    days = build_days(prices, universe, {"US": dummy, "Europe+Nordic": dummy}, s, None)
+    days = add_events(days, s)
+    days, cut2 = add_periods(days, s)
+    assert cut2 == cutoff
+    sanity = {"oos_n": len(cell_events(days, Cell("V1_price_only", H, "All", "OOS")))}
+    days["target"] = demeaned_target(days, H)
+    return days, sanity
+
+
 def forest(res: pd.DataFrame, path: Path) -> None:
     import matplotlib
     matplotlib.use("Agg")
@@ -75,7 +88,7 @@ def fmt(v, d=3):
     return "n/a" if pd.isna(v) else f"{v:+.{d}f}"
 
 
-def write_report(path: Path, spec: dict, res: pd.DataFrame, counts: dict, sanity: dict, run_at: str, reuse: str = "") -> None:
+def write_report(path: Path, spec: dict, res: pd.DataFrame, counts: dict, sanity: dict, run_at: str, reuse: str = "", incomplete: str = "") -> None:
     fam = res[(res["stat"] == "spearman") & (res["period"] == "OOS") & (res["group"] == "All")].set_index("feature")
     isr = res[(res["period"] == "IS")].set_index("feature")
     terc = res[(res["stat"] == "tercile_top_minus_bottom") & (res["group"] == "All")].set_index("feature")
@@ -95,6 +108,7 @@ def write_report(path: Path, spec: dict, res: pd.DataFrame, counts: dict, sanity
           f"({'matches' if sanity['oos_n'] == PARENT_OOS_N else 'DOES NOT MATCH'}). Split cutoff {spec['split']['cutoff_last_in_sample_date']}; "
           f"in-sample events used {counts['IS']:,} (purged dropped), out-of-sample {counts['OOS']:,} (US {counts['OOS_US']:,}, Europe+Nordic {counts['OOS_EU']:,}).", "",
           f"**Out-of-sample period used before:** {reuse or 'not checked (this run was not registered)'}", "",
+          *([f"**Earlier incomplete runs:** {incomplete}", ""] if incomplete else []),
           "## Out-of-sample Spearman rho (pooled), 90% month-clustered interval", "",
           "| feature | IS rho (sign only) | OOS n | OOS rho | 90% interval | raw p | Holm p | MDE (80% power) | supported |",
           "|---|---|---|---|---|---|---|---|---|"]
@@ -170,14 +184,8 @@ def main(argv: list[str] | None = None) -> int:
     print(reg.reuse_note())
     print(f"spec {spec['spec_hash']} written; cutoff {cutoff.date()}")
 
-    dummy = pd.Series(100.0, index=pd.DatetimeIndex(calendar))
-    days = build_days(prices, universe, {"US": dummy, "Europe+Nordic": dummy}, s, None)
-    days = add_events(days, s)
-    days, cut2 = add_periods(days, s)
-    assert cut2 == cutoff
-    sanity = {"oos_n": len(cell_events(days, Cell("V1_price_only", H, "All", "OOS")))}
+    days, sanity = build_event_table(reg, prices, universe, calendar, s, cutoff)
     print(f"reproduction: OOS V1 21d events {sanity['oos_n']} (parent {PARENT_OOS_N})")
-    days["target"] = demeaned_target(days, H)
     ev = days[days["ev_V1_price_only"] & days[f"fwd{H}"].notna() & days[f"period{H}"].isin(["IS", "OOS"])].copy()
     ev["period"] = ev[f"period{H}"]
 
@@ -197,16 +205,18 @@ def main(argv: list[str] | None = None) -> int:
     print(f"look-ahead truncation checks passed: {checks}")
 
     cfg = Settings(draws=boot["draws"], level=boot["level"], seed=boot["seed"])
+    registry.require_registered(reg)
     res = evaluate_features(ev, cfg)
     run_at = datetime.now().strftime("%Y-%m-%d %H:%M")
+    registry.record_trials(reg, trial_rows(res))                                            # ledger first, then any result file
     res.to_csv(out_dir / "results.csv", index=False)
     keep = ["ticker", "region", "group", "date", "entry_date", "period", f"fwd{H}", "target", *FAMILY]
     ev[keep].to_csv(out_dir / "events_features.csv", index=False)
-    registry.record_trials(reg, trial_rows(res), run_at)
     counts = {"IS": int((ev.period == "IS").sum()), "OOS": int((ev.period == "OOS").sum()),
               "OOS_US": int(((ev.period == "OOS") & (ev.group == "US")).sum()), "OOS_EU": int(((ev.period == "OOS") & (ev.group == "Europe+Nordic")).sum())}
     forest(res, out_dir / "forest_features.png")
-    write_report(out_dir / "report_features.md", spec, res, counts, sanity, run_at, reg.reuse_note())
+    write_report(out_dir / "report_features.md", spec, res, counts, sanity, run_at, reg.reuse_note(), reg.incomplete_earlier)
+    registry.mark_complete(reg)
     print(json.dumps(counts))
     print(res[(res.stat == "spearman") & (res.period == "OOS") & (res.group == "All")][["feature", "n", "est", "lo", "hi", "p", "p_holm", "sign_is", "supported", "mde_80"]].to_string())
     return 0

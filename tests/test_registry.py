@@ -205,3 +205,43 @@ def test_backfill_cli_runs(tmp_path, capsys):
     (tmp_path / "trials.csv").write_text(OLD_BT, encoding="utf-8")
     assert registry.main(["backfill", "--root", str(tmp_path)]) == 0
     assert "90205cfc6da3a007" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------- stats-review F1/F3/F5
+def test_old_registry_layout_is_migrated_with_a_status_column_not_set_aside(tmp_path):
+    cols = registry.REGISTRY_COLS[:-1]
+    (tmp_path / "registry.csv").write_text(",".join(cols) + "\n2026-01-01 00:00:00.000000,backtest,f,aaaa,registered,,,,,,,\n"
+                                           "2026-01-02 00:00:00.000000,backtest,f,bbbb,backfilled,,,,,,,n\n", encoding="utf-8")
+    assert registry.read_registry(tmp_path)["status"].tolist() == ["legacy", "complete"]      # readable before migration
+    assert registry.incomplete_note("backtest", tmp_path) == ""                                # legacy is not "incomplete"
+    registry.register("forecast", spec(), tmp_path / "r", tmp_path, WIN)
+    df = registry.read_registry(tmp_path)
+    assert df["spec_hash"].iloc[:2].tolist() == ["aaaa", "bbbb"] and df["status"].tolist() == ["legacy", "complete", "registered"]
+    assert not list(tmp_path.glob("registry_older_layout_*"))
+
+
+def test_require_registered_mark_complete_and_incomplete_note(tmp_path):
+    for bad in (None, object()):
+        with pytest.raises(RegistrationError):
+            registry.require_registered(bad)
+    reg = registry.register("forecast", spec(), tmp_path / "r", tmp_path, WIN)
+    registry.require_registered(reg)
+    with pytest.raises(RegistrationError, match="planned"):
+        registry.mark_complete(reg)                                                            # nothing logged yet
+    assert registry.read_registry(tmp_path)["status"].tolist() == ["registered"]
+    later = registry.register("forecast", spec(family_id="forecast_u"), tmp_path / "r2", tmp_path, WIN)
+    assert "never reached status `complete`" in later.incomplete_earlier and reg.spec_hash in later.incomplete_earlier
+    assert reg.incomplete_earlier == ""
+    registry.record_trials(reg, rows())
+    registry.mark_complete(reg)
+    assert registry.read_registry(tmp_path)["status"].tolist() == ["complete", "registered"]
+    assert registry.incomplete_note("forecast", tmp_path, before=later.registered_at) == ""
+
+
+def test_run_key_is_registered_at_with_microseconds(tmp_path):
+    a = registry.register("forecast", spec(), tmp_path / "a", tmp_path, WIN, now=datetime(2026, 1, 1, 10, 0, 0, 1))
+    b = registry.register("forecast", spec(), tmp_path / "b", tmp_path, WIN, now=datetime(2026, 1, 1, 10, 0, 0, 2))   # same minute
+    registry.record_trials(a, rows())
+    registry.record_trials(b, rows())
+    runs = registry.cells_per_run(tmp_path)
+    assert len(runs) == 2 and runs["logged"].tolist() == [4, 4] and set(runs["run_at"]) == {a.registered_at, b.registered_at}

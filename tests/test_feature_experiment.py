@@ -193,6 +193,25 @@ def test_planned_cells_matches_what_evaluate_features_returns():
     assert len(evaluate_features(ev, Settings(draws=50))) == planned_cells() == 42
 
 
+def _registered_first(mod, name, root, registry, seen):
+    real = getattr(mod, name)
+
+    def spy(*a, **k):
+        reg = registry.read_registry(root)
+        assert len(reg) == 1 and reg["kind"].iloc[0] == "features", f"{name} called before registration"
+        seen.append(name)
+        return real(*a, **k)
+
+    return spy
+
+
+def test_feature_compute_refuses_without_a_registration():
+    mod = _load_script("run_feature_experiment")
+    from dipdash import registry
+    with pytest.raises(registry.RegistrationError):
+        mod.build_event_table(None, {}, [], [], None, None)
+
+
 def test_feature_runner_registers_before_evaluate_features_and_logs_every_cell(tmp_path, monkeypatch):
     """Guard: move registration after evaluate_features in the script and this test fails."""
     from dipdash import registry
@@ -202,6 +221,7 @@ def test_feature_runner_registers_before_evaluate_features_and_logs_every_cell(t
     monkeypatch.setattr(mod, "load_settings", lambda: s)
     root = tmp_path / "out"
     real, seen = mod.evaluate_features, []
+    seen2_list = []
 
     def spy(ev, cfg, *a, **k):
         reg = registry.read_registry(root)
@@ -211,8 +231,17 @@ def test_feature_runner_registers_before_evaluate_features_and_logs_every_cell(t
         return real(ev, cfg, *a, **k)
 
     monkeypatch.setattr(mod, "evaluate_features", spy)
+    real_rt = registry.record_trials
+
+    def rt_spy(reg, rows_):                                              # F3: no result file exists when the ledger is written
+        assert not list(root.glob("*_features/results.csv")) and not list(root.glob("*_features/report_features.md"))
+        return real_rt(reg, rows_)
+
+    monkeypatch.setattr(registry, "record_trials", rt_spy)
+    for name in ("build_days", "cell_events"):                           # F1: the first return computations are spied too
+        monkeypatch.setattr(mod, name, _registered_first(mod, name, root, registry, seen2_list))
     assert mod.main(["--raw", str(raw), "--out-root", str(root), "--draws", "50"]) == 0
-    assert seen == [1]
+    assert seen == [1] and {"build_days", "cell_events"} <= set(seen2_list)
     log = registry.read_trials(root)
     reg = registry.read_registry(root)
     assert len(log) == int(reg["planned_cells"].iloc[0]) == 42 and log["primary"].sum() == len(FAMILY)
@@ -221,3 +250,4 @@ def test_feature_runner_registers_before_evaluate_features_and_logs_every_cell(t
     report = next(root.glob("*_features/report_features.md")).read_text(encoding="utf-8")
     assert "Out-of-sample period used before:" in report and "trials_all.csv" in report
     assert not (root / "trials_features.csv").exists()
+    assert reg["status"].iloc[0] == "complete"

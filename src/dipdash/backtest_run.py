@@ -128,23 +128,24 @@ def run_backtest(prices: dict, index_close: dict, universe: list[Stock], quality
     earlier = registry.earlier_specs("backtest", root, exclude=reg.spec_hash, before=reg.registered_at)
     run_at = datetime.now().strftime("%Y-%m-%d %H:%M")
 
+    registry.require_registered(reg)                                                                # compute entry point: token required
     validation = validate_history(prices, today, s, volumes)
-    validation.to_csv(out_dir / "data_validation.csv", index=False)
-
     days = build_days(prices, universe, index_close, s, quality)
     days = add_peer_returns(add_events(days, s), s.backtest.horizons)
     days, cutoff = add_periods(days, s)
     assert str(cutoff.date()) == spec["split"]["cutoff"], "split moved after the spec was frozen"
     results = run_cells(days, s)
+    registry.record_trials(reg, trial_rows(results))                                                # ledger first, then any result file
+    validation.to_csv(out_dir / "data_validation.csv", index=False)
     results.to_csv(out_dir / "results.csv", index=False)
     evcols = [c for c in days.columns if c.startswith("ev_")]
     ev = days[days[evcols].any(axis=1)]
     keep = ["ticker", "region", "group", "date", "entry_date", "f1", "f5", "f20", "knife", "q", "stress", *evcols] + \
            [f"{p}{h}" for h in s.backtest.horizons for p in ("fwd", "mae", "idx", "ew", "period", "suspect")]
     ev[keep].to_csv(out_dir / "events.csv", index=False)
-    registry.record_trials(reg, trial_rows(results), run_at)
+    registry.mark_complete(reg)
     log = registry.read_trials(root)
-    trial_runs = int(log.loc[log["kind"] == "backtest", "run_at"].nunique())
+    trial_runs = int(log.loc[log["kind"] == "backtest", "run_at"].nunique())          # run key = registered_at (microseconds)
     return {"spec": spec, "days": days, "results": results, "validation": validation, "cutoff": cutoff, "run_at": run_at,
             "n_series": len(prices), "trial_runs": trial_runs, "primary_history": primary_history(root),
-            "earlier_specs": [{"spec_hash": h} for h in earlier], "oos_reuse": reg.reuse_note(), "registration": reg}
+            "earlier_specs": [{"spec_hash": h} for h in earlier], "oos_reuse": reg.reuse_note(), "incomplete_earlier": reg.incomplete_earlier, "registration": reg}

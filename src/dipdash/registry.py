@@ -5,6 +5,11 @@ Rules (backtest-hygiene rule 1, made testable):
   (per kind, see EXCLUDED) and the `registration` block are left out, so editing a note never changes the identity of an analysis.
 - `register` runs BEFORE any return is computed. It checks the required fields, writes `spec_<hash>.json` once (never
   overwritten), appends a row to `registry.csv` and returns a `Registration` token.
+- `status` in `registry.csv`: `registered` when the row is written, `complete` once the runner calls `mark_complete` after the trial
+  cells AND the result files are written (trial cells are logged BEFORE any result file). A row still `registered` later is an
+  incomplete run and the next report says so. Rows from before the column existed read as `legacy`.
+- `require_registered` is what compute entry points call first: no valid token, no computing.
+- A run is keyed by its `registered_at` (microseconds), which is also what `trials_all.csv` stores in `run_at` for new runs.
 - `record_trials` is the only writer of the trial log `trials_all.csv`. It refuses without a token from `register` (or `backfill`),
   refuses rows that carry another spec hash, and refuses more cells than the registration planned.
 - The period ledger is derived from `registry.csv`: when a new registration's out-of-sample window overlaps one that was already
@@ -38,7 +43,8 @@ EXCLUDED: dict[str, frozenset[str]] = {                     # descriptive keys p
 ALWAYS_EXCLUDED = frozenset({"spec_hash", "registration"})  # the hash itself and the registry's own block
 REGISTRY_FILE, TRIALS_FILE = "registry.csv", "trials_all.csv"
 REGISTRY_COLS = ["registered_at", "kind", "family_id", "spec_hash", "source", "split_cutoff", "oos_start", "oos_end", "horizons",
-                 "raw_sha256", "planned_cells", "note"]
+                 "raw_sha256", "planned_cells", "note", "status"]
+STATUS_REGISTERED, STATUS_COMPLETE, STATUS_LEGACY = "registered", "complete", "legacy"   # legacy = row written before the status column
 TRIAL_COLS = ["run_at", "kind", "family_id", "spec_hash", "cell", "stat", "group", "period", "horizon", "n", "estimate", "lo", "hi",
               "p_raw", "p_holm", "primary"]
 REQUIRED = ("family_id", "hypothesis", "pass_fail", "split_cutoff", "oos_start", "oos_end", "horizons", "planned_cells", "raw_sha256")
@@ -93,6 +99,7 @@ class Registration:
     oos_end: str
     source: str = "registered"
     oos_reuse: tuple[str, ...] = ()
+    incomplete_earlier: str = ""
     _token: str = field(default="", repr=False, compare=False)
 
     @property
@@ -172,6 +179,7 @@ def register(kind: str, spec: dict, out_dir: Path | str, root: Path | str, field
     out_dir.mkdir(parents=True, exist_ok=True)
     stamp = (now or datetime.now()).isoformat(sep=" ", timespec="microseconds")
     reuse = tuple(reuse_lines(f["oos_start"], f["oos_end"], root, h))            # read the ledger BEFORE adding this row
+    incomplete = incomplete_note(kind, root, before=stamp)
     block = {"registered_at": stamp, "kind": kind, **{k: f[k] for k in REQUIRED if k not in ("hypothesis", "pass_fail")},
              "registry": REGISTRY_FILE, "oos_reuse": list(reuse)}
     spec_file = out_dir / f"spec_{h}.json"
@@ -180,11 +188,36 @@ def register(kind: str, spec: dict, out_dir: Path | str, root: Path | str, field
             fh.write(json.dumps({**spec, "spec_hash": h, "registration": block}, indent=2, default=str))
     _append_registry(root, {"registered_at": stamp, "kind": kind, "family_id": f["family_id"], "spec_hash": h, "source": "registered",
                             "split_cutoff": f["split_cutoff"], "oos_start": f["oos_start"], "oos_end": f["oos_end"],
-                            "horizons": f["horizons"], "raw_sha256": f["raw_sha256"], "planned_cells": f["planned_cells"], "note": ""})
+                            "horizons": f["horizons"], "raw_sha256": f["raw_sha256"], "planned_cells": f["planned_cells"], "note": "",
+                            "status": STATUS_REGISTERED})
     token = secrets.token_hex(16)
     _ISSUED[token] = 0
     return Registration(kind, f["family_id"], h, stamp, root, spec_file, int(f["planned_cells"]), f["oos_start"], f["oos_end"],
-                        "registered", reuse, token)
+                        "registered", reuse, incomplete, token)
+
+
+def require_registered(reg) -> None:
+    """Compute entry points call this first. Raises unless `reg` is a live token from register() whose spec file and registry row exist."""
+    if not _valid(reg):
+        raise RegistrationError("nothing may be computed before registry.register(): this entry point needs the Registration it returned.")
+
+
+def mark_complete(reg: Registration) -> None:
+    """Set status=complete for this registration's row. Call it last, after the trial cells and every result file are written.
+    Refuses if fewer cells than planned were logged."""
+    require_registered(reg)
+    if reg.planned_cells is not None and _ISSUED[reg._token] < reg.planned_cells:
+        raise RegistrationError(f"only {_ISSUED[reg._token]} of {reg.planned_cells} planned trial cells were logged for spec {reg.spec_hash}")
+    p = Path(reg.root) / REGISTRY_FILE
+    _migrate_registry(p)
+    with p.open(encoding="utf-8", newline="") as fh:
+        rows = list(csv.reader(fh))
+    i_h, i_t, i_s = (rows[0].index(c) for c in ("spec_hash", "registered_at", "status"))
+    for r in rows[1:]:
+        if r[i_h] == reg.spec_hash and r[i_t] == reg.registered_at:
+            r[i_s] = STATUS_COMPLETE
+    with p.open("w", encoding="utf-8", newline="") as fh:
+        csv.writer(fh, lineterminator="\n").writerows(rows)
 
 
 def registration_block(reg: Registration) -> dict:
@@ -209,7 +242,22 @@ def _append_rows(path: Path, cols: list[str], rows: list[list]) -> None:
         w.writerows(rows)
 
 
+def _migrate_registry(path: Path) -> None:
+    """Add the status column to a registry.csv written before it existed (in place; nothing else changes)."""
+    if not path.exists():
+        return
+    with path.open(encoding="utf-8", newline="") as fh:
+        rows = list(csv.reader(fh))
+    if not rows or rows[0] != REGISTRY_COLS[:-1]:
+        return
+    i_src = rows[0].index("source")
+    out = [REGISTRY_COLS] + [r + ["complete" if r[i_src] == "backfilled" else STATUS_LEGACY] for r in rows[1:]]
+    with path.open("w", encoding="utf-8", newline="") as fh:
+        csv.writer(fh, lineterminator="\n").writerows(out)
+
+
 def _append_registry(root: Path, row: dict) -> None:
+    _migrate_registry(Path(root) / REGISTRY_FILE)
     _append_rows(Path(root) / REGISTRY_FILE, REGISTRY_COLS, [[row.get(c, "") for c in REGISTRY_COLS]])
 
 
@@ -217,7 +265,25 @@ def read_registry(root: Path | str) -> pd.DataFrame:
     p = Path(root) / REGISTRY_FILE
     if not p.exists():
         return pd.DataFrame(columns=REGISTRY_COLS)
-    return pd.read_csv(p, dtype=str, keep_default_na=False)
+    df = pd.read_csv(p, dtype=str, keep_default_na=False)
+    if "status" not in df.columns:                                   # file from before the status column (not yet migrated)
+        df["status"] = [STATUS_COMPLETE if s_ == "backfilled" else STATUS_LEGACY for s_ in df["source"]]
+    return df
+
+
+def incomplete_note(kind: str, root: Path | str, before: str | None = None) -> str:
+    """One sentence if the ledger holds an earlier registration of this kind that never reached status=complete, else ''."""
+    _check_kind(kind)
+    reg = read_registry(root)
+    reg = reg[(reg["kind"] == kind) & (reg["status"] == STATUS_REGISTERED)]
+    if before is not None and len(reg):
+        reg = reg[pd.to_datetime(reg["registered_at"], format="mixed") < pd.Timestamp(before)]
+    if reg.empty:
+        return ""
+    items = "; ".join(f"`{r['spec_hash']}` registered {r['registered_at'][:19]}" for _, r in reg.head(5).iterrows())
+    more = f" and {len(reg) - 5} more" if len(reg) > 5 else ""
+    return (f"The ledger shows {len(reg)} earlier {kind} run{'s' if len(reg) != 1 else ''} that never reached status `complete` ({items}{more}). "
+            "Such a run crashed or was stopped after registering; its trial cells may be partly logged and some of its results may have been seen.")
 
 
 # ---------------------------------------------------------------- period ledger
@@ -257,7 +323,7 @@ def reuse_lines(oos_start: str, oos_end: str, root: Path | str, current_hash: st
         more = f" and {len(firsts) - 6} more" if len(firsts) > 6 else ""
         out.append(f"This out-of-sample window ({oos_start} to {oos_end}) overlaps one already used by {len(firsts)} earlier "
                    f"spec{'s' if len(firsts) != 1 else ''} in `{REGISTRY_FILE}`: {'; '.join(items)}{more}. "
-                   "Those results were seen before this registration, so this period is not untouched for this question.")
+                   "Those results were registered or looked at before this registration, so this period is not untouched for this question.")
     if len(unknown):
         hs = ", ".join(f"`{h}`" for h in dict.fromkeys(unknown["spec_hash"]))
         out.append(f"{unknown['spec_hash'].nunique()} earlier registration{'s' if unknown['spec_hash'].nunique() != 1 else ''} ({hs}) "
@@ -296,12 +362,13 @@ def _is_true(v) -> bool:
     return v is True or (isinstance(v, (bool, int)) and bool(v)) or str(v).strip().lower() == "true"
 
 
-def record_trials(reg: Registration, rows: pd.DataFrame, run_at: str | None = None) -> int:
+def record_trials(reg: Registration, rows: pd.DataFrame) -> int:
     """Append every computed cell to `trials_all.csv` under one registration. The only writer of the trial log.
 
     rows: columns cell, stat, group, period, horizon, n, estimate, and optionally lo, hi, p_raw, p_holm, primary. If rows carry
     spec_hash / kind / family_id columns, they must match the registration. Refuses: no token, more cells than planned.
-    Backfilled registrations keep each row's own run_at; new runs get one run_at for all rows."""
+    The run key stored in `run_at` is the registration's `registered_at` (microseconds), so two runs in the same minute stay apart.
+    Backfilled registrations keep each row's own run_at. Call this BEFORE writing any result file."""
     if not _valid(reg):
         raise RegistrationError("record_trials needs a Registration returned by registry.register() whose spec file and registry row "
                                 "exist. Register the spec before computing anything.")
@@ -315,7 +382,7 @@ def record_trials(reg: Registration, rows: pd.DataFrame, run_at: str | None = No
     done = _ISSUED[reg._token]
     if reg.planned_cells is not None and done + len(rows) > reg.planned_cells:
         raise RegistrationError(f"{done + len(rows)} trial cells for spec {reg.spec_hash}, but only {reg.planned_cells} were planned")
-    stamp = run_at or datetime.now().strftime("%Y-%m-%d %H:%M")
+    stamp = reg.registered_at
     out = []
     for _, r in rows.iterrows():
         when = r["run_at"] if reg.source == "backfilled" and "run_at" in rows.columns else stamp
@@ -375,11 +442,12 @@ def backfill_registration(kind: str, spec_hash_: str, root: Path | str, family_i
     w = window or {}
     _append_registry(Path(root), {"registered_at": registered_at, "kind": kind, "family_id": family_id, "spec_hash": spec_hash_,
                                   "source": "backfilled", **{k: w.get(k, "") for k in ("split_cutoff", "oos_start", "oos_end", "horizons",
-                                                                                         "raw_sha256", "planned_cells")}, "note": note})
+                                                                                         "raw_sha256", "planned_cells")}, "note": note,
+                                  "status": STATUS_COMPLETE})
     token = secrets.token_hex(16)
     _ISSUED[token] = 0
     return Registration(kind, family_id, spec_hash_, registered_at, Path(root), None, None, w.get("oos_start", ""), w.get("oos_end", ""),
-                        "backfilled", (), token)
+                        "backfilled", (), "", token)
 
 
 def _legacy_layout(path: Path) -> str | None:
