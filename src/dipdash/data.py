@@ -106,9 +106,17 @@ def fetch_raw_closes(ticker: str, start: str, end: str) -> pd.Series | None:
         return None
 
 
-def fetch_fundamentals(tickers: list[str], cache_path: Path, max_age_days: int = 7) -> dict:
+def _yahoo_info(ticker: str) -> dict:
     import yfinance as yf
 
+    return yf.Ticker(ticker).info
+
+
+def fetch_fundamentals(tickers: list[str], cache_path: Path, max_age_days: int = 7,
+                       fetch_info: Callable[[str], dict] | None = None) -> dict:
+    """{ticker: {FUND_KEYS...}} from a 7-day cache, refreshing stale entries. `fetch_info(ticker)` returns a Yahoo-style
+    info dict; default is yfinance (tests inject a fake so nothing touches the network)."""
+    fetch_info = fetch_info or _yahoo_info
     cache: dict = {}
     if cache_path.exists():
         try:
@@ -120,7 +128,7 @@ def fetch_fundamentals(tickers: list[str], cache_path: Path, max_age_days: int =
 
     def get(t):
         try:
-            info = yf.Ticker(t).info
+            info = fetch_info(t) or {}
             d = {k: info.get(k) for k in FUND_KEYS}
             return t, ({"ts": now, "d": d} if any(v is not None for v in d.values()) else None)
         except Exception:

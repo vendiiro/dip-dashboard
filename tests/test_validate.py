@@ -62,6 +62,17 @@ def test_many_missing_closes_are_flagged():
     assert "missing_values" in checks(validate_prices("X", c, TODAY, 4))
 
 
+def test_trailing_empty_closes_are_recorded_not_silent():
+    c = geometric(260, 0.001)                       # last bar 2026-10-29
+    c.iloc[-2:] = np.nan
+    got = [i for i in validate_prices("X", c, TODAY, 4) if i.check == "empty_last_bar"]
+    assert len(got) == 1 and got[0].severity == "info"
+    assert "last 2 close(s) empty (from 2026-10-28)" in got[0].detail and "bar from 2026-10-27" in got[0].detail
+    c.iloc[-60:-20] = np.nan                        # a hole in the middle is not a trailing empty bar
+    c.iloc[-2:] = geometric(2, 0.0, start=50.0, end="2026-10-29").to_numpy()
+    assert "empty_last_bar" not in checks(validate_prices("X", c, TODAY, 4))
+
+
 def test_duplicate_dates_are_an_error_and_unsorted_is_a_warning():
     c = geometric(100, 0.001)
     dup = pd.concat([c, c.iloc[-1:]])

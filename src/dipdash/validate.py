@@ -57,6 +57,11 @@ def validate_prices(ticker: str, close: pd.Series, today: date, max_stale_tradin
     if missing > MAX_MISSING_SHARE:
         issues.append(Issue(ticker, "missing_values", "warn", f"{missing:.0%} of the last {len(window)} closes are empty"))
     c = close.dropna()
+    tail = int(close.notna().to_numpy()[::-1].argmax())          # trailing empty closes (close is deduplicated and sorted here)
+    if tail:
+        # A batch download aligns all tickers on one calendar, so an exchange holiday leaves an empty last row; so does a bad bar.
+        issues.append(Issue(ticker, "empty_last_bar", "info",
+                            f"last {tail} close(s) empty (from {str(close.index[-tail])[:10]}); using the bar from {str(c.index[-1])[:10]}"))
 
     bad = c[c <= 0]
     if len(bad):
