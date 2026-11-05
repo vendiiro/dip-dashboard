@@ -63,6 +63,8 @@ def test_brief_and_compact_columns(browser, demo_html):
     page, errors = open_page(browser, demo_html)
     brief = page.inner_text("#brief")
     assert "Today in brief" in brief and "screened stocks are flagged as dips" in brief and "not a forecast" in brief
+    assert "follows the filters below" not in brief                                  # it does not follow region or search
+    assert "Dip and quality counts follow the window and quality settings; the rest covers all screened stocks" in brief
     assert not any(w in brief.lower() for w in ("buy", "sell", "top pick"))
     default_cols = page.locator("#head th").count()
     assert default_cols == 10 and page.is_visible("#head th:has-text('90 days')")      # sparkline column is in the default set
@@ -87,7 +89,8 @@ def test_show_filter_changes_the_row_count(browser, demo_html):
     page.click("#show button[data-v=quality]")
     n_quality = page.locator("#body tr.row").count()
     assert 0 < n_quality <= dips
-    assert n_quality == page.evaluate("DATA.rows.filter(r => r.setup.rank === 4).length")
+    assert n_quality == page.evaluate("DATA.rows.filter(r => window.__dipView(r.t).rank === 4).length")
+    assert n_quality == page.evaluate("DATA.rows.filter(r => r.setup === 'Quality dip').length")   # page and nightly label agree
     assert n_quality == int(page.locator("[data-testid=tile-quality] .big").inner_text())
     page.close()
 
@@ -258,5 +261,192 @@ def test_filter_counts_chips_reset_and_detail_order(browser, demo_html):
     assert page.locator("td.detail .extra:visible").count() == 0
     page.click("td.detail button:has-text('More context')")
     assert page.locator("td.detail .extra:visible").count() > 0
+    assert errors == []
+    page.close()
+
+
+# ---------------------------------------------------------------- FE-3 stale banner, FE-4 visible failure, FE-7 small fixes
+def variant_html(tmp_path, demo_html, js, name="v.html"):
+    """A copy of the demo page whose DATA is changed by `js` (run right after `const DATA = ...;`)."""
+    from pathlib import Path
+    from urllib.parse import unquote, urlparse
+    html = Path(unquote(urlparse(demo_html).path)).read_text(encoding="utf-8")
+    i = html.index("const DATA = ")
+    j = html.index("\n", i)
+    out = tmp_path / name
+    out.write_text(html[:j + 1] + js + "\n" + html[j + 1:], encoding="utf-8")
+    return out.resolve().as_uri()
+
+
+def open_at(browser, url, when, w=1280, h=900):
+    """Open with the browser clock fixed at `when` (ISO, local time) so the stale check is deterministic."""
+    from datetime import datetime
+    page = browser.new_page(viewport={"width": w, "height": h})
+    page.clock.install(time=datetime.fromisoformat(when))
+    page.route("**/fonts.googleapis.com/**", lambda route: route.fulfill(status=200, content_type="text/css", body=""))
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.goto(url, wait_until="domcontentloaded")
+    page.wait_for_selector("#tiles .tile")
+    return page, errors
+
+
+def newest_asof(page):
+    return page.evaluate("DATA.rows.map(r => r.asof).sort().at(-1)")
+
+
+def test_stale_banner_names_the_date_when_prices_are_over_two_weekdays_old(browser, demo_html, tmp_path):
+    from datetime import date, timedelta
+    url = variant_html(tmp_path, demo_html, "DATA.demo = false;")
+    page, errors = open_at(browser, url, "2026-01-01T12:00:00")
+    asof = date.fromisoformat(newest_asof(page))
+    page.close()
+
+    def plus_weekdays(d, n):
+        while n:
+            d += timedelta(days=1)
+            n -= d.weekday() < 5
+        return d
+
+    late = plus_weekdays(asof, 5)
+    page, errors = open_at(browser, url, f"{late.isoformat()}T10:00:00")
+    assert page.is_visible("[data-testid=stale]") and page.get_attribute("#stale", "role") == "status"
+    text = page.inner_text("#stale")
+    day = f"{asof.strftime('%a')} {asof.day} {asof.strftime('%b')}"
+    assert day in text and "5 weekdays ago" in text and "may have failed" in text and "not today" in text
+    assert not any(w in text.lower() for w in ("buy", "sell"))
+    assert errors == []
+    page.close()
+    for n in (0, 2):                                                    # same day, or 2 weekdays later: no banner
+        page, _ = open_at(browser, url, f"{plus_weekdays(asof, n).isoformat()}T10:00:00")
+        assert page.is_hidden("[data-testid=stale]")
+        page.close()
+    page, _ = open_at(browser, url, f"{plus_weekdays(asof, 3).isoformat()}T10:00:00")   # 3 weekdays: banner
+    assert page.is_visible("[data-testid=stale]")
+    page.close()
+
+
+def test_demo_page_never_shows_the_stale_banner(browser, demo_html):
+    page, _ = open_at(browser, demo_html, "2030-06-03T10:00:00")
+    assert page.is_hidden("[data-testid=stale]")
+    page.close()
+
+
+def test_a_broken_row_is_skipped_and_named_in_a_visible_alert(browser, demo_html, tmp_path):
+    js = "{ const r = DATA.rows.find(x => x.dip); r.spark = null; window.__broken = r.t; }"
+    page, errors = open_page(browser, variant_html(tmp_path, demo_html, js))
+    t = page.evaluate("window.__broken")
+    assert [e for e in errors if not e.startswith("dashboard: could not draw")] == []    # caught and logged, no uncaught error
+    assert page.is_visible("[role=alert]#fail") and t in page.inner_text("#fail")
+    assert "could not draw part of the screen" in page.inner_text("#fail")
+    assert page.locator(f"#body tr.row[data-t='{t}']").count() == 0 and page.locator("#body tr.row").count() > 0
+    assert "s-crit" in page.get_attribute("#dqbtn", "class") and "1 part failed" in page.inner_text("#dqbtn")
+    assert page.locator("#hist svg").count() == 1 and page.locator("#sect svg").count() == 1   # the rest is drawn
+    page.close()
+
+
+def test_a_broken_chart_leaves_the_detail_and_the_table(browser, demo_html, tmp_path):
+    js = "{ const r = DATA.rows.find(x => x.dip); r.hist = null; window.__broken = r.t; }"
+    page, errors = open_page(browser, variant_html(tmp_path, demo_html, js))
+    t = page.evaluate("window.__broken")
+    assert page.is_hidden("#fail")                                      # nothing broken until the detail is opened
+    page.click(f"#body tr.row[data-t='{t}']")
+    assert [e for e in errors if not e.startswith("dashboard: could not draw")] == [] and page.locator("td.detail").count() == 1
+    assert "1-year chart could not be drawn" in page.inner_text("td.detail") and "key numbers" in page.inner_text("td.detail").lower()
+    assert t in page.inner_text("#fail") and "1-year chart" in page.inner_text("#fail")
+    page.close()
+
+
+def test_a_data_file_that_is_not_valid_javascript_still_shows_a_message(browser, demo_html, tmp_path):
+    from pathlib import Path
+    from urllib.parse import unquote, urlparse
+    html = Path(unquote(urlparse(demo_html).path)).read_text(encoding="utf-8")
+    i = html.index("const DATA = ")
+    bad = tmp_path / "cut.html"
+    bad.write_text(html[:i + 200] + html[html.index("\n", i):], encoding="utf-8")    # payload cut short mid-line
+    page = browser.new_page()
+    page.route("**/fonts.googleapis.com/**", lambda route: route.fulfill(status=200, content_type="text/css", body=""))
+    page.goto(bad.resolve().as_uri(), wait_until="load")
+    assert page.is_visible("#fail") and "could not read its data file" in page.inner_text("#fail")
+    page.close()
+
+
+def test_noscript_message(browser, demo_html):
+    ctx = browser.new_context(java_script_enabled=False)
+    page = ctx.new_page()
+    page.route("**/fonts.googleapis.com/**", lambda route: route.fulfill(status=200, content_type="text/css", body=""))
+    page.goto(demo_html, wait_until="domcontentloaded")
+    assert "This dashboard needs JavaScript" in page.inner_text("main") and "output/digest.md" in page.inner_text("main")
+    ctx.close()
+
+
+def test_payload_setup_stays_a_string_and_the_view_is_separate(browser, demo_html):
+    page, _ = open_page(browser, demo_html)
+    assert page.evaluate("DATA.rows.every(r => typeof r.setup === 'string' && !('view' in r))")
+    assert page.evaluate("typeof window.__dipView(DATA.rows[0].t).rank") == "number"
+    page.close()
+
+
+def test_end_dots_are_coloured_by_direction(browser, demo_html):
+    page, _ = open_page(browser, demo_html)
+    page.click("#show button[data-v=all]")
+    up = page.evaluate("DATA.rows.find(r => r.hist.c.at(-1) > r.hist.c[0] && r.spark.at(-1) > r.spark[0]).t")
+    down = page.evaluate("DATA.rows.find(r => r.hist.c.at(-1) < r.hist.c[0] && r.spark.at(-1) < r.spark[0]).t")
+    for t, d in ((up, "up"), (down, "down")):
+        row = page.locator(f"#body tr.row[data-t='{t}']")
+        assert row.locator(".enddot").get_attribute("data-dir") == d
+        row.click()
+        assert page.locator("td.detail .enddot").get_attribute("data-dir") == d
+        assert page.locator("td.detail .enddot").get_attribute("fill") == f"var(--{d})"
+        row.click()
+    page.close()
+
+
+def test_detail_chart_axis_names_the_currency_and_foot_notes_are_styled(browser, demo_html):
+    page, _ = open_page(browser, demo_html)
+    page.locator("#body tr.row").first.click()
+    ccy = page.evaluate("DATA.rows.find(r => r.t === document.querySelector('tr.row.open').dataset.t).ccy")
+    cap = page.text_content("td.detail svg .axcap")
+    assert cap == "Price" + (f", {ccy}" if ccy else "")
+    page.evaluate("document.querySelector('td.detail').append(Object.assign(document.createElement('div'), {className: 'foot', id: 'probe'}))")
+    assert page.evaluate("getComputedStyle(document.getElementById('probe')).fontSize") == "12.5px"
+    page.close()
+
+
+def test_charts_redraw_when_the_width_changes(browser, demo_html):
+    page, _ = open_page(browser, demo_html)
+    page.locator("#body tr.row").first.click()
+    before = page.get_attribute("td.detail svg[role=img]", "width")
+    page.set_viewport_size({"width": 700, "height": 900})
+    page.wait_for_function(f"document.querySelector('td.detail svg[role=img]').getAttribute('width') !== '{before}'", timeout=3000)
+    assert int(page.get_attribute("td.detail svg[role=img]", "width")) < int(before)
+    assert page.evaluate("document.documentElement.scrollWidth - innerWidth") <= 0
+    page.close()
+
+
+def test_stock_buttons_are_tap_sized_without_taller_rows(browser, demo_html):
+    page, _ = open_page(browser, demo_html)
+    h = page.evaluate("document.querySelector('#body tr.row .tkbtn').getBoundingClientRect().height")
+    row = page.evaluate("document.querySelector('#body tr.row').getBoundingClientRect().height")
+    assert h >= 40 and row < 70
+    page.close()
+
+
+def test_phone_shows_ten_cards_then_a_show_all_button(browser, demo_html):
+    page, errors = open_page(browser, demo_html, 390, 844)
+    n = page.evaluate("DATA.rows.filter(r => r.dip).length")
+    assert n > 10
+    assert page.locator("#cards .sc").count() == 10
+    more = page.locator("[data-testid=cards-more]")
+    assert more.inner_text() == f"Show all {n} stocks" and more.bounding_box()["height"] >= 40
+    more.focus()
+    page.keyboard.press("Enter")
+    assert page.locator("#cards .sc").count() == n
+    assert page.evaluate("document.activeElement.dataset.testid") == "cards-more"   # focus stays on the button
+    page.click("#ctltoggle")
+    page.click("#show button[data-v=all]")                                          # a filter change folds the list back
+    assert page.locator("#cards .sc").count() == 10
+    page.fill("#q", "nokia")
+    assert page.locator("#cards .sc").count() == 1 and page.locator("[data-testid=cards-more]").count() == 0
     assert errors == []
     page.close()
