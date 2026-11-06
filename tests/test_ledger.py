@@ -1,6 +1,8 @@
 """RES-5 forward ledger: recording, idempotence, scoring and the honest summary. Synthetic data only; files under tmp_path."""
+import json
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -8,7 +10,7 @@ import pytest
 
 from dipdash import ledger
 from dipdash.config import load_settings
-from dipdash.ledger import LEDGER_COLS, append_rows, ledger_rows, read_ledger, score, summarize_scores
+from dipdash.ledger import LEDGER_COLS, append_rows, ledger_rows, prepare_rows, read_ledger, record_run, score, summarize_scores
 
 NOW = datetime(2026, 11, 6, 0, 15, tzinfo=timezone.utc)
 
@@ -22,7 +24,8 @@ def rows_df(*rows):
 
 
 def test_columns_are_fixed():
-    assert LEDGER_COLS == ["asof", "ticker", "region", "flagged", "setup", "q", "knife", "settings_hash", "universe_hash", "recorded_at"]
+    assert LEDGER_COLS == ["asof", "ticker", "region", "flagged", "setup", "q", "knife", "settings_hash", "universe_hash",
+                           "code_hash", "schema_version", "detail", "recorded_at"]
 
 
 def test_partial_rows_are_never_recorded():
@@ -138,28 +141,33 @@ def test_score_keeps_stock_missing_from_prices():
     assert len(out) == 1 and pd.isna(out["fwd_1"].iloc[0])
 
 
-def _scored_panel(n_dates=40, effect=0.02, seed=1):
-    """One flagged and two unflagged stocks per date; flagged return = same-date level + effect (plus noise)."""
+def _scored_panel(n_dates=300, effect=0.02, seed=1, setup="Quality dip"):
+    """One flagged and two unflagged stocks per date (a new flagged stock each night, so the cooldown keeps all);
+    flagged return = same-date level + effect plus noise. 300 weekdays is about 14 calendar months."""
     rng = np.random.default_rng(seed)
     recs = []
-    for d in pd.bdate_range("2026-01-05", periods=n_dates):
+    for i, d in enumerate(pd.bdate_range("2026-01-05", periods=n_dates)):
         base = rng.normal(0.0, 0.01)
         day = d.strftime("%Y-%m-%d")
-        recs.append((day, "F0", True, base + effect + rng.normal(0, 0.005)))
+        recs.append((day, f"F{i}", True, setup, base + effect + rng.normal(0, 0.005)))
         for k in range(2):
-            recs.append((day, f"U{k}", False, base + rng.normal(0, 0.005)))
-    return pd.DataFrame(recs, columns=["asof", "ticker", "flagged", "fwd_5"])
+            recs.append((day, f"U{k}", False, "No dip", base + rng.normal(0, 0.005)))
+    return pd.DataFrame(recs, columns=["asof", "ticker", "flagged", "setup", "fwd_5"])
+
+
+def _get(out, section="any dip", view="after cooldown", h=5):
+    return out[(out["section"] == section) & (out["view"] == view) & (out["horizon"] == h)].iloc[0]
 
 
 def test_summary_reports_n_costs_baseline_and_interval():
     s = load_settings()
-    r = summarize_scores(_scored_panel(), s).iloc[0]
-    assert r["horizon"] == 5 and r["n_flagged"] == 40 and r["n_baseline"] == 80
-    assert r["n_months"] >= 2
+    r = _get(summarize_scores(_scored_panel(), s))
+    assert r["n_flagged"] == 300 and r["n_baseline"] == 600 and r["n_months"] >= 12
     assert r["gross_diff"] == pytest.approx(0.02, abs=0.005)
     assert r["net_diff"] == pytest.approx(r["gross_diff"] - s.backtest.cost_roundtrip)
-    assert r["net_lo"] < r["net_diff"] < r["net_hi"]
-    assert r["note"] == ""
+    assert r["net_diff_2x"] == pytest.approx(r["gross_diff"] - 2 * s.backtest.cost_roundtrip)
+    assert r["net_lo"] < r["net_diff"] < r["net_hi"] and r["note"] == ""
+    assert r["p10_excess"] < r["med_excess"] < r["p90_excess"]
 
 
 def test_summary_baseline_is_same_date_only():
@@ -169,19 +177,87 @@ def test_summary_baseline_is_same_date_only():
     assert summarize_scores(df, load_settings()).iloc[0]["gross_diff"] == pytest.approx(0.01)
 
 
-def test_summary_says_too_few_under_30():
-    r = summarize_scores(_scored_panel(n_dates=29), load_settings()).iloc[0]
+def test_summary_says_too_few_under_30_events():
+    r = _get(summarize_scores(_scored_panel(n_dates=29), load_settings()))
     assert "too few" in r["note"].lower()
     assert pd.isna(r["net_lo"]) and pd.isna(r["net_hi"]) and pd.isna(r["gross_lo"]) and pd.isna(r["gross_hi"])
-    assert r["n_flagged"] == 29
+    assert r["n_flagged"] == 29 and not pd.isna(r["gross_diff"])
+
+
+def test_summary_needs_twelve_months_even_with_many_events():
+    r = _get(summarize_scores(_scored_panel(n_dates=180), load_settings()))        # about 8 months, 180 events
+    assert r["n_flagged"] == 180 and r["n_months"] < 12 and "too few" in r["note"].lower() and pd.isna(r["net_lo"])
 
 
 def test_summary_horizon_with_no_matured_rows():
     df = _scored_panel(n_dates=5)
     df["fwd_21"] = np.nan
-    out = summarize_scores(df, load_settings())
-    r = out[out["horizon"] == 21].iloc[0]
+    r = _get(summarize_scores(df, load_settings()), h=21)
     assert r["n_flagged"] == 0 and "too few" in r["note"].lower()
+
+
+def test_cooldown_counts_trading_days_in_the_price_series_not_ledger_rows():
+    s = load_settings()                                          # cooldown_days 21
+    dates = [d.strftime("%Y-%m-%d") for d in pd.bdate_range("2026-01-05", periods=60)]
+    led = pd.concat([pd.DataFrame({"asof": dates, "ticker": "AAA", "flagged": True, "setup": "Quality dip"}),
+                     pd.DataFrame({"asof": dates, "ticker": "BASE", "flagged": False, "setup": "No dip"})], ignore_index=True)
+    px = {t: pd.Series(np.linspace(100, 160, 80), index=pd.bdate_range("2026-01-05", periods=80)) for t in ("AAA", "BASE")}
+    out = summarize_scores(score(led, px, (5,)), s)
+    assert _get(out)["n_flagged"] == 3 and _get(out, view="all nights")["n_flagged"] == 60     # bars 0, 21, 42
+    gap = led[~((led["ticker"] == "AAA") & led["asof"].isin(dates[1:20]))]                            # ledger rows missing, bars still count
+    assert _get(summarize_scores(score(gap, px, (5,)), s))["n_flagged"] == 3
+
+
+def test_all_nights_interval_needs_the_cooldown_view_to_qualify():
+    df = _scored_panel(n_dates=300)
+    df["ticker"] = np.where(df["flagged"], "SAME", df["ticker"])  # one stock flagged every night: 15 events after cooldown
+    out = summarize_scores(df, load_settings())
+    c, a = _get(out), _get(out, view="all nights")
+    assert c["n_flagged"] < 30 and pd.isna(c["net_lo"]) and a["n_flagged"] == 300 and pd.isna(a["net_lo"]) and a["note"]
+
+
+def test_quality_dip_section_is_separate():
+    df = _scored_panel()
+    df.loc[df.index[df["flagged"]][:100], "setup"] = "Dip, low quality"
+    out = summarize_scores(df, load_settings())
+    assert _get(out, "any dip")["n_flagged"] == 300 and _get(out, "Quality dip only")["n_flagged"] == 200
+
+
+def test_rule_versions_are_never_pooled():
+    a, b = _scored_panel(), _scored_panel(seed=2, effect=-0.02)
+    a["settings_hash"], b["settings_hash"] = "v1", "v2"
+    out = summarize_scores(pd.concat([a, b], ignore_index=True), load_settings())
+    assert set(out["settings_hash"]) == {"v1", "v2"}
+    assert _get(out[out["settings_hash"] == "v1"])["gross_diff"] > 0.01
+    assert _get(out[out["settings_hash"] == "v2"])["gross_diff"] < -0.01
+
+
+def test_late_recorded_rows_are_excluded_and_counted():
+    px = {"AAA": _prices([100, 100, 110, 121, 121, 121, 121, 121]), "BBB": _prices([100] * 8)}
+    led = pd.DataFrame({"asof": ["2026-11-02", "2026-11-02"], "ticker": ["AAA", "BBB"], "flagged": [True, False],
+                        "recorded_at": ["2026-11-05T22:00:00Z", "2026-11-02T22:00:00Z"]})
+    sc = score(led, px, (1,))
+    assert list(sc["late"]) == [True, False]                      # entry bar is Nov 3; AAA was recorded on Nov 5
+    r = summarize_scores(sc, load_settings()).iloc[0]
+    assert r["n_flagged"] == 0 and r["n_late"] == 1
+
+
+def test_unscored_rows_old_enough_to_have_matured_are_counted():
+    px = {"AAA": _prices([100, 100, 110, 121, 121, 121, 121]), "GONE": _prices([100, 100]), "BASE": _prices([100] * 7)}
+    led = pd.DataFrame({"asof": ["2026-11-02"] * 3, "ticker": ["AAA", "GONE", "BASE"], "flagged": [True, True, False]})
+    sc = score(led, px, (2,))
+    assert sc.loc[sc.ticker == "GONE", "due_2"].iloc[0] and pd.isna(sc.loc[sc.ticker == "GONE", "fwd_2"].iloc[0])
+    r = summarize_scores(sc, load_settings()).iloc[0]
+    assert r["n_flagged"] == 1 and r["n_unscored"] == 1
+
+
+def test_score_rejects_a_row_older_than_the_pull_and_a_late_entry():
+    px = {"AAA": _prices([100, 100, 110, 121, 121])}
+    old = score(_scored_input("2026-03-02", True), px, (1,))
+    assert old["reason"].iloc[0] == "no_bar_at_asof" and pd.isna(old["fwd_1"].iloc[0]) and old["entry_date"].iloc[0] == ""
+    halt = pd.Series([100, 100, 105, 106], index=pd.to_datetime(["2026-03-02", "2026-03-03", "2026-03-25", "2026-03-26"]))
+    h = score(_scored_input("2026-03-03", True), {"AAA": halt}, (1,))
+    assert h["reason"].iloc[0] == "entry_gap_over_7_days" and pd.isna(h["fwd_1"].iloc[0])
 
 
 def test_settings_hash_follows_only_the_screen_sections():
@@ -192,8 +268,138 @@ def test_settings_hash_follows_only_the_screen_sections():
     assert ledger.settings_hash(replace(s, dip=replace(s.dip, drop_1d=0.5))) != h
 
 
-def test_universe_hash_is_file_sha256(tmp_path):
-    p = tmp_path / "u.csv"
+def test_universe_hash_is_file_sha256_with_line_endings_normalised(tmp_path):
+    p, q = tmp_path / "u.csv", tmp_path / "v.csv"
     p.write_bytes(b"ticker\nAAA\n")
+    q.write_bytes(b"ticker\r\nAAA\r\n")
     import hashlib
-    assert ledger.file_hash(p) == hashlib.sha256(b"ticker\nAAA\n").hexdigest()
+    assert ledger.file_hash(p) == hashlib.sha256(b"ticker\nAAA\n").hexdigest() == ledger.file_hash(q)
+
+
+def test_detail_holds_the_unrecoverable_signal_data():
+    r = row("AAA") | {"price": 12.3, "r1": -0.05, "r5": -0.08, "dd20": -0.13, "vs200": -0.1, "dd52": -0.2, "why": ["1d drop"],
+                      "q_status": "ok", "q_scored": 6, "q_applicable": 6, "q_passed": 5, "q_must_failed": [], "q_must_missing": [],
+                      "earn": {"next": "2026-12-01"}, "name": "not stored"}
+    df, _ = prepare_rows({"rows": [r]}, "sh", "uh", NOW, code="cc", price_source={"AAA": "primary"})
+    d = json.loads(df["detail"].iloc[0])
+    assert d["price"] == 12.3 and d["why"] == ["1d drop"] and d["price_source"] == "primary" and d["earn"] == {"next": "2026-12-01"}
+    assert "name" not in d and df["code_hash"].iloc[0] == "cc" and df["schema_version"].iloc[0] == "1"
+
+
+def test_older_header_is_read_by_name_and_unknown_header_is_refused(tmp_path):
+    p = tmp_path / "flags.csv"
+    p.write_text("asof,ticker,region,flagged,setup,q,knife,settings_hash,universe_hash,recorded_at\n"
+                 "2026-11-04,AAA,US,True,Quality dip,80,False,s,u,2026-11-05T00:00:00Z\n", encoding="utf-8", newline="")
+    assert append_rows(p, rows_df(row("BBB", asof="2026-11-04"))) == 1
+    got = read_ledger(p)
+    assert sorted(got["ticker"]) == ["AAA", "BBB"] and got["detail"].iloc[0] == ""
+    assert len(p.read_text(encoding="utf-8").splitlines()[2].split(",")) == 10          # the row follows the file's own header
+    bad = tmp_path / "bad.csv"
+    bad.write_text("asof,ticker,mystery,recorded_at\n", encoding="utf-8")
+    with pytest.raises(ValueError):
+        append_rows(bad, rows_df(row("AAA")))
+
+
+def test_bom_in_header_is_read_and_appending_continues(tmp_path):
+    p = tmp_path / "flags.csv"
+    append_rows(p, rows_df(row("AAA", asof="2026-11-04")))
+    p.write_bytes(b"\xef\xbb\xbf" + p.read_bytes())
+    before = p.read_bytes()
+    assert append_rows(p, rows_df(row("BBB", asof="2026-11-04"))) == 1
+    assert p.read_bytes().startswith(before) and sorted(read_ledger(p)["ticker"]) == ["AAA", "BBB"]
+
+
+def test_read_ledger_dedupes_first_wins(tmp_path):
+    p = tmp_path / "flags.csv"
+    append_rows(p, rows_df(row("AAA", dip=True)))
+    with p.open("ab") as fh:                                      # a duplicate written by some other tool
+        fh.write(p.read_bytes().splitlines()[1].replace(b"True", b"False", 1) + b"\n")
+    got = read_ledger(p)
+    assert len(got) == 1 and bool(got["flagged"].iloc[0]) is True
+
+
+def test_run_too_soon_after_the_close_is_not_recorded():
+    cet = timezone(timedelta(hours=1))
+    r = row("SEB.ST", asof="2026-11-05", region="Europe")
+    started = datetime(2026, 11, 5, 17, 25, tzinfo=cet)         # price taken at 17:25 CET; validation finishes at 17:46
+    df, skipped = prepare_rows({"rows": [r]}, "s", "u", datetime(2026, 11, 5, 17, 46, tzinfo=cet), run_started=started)
+    assert df.empty and skipped == {"SEB.ST": "too_soon"}
+    later, _ = prepare_rows({"rows": [r]}, "s", "u", NOW, run_started=datetime(2026, 11, 5, 19, 31, tzinfo=cet))
+    assert list(later["ticker"]) == ["SEB.ST"]
+
+
+def test_record_run_keeps_versions_runs_log_and_backup(tmp_path):
+    uni, st = tmp_path / "universe.csv", tmp_path / "settings.toml"
+    uni.write_bytes(b"ticker,name,region\r\nAAA,A,US\r\n")
+    st.write_text("[dip]\n", encoding="utf-8")
+    led = tmp_path / "ledger" / "flags.csv"
+    payload = {"rows": [row("AAA"), row("BBB", partial=True)], "data_quality": [{"t": "CCC", "reason": "stale", "detail": "x"}]}
+    kw = dict(settings_path=st, run_started=datetime(2026, 11, 6, 0, 15, tzinfo=timezone.utc), now=NOW, universe_size=3)
+    assert record_run(payload, load_settings(), uni, led, **kw) == 1
+    vdir = led.parent / "versions"
+    assert (vdir / f"{ledger.settings_hash(load_settings())}.toml").read_text() == "[dip]\n"
+    uh = ledger.file_hash(uni)
+    assert (vdir / f"{uh}.csv").exists() and not led.with_name("flags.backup.csv").exists()
+    uni.write_bytes(b"changed")
+    kept = (vdir / f"{uh}.csv").read_bytes()
+    record_run(payload, load_settings(), uni, led, **kw)
+    assert (vdir / f"{uh}.csv").read_bytes() == kept and led.with_name("flags.backup.csv").exists()
+    runs = pd.read_csv(led.parent / "runs.csv", dtype=str)
+    assert len(runs) == 2 and runs["rows_written"].tolist() == ["1", "0"] and runs["partial_count"].iloc[0] == "1"
+    assert json.loads(runs["skipped"].iloc[0]) == {"BBB": "partial", "CCC": "stale"} and runs["universe_size"].iloc[0] == "3"
+
+
+def test_corrupt_ledger_does_not_replace_the_backup(tmp_path):
+    uni = tmp_path / "universe.csv"
+    uni.write_text("ticker\nAAA\n", encoding="utf-8")
+    led = tmp_path / "flags.csv"
+    record_run({"rows": [row("AAA")]}, load_settings(), uni, led, now=NOW)
+    record_run({"rows": [row("AAA", asof="2026-11-04")]}, load_settings(), uni, led, now=NOW)
+    good = led.with_name("flags.backup.csv").read_bytes()
+    led.write_text("garbage\n", encoding="utf-8")
+    with pytest.raises(ValueError):
+        record_run({"rows": [row("ZZZ")]}, load_settings(), uni, led, now=NOW)
+    assert led.with_name("flags.backup.csv").read_bytes() == good
+
+
+def test_pick_raw_skips_a_mid_session_pull():
+    files = [Path("2026-11-05.csv.gz"), Path("2026-11-06.csv.gz"), Path("2026-11-06_143000.csv.gz")]
+    pick, warn = ledger.pick_raw(files)
+    assert pick.name == "2026-11-06.csv.gz" and "mid-session" in warn
+    assert ledger.pick_raw(files[:2]) == (files[1], "")
+
+
+def _load_script():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("score_ledger", Path(__file__).resolve().parents[1] / "scripts" / "score_ledger.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_score_script_text_has_no_banned_phrase_and_states_the_limits():
+    mod = _load_script()
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("check_wording", Path(mod.__file__).with_name("check_wording.py"))
+    cw = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cw)
+    assert cw.scan_text(Path(mod.__file__).read_text(encoding="utf-8")) == []
+    text = "\n".join(mod.explain(0.001, 0.9, 21)) + mod.CAVEAT
+    for needle in ("round trip", "Gross", "Net", "Survivorship bias", "unscored", "85 to 91%"):
+        assert needle in text
+
+
+def test_score_script_runs_on_a_synthetic_ledger(tmp_path, capsys):
+    from dipdash.cache import save_raw_prices
+    mod = _load_script()
+    idx = pd.bdate_range("2026-01-05", periods=80)
+    px = {t: (pd.Series(np.linspace(100, 120, 80), index=idx), None) for t in ("AAA", "BBB")}
+    raw = save_raw_prices(px, "yfinance", tmp_path / "raw")
+    dates = [d.strftime("%Y-%m-%d") for d in idx[:10]]
+    for d in dates:
+        append_rows(tmp_path / "flags.csv", rows_df(row("AAA", asof=d), row("BBB", asof=d, dip=False, setup="No dip")))
+    assert mod.main(["--ledger", str(tmp_path / "flags.csv"), "--raw", str(raw), "--out", str(tmp_path / "o.csv")]) == 0
+    out = capsys.readouterr().out
+    assert "needs years of nights before the result can mean much" in out and "not advice" in out and "too few for an interval" in out
+    assert (tmp_path / "o.csv").exists()
+    assert mod.main(["--ledger", str(tmp_path / "none.csv"), "--raw", str(raw)]) == 1

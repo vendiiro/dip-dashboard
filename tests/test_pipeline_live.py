@@ -160,17 +160,56 @@ def test_no_bundle_and_no_yfinance_exits_with_install_hint(env):
     assert "yfinance is not installed" in str(e.value)
 
 
-def test_live_run_records_the_ledger(env):
+# --- forward ledger (RES-5): the hook records only default-rule live runs ---------------------------------------------
+
+@pytest.fixture
+def default_cfg(env, monkeypatch):
+    """A config folder under tmp_path, so a run WITHOUT --universe/--settings (the only kind that is recorded) stays offline."""
+    import shutil
+
+    from dipdash import config
     tmp, uni = env
-    assert run(env, make_fake()) == 0
-    import pandas as pd
-    led = pd.read_csv(tmp / "data" / "ledger" / "flags.csv", dtype=str)
-    assert set(led["ticker"]) == set(ALL) and led["asof"].nunique() == 1
+    cfg = tmp / "config"
+    cfg.mkdir()
+    shutil.copy(uni, cfg / "universe.csv")
+    shutil.copy(config.CONFIG_DIR / "settings.toml", cfg / "settings.toml")
+    monkeypatch.setattr(config, "CONFIG_DIR", cfg)
+    monkeypatch.setattr(cli, "CONFIG_DIR", cfg)
+    return tmp
+
+
+def run_default(tmp, fake, *extra):
+    argv = ["--out", str(tmp / "output" / "dashboard.html"), "--data-dir", str(tmp / "data"), "--no-crosscheck", *extra]
+    return cli.main(argv, sources=fake.sources())
+
+
+def test_live_run_records_the_ledger(default_cfg):
+    tmp = default_cfg
+    assert run_default(tmp, make_fake()) == 0
     import hashlib
-    assert set(led["universe_hash"]) == {hashlib.sha256(uni.read_bytes()).hexdigest()}
-    before = (tmp / "data" / "ledger" / "flags.csv").read_bytes()
-    assert run(env, make_fake()) == 0                                   # a second run on the same data adds nothing
-    assert (tmp / "data" / "ledger" / "flags.csv").read_bytes() == before
+
+    import pandas as pd
+    flags = tmp / "data" / "ledger" / "flags.csv"
+    led = pd.read_csv(flags, dtype=str)
+    assert set(led["ticker"]) == set(ALL) and led["asof"].nunique() == 1
+    assert set(led["universe_hash"]) == {hashlib.sha256((tmp / "config" / "universe.csv").read_bytes().replace(b"\r\n", b"\n")).hexdigest()}
+    assert led["code_hash"].str.len().eq(64).all() and set(led["schema_version"]) == {"1"}
+    assert len(list((tmp / "data" / "ledger" / "versions").iterdir())) == 2 and (tmp / "data" / "ledger" / "runs.csv").exists()
+    before = flags.read_bytes()
+    assert run_default(tmp, make_fake()) == 0                           # a second run on the same data adds nothing
+    assert flags.read_bytes() == before and (tmp / "data" / "ledger" / "flags.backup.csv").read_bytes() == before
+
+
+def test_custom_universe_or_settings_is_not_recorded(env, capsys):
+    tmp, uni = env
+    assert run(env, make_fake()) == 0                                   # run() passes --universe
+    assert not (tmp / "data" / "ledger").exists() and "Ledger skipped" in capsys.readouterr().out
+
+
+def test_custom_settings_is_not_recorded(default_cfg, capsys):
+    tmp = default_cfg
+    assert run_default(tmp, make_fake(), "--settings", str(tmp / "config" / "settings.toml")) == 0
+    assert not (tmp / "data" / "ledger").exists() and "Ledger skipped" in capsys.readouterr().out
 
 
 def test_demo_run_writes_no_ledger(env):
@@ -179,21 +218,70 @@ def test_demo_run_writes_no_ledger(env):
     assert not (tmp / "data" / "ledger").exists()
 
 
-def test_locked_ledger_keeps_exit_code_and_page(env, capsys):
-    tmp, _ = env
+def test_locked_ledger_keeps_exit_code_page_and_warns_in_the_quality_log(default_cfg, capsys):
+    tmp = default_cfg
     (tmp / "data" / "ledger" / "flags.csv").mkdir(parents=True)         # a directory where the file should be: cannot be opened
-    assert run(env, make_fake()) == 0
+    assert run_default(tmp, make_fake()) == 0
     assert (tmp / "output" / "dashboard.html").stat().st_size > 0 and (tmp / "output" / "run_meta.json").exists()
     assert "Ledger not updated" in capsys.readouterr().out
     assert (tmp / "data" / "ledger" / "flags.csv").is_dir()             # nothing was replaced
+    hit = [r for r in quality(tmp) if r["check"] == "ledger_not_updated"]
+    assert len(hit) == 1 and hit[0]["severity"] == "warn"
 
 
-def test_ledger_failure_by_exception_keeps_exit_code(env, capsys, monkeypatch):
-    tmp, _ = env
+def test_ledger_failure_by_exception_keeps_exit_code(default_cfg, capsys, monkeypatch):
+    tmp = default_cfg
     from dipdash import ledger
 
     def boom(*a, **k):
         raise OSError("disk full")
     monkeypatch.setattr(ledger, "append_rows", boom)
-    assert run(env, make_fake()) == 0
+    assert run_default(tmp, make_fake()) == 0
     assert "Ledger not updated" in capsys.readouterr().out
+    assert any(r["check"] == "ledger_not_updated" for r in quality(tmp))
+
+
+class _Clock:
+    """Stands in for cli.datetime: now() returns the next time in the list, then keeps the last one."""
+    def __init__(self, *times):
+        self.times = list(times)
+
+    def __call__(self, real):
+        clock = self
+
+        class Fake(real):
+            @classmethod
+            def now(cls, tz=None):
+                return clock.times.pop(0) if len(clock.times) > 1 else clock.times[0]
+        return Fake
+
+
+def test_a_partial_bar_goes_through_the_cli_but_not_into_the_ledger(default_cfg, monkeypatch):
+    import pandas as pd
+    from datetime import datetime as real_dt, timezone
+    tmp = default_cfg
+    monkeypatch.setattr(cli, "datetime", _Clock(real_dt(2026, 10, 30, 12, 0, tzinfo=timezone.utc))(real_dt))
+    prices = {t: geometric(300, 0.0005 + 0.0001 * i) for i, t in enumerate(ALL)}
+    prices["US0"] = geometric(300, 0.0005, end="2026-10-30")             # this bar is dated today and the US market is still open
+    fake = FakeYahoo(prices, fx={"SEK": 0.095, "EUR": 1.08}, index={s: geometric(300, 0.0003) for s in INDICES})
+    assert run_default(tmp, fake) == 0
+    led = pd.read_csv(tmp / "data" / "ledger" / "flags.csv", dtype=str)
+    assert "US0" not in set(led["ticker"]) and len(led) == len(ALL) - 1
+    runs = pd.read_csv(tmp / "data" / "ledger" / "runs.csv", dtype=str)
+    assert runs["partial_count"].iloc[0] == "1" and '"US0":"partial"' in runs["skipped"].iloc[0]
+
+
+def test_the_clock_is_read_before_the_prices_are_fetched(default_cfg, monkeypatch):
+    """Price taken at 17:25 CET, validation done at 17:46 CET: the 17:46 reading would call a 17:30 close complete."""
+    import pandas as pd
+    from datetime import datetime as real_dt, timezone
+    tmp = default_cfg
+    first, later = real_dt(2026, 10, 30, 16, 25, tzinfo=timezone.utc), real_dt(2026, 10, 30, 16, 46, tzinfo=timezone.utc)
+    monkeypatch.setattr(cli, "datetime", _Clock(first, later)(real_dt))
+    prices = {t: geometric(300, 0.0005 + 0.0001 * i, end="2026-10-30") for i, t in enumerate(ALL)}
+    fake = FakeYahoo(prices, fx={"SEK": 0.095, "EUR": 1.08}, index={s: geometric(300, 0.0003) for s in INDICES})
+    assert run_default(tmp, fake) == 0
+    flags = tmp / "data" / "ledger" / "flags.csv"
+    assert not flags.exists() or pd.read_csv(flags).empty
+    runs = pd.read_csv(tmp / "data" / "ledger" / "runs.csv", dtype=str)
+    assert runs["rows_written"].iloc[0] == "0" and int(runs["partial_count"].iloc[0]) + int(runs["too_soon_count"].iloc[0]) == len(ALL)

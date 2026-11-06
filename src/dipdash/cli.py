@@ -131,6 +131,7 @@ def main(argv: list[str] | None = None, sources: Sources | None = None) -> int:
     today = date.today()
     data_dir = Path(a.data_dir)
     fx = None
+    run_started = None       # live runs: the clock before any price is fetched; a bar is judged complete against this time
     idx_hist: dict = {}      # full index close series for the beta fit; empty in demo mode
     earnings: dict = {}
     reasons: dict[str, str] = {}      # why a price fetch failed or needed a rescue (filled by pull_prices)
@@ -155,6 +156,7 @@ def main(argv: list[str] | None = None, sources: Sources | None = None) -> int:
         from .sources import live_sources
 
         bundle = sources or live_sources()
+        run_started = datetime.now(timezone.utc)
         print(f"Downloading 2y daily prices for {len(tickers)} tickers...")
         start = str(today - timedelta(days=730))
         try:
@@ -200,7 +202,7 @@ def main(argv: list[str] | None = None, sources: Sources | None = None) -> int:
     if a.demo:
         issues = validate_run(universe, prices, funds, settings, today)
     else:
-        issues = validate_run(universe, prices, funds, settings, today, now=datetime.now(timezone.utc), fx_rates=fx)
+        issues = validate_run(universe, prices, funds, settings, today, now=run_started, fx_rates=fx)
     issues += [Issue(t, "price_source", "warn", "Yahoo had no data; used unadjusted OpenBB bars (dividends not adjusted)")
                for t, s in source.items() if s == "fallback"]
     if not a.demo:
@@ -253,12 +255,19 @@ def main(argv: list[str] | None = None, sources: Sources | None = None) -> int:
         atomic_write_text(out_path.parent / "run_meta.json", json.dumps(meta, indent=2, ensure_ascii=False) + "\n")
         print(coverage_summary)
     if not a.demo:
-        try:                                            # the forward record must never stop the run or the page
-            from . import ledger
-            n_new = ledger.record_run(payload, settings, a.universe or CONFIG_DIR / "universe.csv", data_dir / "ledger" / "flags.csv")
-            print(f"Ledger: {n_new} new row(s) -> {data_dir / 'ledger' / 'flags.csv'}")
-        except Exception as exc:
-            print(f"Ledger not updated: {type(exc).__name__}: {exc}")
+        if a.universe or a.settings:
+            print("Ledger skipped: a custom --universe or --settings was given (the record is for the default rules only)")
+        else:
+            try:                                        # the forward record must never stop the run or the page
+                from . import ledger
+                n_new = ledger.record_run(payload, settings, CONFIG_DIR / "universe.csv", data_dir / "ledger" / "flags.csv",
+                                          settings_path=CONFIG_DIR / "settings.toml", run_started=run_started,
+                                          universe_size=len(universe), price_source=source)
+                print(f"Ledger: {n_new} new row(s) -> {data_dir / 'ledger' / 'flags.csv'}")
+            except Exception as exc:
+                msg = f"Ledger not updated: {type(exc).__name__}: {exc}"
+                print(msg)
+                issues.append(Issue("*", "ledger_not_updated", "warn", msg))
     log = write_quality_log(issues, out_path.parent / ("data_quality.demo.csv" if a.demo else "data_quality.csv"))   # a demo run must not replace a real log
     n = {k: sum(i.severity == k for i in issues) for k in ("error", "warn", "info")}
     print(f"Data quality: {n['error']} error(s), {n['warn']} warning(s) -> {log}")
