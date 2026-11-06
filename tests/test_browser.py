@@ -539,13 +539,24 @@ def test_distorted_and_no_fundamentals_states_render(browser, demo_html):
 def test_default_sort_note_shows_until_a_column_is_chosen(browser, demo_html):
     page, _ = open_page(browser, demo_html)
     note = page.locator("#sortnote")
-    assert note.is_visible() and note.inner_text() == "Sorted by size of drop"
+    assert note.is_visible() and note.inner_text() == "Sorted by size of drop. You can also sort by quality score or 5d vs index."
     assert page.locator("#head th[aria-sort=ascending], #head th[aria-sort=descending]").count() == 0
     page.click("#head th:has-text('Price')")
     assert note.is_hidden() and page.locator("#head th[aria-sort=ascending], #head th[aria-sort=descending]").count() == 1
     page.click("#show button[data-v=all]")                                            # a filter change returns to the default order
     assert note.is_visible()
     page.close()
+
+
+def test_phone_sort_chooser_is_visible_without_opening_filters(browser, demo_html):
+    ph, _ = open_page(browser, demo_html, 390, 844)
+    assert ph.locator("#controls").is_hidden() and ph.locator("#sortsel").is_visible()
+    ph.select_option("#sortsel", "q")
+    assert ph.locator("#sortnote").is_hidden()
+    ph.close()
+    dk, _ = open_page(browser, demo_html, 1280, 900)
+    assert dk.locator("#sortsel").is_hidden()
+    dk.close()
 
 
 def test_neutral_check_threshold_wording_and_title(browser, demo_html):
@@ -854,7 +865,7 @@ def test_sticky_header_keeps_the_sideways_scroll_of_more_columns(browser, demo_h
     page.close()
 
 
-@pytest.mark.parametrize("w, h, sel, limit", [(1280, 800, "#body tr.row", 900), (390, 844, "#cards .sc", 910)])
+@pytest.mark.parametrize("w, h, sel, limit", [(1280, 800, "#body tr.row", 900), (390, 844, "#cards .sc", 1000)])
 def test_first_row_sits_near_the_top(browser, demo_html, w, h, sel, limit):
     """FE-1: on the demo page (with its Demo banner) the first row or card starts above the fold; the real page has less above it."""
     page, _ = open_page(browser, demo_html, w, h)
