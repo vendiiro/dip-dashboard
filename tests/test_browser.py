@@ -758,7 +758,7 @@ def test_quality_tile_reconciles_with_the_all_dips_count(browser, demo_html):
     dips = page.evaluate("DATA.rows.filter(r => __dipView(r.t).rank > 0).length")
     big = page.locator("[data-testid=tile-quality] .big").inner_text()
     foot = page.locator("[data-testid=tile-quality] .foot").inner_text()
-    assert foot.startswith(f"{big} of {dips} dips have quality score ≥ ") and "net margin above 0 · drop window: default" in foot
+    assert foot.startswith(f"{big} of the {dips} dips below meet the check thresholds (quality score ≥ ") and "net margin above 0) · drop window: default" in foot
     page.click("#show button[data-v=dips]")
     assert page.inner_text("#tabletitle") == f"All dips · {dips}"
     page.close()

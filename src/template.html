@@ -135,7 +135,8 @@ table.wide{min-width:1120px}
 .brief{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px;display:flex;flex-direction:column;gap:2px}
 .brief h2{font-size:14px;font-weight:600}
 .brief p{margin:0;font-size:14px;line-height:1.5;color:var(--ink)}
-.brief .sub{font-size:12.5px;font-weight:400;color:var(--ink-3);font-family:var(--f-body)}
+.brief .sub{margin-left:8px;font-size:12.5px;font-weight:400;color:var(--ink-3);font-family:var(--f-body)}
+.brief p.briefend{font-size:13px;color:var(--ink-3)}
 .brief .num{font-family:var(--f-data);font-variant-numeric:tabular-nums;white-space:nowrap}
 .scrollcue{align-self:center;font-size:12.5px;font-weight:500;color:var(--accent);white-space:nowrap}
 .colbtn{align-self:center;border:1px solid var(--line-strong);background:var(--surface);border-radius:6px;padding:4px 12px;min-height:40px;cursor:pointer;font-size:13px;color:var(--accent)}
@@ -280,8 +281,7 @@ footer dd.hit,footer dt.hit{background:var(--line);border-radius:4px}
   .tiles .tile:nth-child(1),.tiles .tile:nth-child(4){grid-column:1 / -1}
   .tile{padding:10px 12px}
   .tile .foot,.tile:not(:first-child) .chips{display:none}
-  .brief .sub{display:block;margin-top:2px}
-  .brief .sub .subrest,.brief .sub .dot{display:none}
+  .brief .sub{display:none}
   .tile .big{font-size:24px}
   .mktline{display:block}
   .brief .idxline{display:none}   /* the index moves are in the Market context tile; the phone brief keeps the first sentence */
@@ -647,7 +647,7 @@ function brief(all) {
   const newQ = qd.filter(r => wasQualityDip(r) === false);
   const h = el('h2', null, 'Today in brief'); h.id = 'brief-h';
   h.append(el('span', 'sub'));
-  const sub = h.lastChild; sub.append(el('span', 'dot', ' · '), 'a description of the latest close, not a forecast.'); const rest = el('span', 'subrest', ' Dip and quality counts follow the window and quality settings; the rest covers all screened stocks.'); sub.append(rest);
+  const sub = h.lastChild; const rest = el('span', 'subrest', 'Dip and quality counts follow the window and quality settings; the rest covers all screened stocks.'); sub.append(rest);
   const p1 = el('p'), dl = el('a', null, 'Definitions'); dl.href = '#def-q';
   p1.append(`${dips.length} of ${all.length} screened stocks are flagged as dips; ${qd.length} of them meet the check thresholds (see `, dl, `)${newQ.length ? ' and ' + newQ.length + ' ' + (newQ.length === 1 ? 'is' : 'are') + ' new since the previous close' : ''}.`);
   const p2 = el('p', 'idxline');
@@ -662,6 +662,7 @@ function brief(all) {
   if (nIdx) p2.append(`${far} of ${nIdx} flagged dips fell at least 5 points more than their own index.`);
   box.append(h, p1);
   if (p2.childNodes.length) box.append(p2);
+  box.append(el('p', 'briefend', 'This describes the latest close; it is not a forecast.'));
 }
 
 // ---------- trigger alerts ----------
@@ -722,7 +723,7 @@ function tiles(all) {
     }
     if (foot) t.append(el('div', 'foot', foot)); box.append(t);
   };
-  mk('tile-quality', 'Dips meeting the check thresholds', qd.length, `${qd.length} of ${dipsN} dips have quality score ≥ ${$('qmin').value} and net margin above 0 · drop window: ${$('win').value === 'any' ? 'default' : 'chosen window'}`, qd.map(r => r.t));
+  mk('tile-quality', 'Dips meeting the check thresholds', qd.length, `${qd.length} of the ${dipsN} dips below meet the check thresholds (quality score ≥ ${$('qmin').value}, net margin above 0) · drop window: ${$('win').value === 'any' ? 'default' : 'chosen window'}`, qd.map(r => r.t));
   mk('tile-new', 'New since the previous close', newQ.length, newQ.length ? 'Started meeting the check thresholds with the latest close' : 'Same dips meeting the check thresholds as the previous close', newQ.map(r => r.t));
   mk('tile-knife', 'Falling-knife flags', kn.length, 'Dipping inside a long downtrend', kn.map(r => r.t));
   const t = el('div', 'tile'); t.dataset.testid = 'tile-market'; t.append(el('div', 'lab', 'Market context'));

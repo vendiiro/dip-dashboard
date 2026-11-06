@@ -12,7 +12,7 @@ function brief(all) {
   const newQ = qd.filter(r => wasQualityDip(r) === false);
   const h = el('h2', null, 'Today in brief'); h.id = 'brief-h';
   h.append(el('span', 'sub'));
-  const sub = h.lastChild; sub.append(el('span', 'dot', ' · '), 'a description of the latest close, not a forecast.'); const rest = el('span', 'subrest', ' Dip and quality counts follow the window and quality settings; the rest covers all screened stocks.'); sub.append(rest);
+  const sub = h.lastChild; const rest = el('span', 'subrest', 'Dip and quality counts follow the window and quality settings; the rest covers all screened stocks.'); sub.append(rest);
   const p1 = el('p'), dl = el('a', null, 'Definitions'); dl.href = '#def-q';
   p1.append(`${dips.length} of ${all.length} screened stocks are flagged as dips; ${qd.length} of them meet the check thresholds (see `, dl, `)${newQ.length ? ' and ' + newQ.length + ' ' + (newQ.length === 1 ? 'is' : 'are') + ' new since the previous close' : ''}.`);
   const p2 = el('p', 'idxline');
@@ -27,5 +27,6 @@ function brief(all) {
   if (nIdx) p2.append(`${far} of ${nIdx} flagged dips fell at least 5 points more than their own index.`);
   box.append(h, p1);
   if (p2.childNodes.length) box.append(p2);
+  box.append(el('p', 'briefend', 'This describes the latest close; it is not a forecast.'));
 }
 

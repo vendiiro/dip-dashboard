@@ -35,8 +35,7 @@
   .tiles .tile:nth-child(1),.tiles .tile:nth-child(4){grid-column:1 / -1}
   .tile{padding:10px 12px}
   .tile .foot,.tile:not(:first-child) .chips{display:none}
-  .brief .sub{display:block;margin-top:2px}
-  .brief .sub .subrest,.brief .sub .dot{display:none}
+  .brief .sub{display:none}
   .tile .big{font-size:24px}
   .mktline{display:block}
   .brief .idxline{display:none}   /* the index moves are in the Market context tile; the phone brief keeps the first sentence */
