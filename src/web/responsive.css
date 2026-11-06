@@ -9,6 +9,8 @@
 @media (max-width:600px){
   .scroll,.colbtn{display:none}
   .cards{display:flex}
+  /* Opened card: the short, readable panels first (quality checks, key numbers), the long chart and headlines last. */
+  .dgrid>:nth-child(3){order:1} .dgrid>:nth-child(2){order:2} .dgrid>:nth-child(1){order:3}
   .brief p{font-size:13.5px}
   .seg button{min-height:40px;padding:6px 12px}
   .ctl select,.ctl input{min-height:40px}

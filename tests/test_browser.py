@@ -584,6 +584,15 @@ def test_status_pill_is_red_only_for_a_real_error(browser, demo_html, tmp_path, 
     page.close()
 
 
+def test_phone_opened_card_shows_checks_and_numbers_before_the_chart(browser, demo_html):
+    ph, _ = open_page(browser, demo_html, 390, 844)
+    ph.locator("#cards .schead").first.click()
+    ys = ph.evaluate("(() => { const d = document.querySelector('#cards .scdetail'); const top = s => [...d.querySelectorAll('h3')].find(h => h.textContent.startsWith(s)).getBoundingClientRect().top; "
+                     "return [d.querySelector('.whystrip') ? d.querySelector('.whystrip').getBoundingClientRect().top : -1, top('Quality checks'), top('Key numbers'), top('1 year'), top('Headlines')]; })()")
+    assert ys[1] < ys[2] < ys[3] < ys[4] and ys[0] < ys[1]
+    ph.close()
+
+
 def test_phone_sort_chooser_is_visible_without_opening_filters(browser, demo_html):
     ph, _ = open_page(browser, demo_html, 390, 844)
     assert ph.locator("#controls").is_hidden() and ph.locator("#sortsel").is_visible()
