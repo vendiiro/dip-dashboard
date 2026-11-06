@@ -65,7 +65,7 @@ The "Used by" column says which file would break: `browser` = `tests/test_browse
 | `id:ctlsum` | browser | Summary on that button, e.g. "All dips · All · Quality score ≥ 60" |
 | `id:scrollcue` | browser | "Scroll sideways for more columns ›" cue above the table; visible only while the table scrolls sideways (`.scroll.hs`) |
 | `id:dqic` | browser | Icon inside `#dqbtn`: ✓ all clear, • notes only (class `s-note`), ✕ a real error (`s-crit`) |
-| `id:dqbtn` | browser | Data-quality badge button (also shows "N stock(s) failed to draw"; wording for stocks without price data is "N without price data") |
+| `id:dqbtn` | browser | Data-quality badge button (also shows "N stock(s) failed to draw"; wording for stocks left out or with a failed fetch is "N stock(s) left out"; red at 5% of the universe or when a region has no rows) |
 | `id:dqpanel` | browser | Data-quality panel opened by `#dqbtn` |
 | `id:stale` | browser | Stale-data banner element (FE-3) |
 | `id:fail` | browser, visual | Visible failure alert (FE-4) |

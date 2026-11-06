@@ -574,12 +574,19 @@ def test_market_adjusted_row_shows_no_rough_note_and_shows_se(browser, demo_html
     page.close()
 
 
-@pytest.mark.parametrize("check, cls, icon", [("fetch_failed", "s-note", "•"), ("stale", "s-note", "•"), ("bad_run", "s-crit", "✕")])
-def test_status_pill_is_red_only_for_a_real_error(browser, demo_html, tmp_path, check, cls, icon):
-    js = "DATA.issues = [{severity: 'error', check: '%s', ticker: DATA.rows[0].t, detail: 'x'}, {severity: 'warn', check: 'missing_values', ticker: DATA.rows[1].t, detail: 'y'}];" % check
+@pytest.mark.parametrize("n, check, drop_region, cls, icon, label", [
+    (1, "fetch_failed", None, "s-note", "•", "1 stock left out"),
+    (4, "stale", None, "s-note", "•", "4 stocks left out"),                 # below the threshold: max(5, 5% of 348) = 18
+    (30, "fetch_failed", None, "s-crit", "✕", "30 stocks left out"),
+    (1, "fetch_failed", "Nordic", "s-crit", "✕", "1 stock left out"),        # a whole region has no rows
+    (1, "bad_run", None, "s-crit", "✕", "1 other note"),                     # not stock-level: a real error
+])
+def test_status_pill_is_red_only_for_a_real_problem(browser, demo_html, tmp_path, n, check, drop_region, cls, icon, label):
+    js = ("DATA.issues = DATA.rows.slice(0, %d).map(r => ({severity: 'error', check: '%s', ticker: r.t, detail: 'x'}));" % (n, check)
+          + ("DATA.rows = DATA.rows.filter(r => r.region !== '%s');" % drop_region if drop_region else ""))
     page, errors = open_page(browser, variant_html(tmp_path, demo_html, js))
     assert cls in page.get_attribute("#dqbtn", "class") and page.inner_text("#dqic") == icon
-    assert "2 other notes" in page.inner_text("#dqbtn")
+    assert label in page.inner_text("#dqbtn")
     assert errors == []
     page.close()
 

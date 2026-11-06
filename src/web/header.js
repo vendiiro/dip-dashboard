@@ -31,17 +31,20 @@ guard('the data-quality badge', function dataQuality() {
   const skipped = DATA.data_quality || [];
   const checks = iss.filter(i => i.check === 'crosscheck_ok' || i.check === 'crosscheck_diff');
   const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
-  // A ticker the source simply did not return is shown as "without price data" (a warning), not as a red error: the run itself is fine.
-  // Red only for a real error. One stock's data problem (no data, a failed fetch, an old last bar) is a note: that stock is left out or flagged, the run is fine.
+  // Stock-level problems (no data, a failed fetch, an old last bar) leave that stock out or flagged: a few are a note (neutral dot).
+  // Red when they reach 5% of the universe (at least 5 stocks), or when a whole region has no rows: then the run itself looks broken.
   const STOCK_LEVEL = ['no_data', 'fetch_failed', 'stale'];
   const hardErrs = errs.filter(i => !STOCK_LEVEL.includes(i.check));
-  const state = hardErrs.length ? 'crit' : (errs.length || warns.length) ? 'note' : 'ok';
+  const leftOut = new Set([...errs.filter(i => STOCK_LEVEL.includes(i.check)).map(i => i.ticker), ...skipped.map(i => i.t)]).size;
+  const tooMany = leftOut >= Math.max(5, Math.ceil(0.05 * (rows.length + skipped.length)));
+  const emptyRegion = ['US', 'Europe', 'Nordic'].some(g => !rows.some(r => r.region === g));
+  const state = (hardErrs.length || tooMany || emptyRegion) ? 'crit' : (errs.length || warns.length) ? 'note' : 'ok';
   $('dqbtn').className = 'dq s-' + state;
   $('dqic').textContent = state === 'ok' ? '✓' : state === 'note' ? '•' : '✕';
   const partial = warns.filter(i => i.check === 'partial_bar').length;
-  const otherNotes = errs.filter(i => i.check !== 'no_data').length + warns.length - partial;
+  const otherNotes = hardErrs.length + warns.length - partial;
   const parts = [rows.length + ' screened'];
-  if (skipped.length) parts.push(skipped.length + ' without price data');
+  if (leftOut) parts.push(plural(leftOut, 'stock') + ' left out');
   if (partial) parts.push(partial + ' intraday');
   if (otherNotes) parts.push(plural(otherNotes, 'other note'));
   $('dqlabel').textContent = (state === 'ok' ? 'Data checks passed · ' : '') + parts.join(' · ');
