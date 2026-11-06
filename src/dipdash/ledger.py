@@ -398,7 +398,7 @@ def _one(d: pd.DataFrame, fl_mask: pd.Series, h: int, b, allow_interval: bool | 
 
 
 def summarize_scores(scored: pd.DataFrame, s: Settings) -> pd.DataFrame:
-    """Flagged minus same-date unflagged, per rule version (settings_hash), section (any dip, Quality dip only), view
+    """Flagged minus same-date unflagged, per rule version (settings_hash), section (any dip, Dip, more checks passed), view
     (after cooldown first, all nights second) and horizon. Never pools rule versions. Gross is before costs; net subtracts
     one round-trip cost from the flagged side only; net_diff_2x doubles that cost. The difference is taken date by date,
     dates counting equally, and the interval resamples whole calendar months. An interval needs MIN_FLAGGED events and
@@ -416,7 +416,7 @@ def summarize_scores(scored: pd.DataFrame, s: Settings) -> pd.DataFrame:
         sub["flagged"] = sub["flagged"].astype(bool)
         sections = [("any dip", sub["flagged"])]
         if "setup" in sub.columns:
-            sections.append(("Quality dip only", sub["flagged"] & (sub["setup"] == "Quality dip")))
+            sections.append(("Dip, more checks passed", sub["flagged"] & (sub["setup"] == "Quality dip")))
         for name, mask in sections:
             keep = after_cooldown(sub[mask], b.cooldown_days)
             views = (("after cooldown", mask & keep.reindex(sub.index, fill_value=False)), ("all nights", mask))

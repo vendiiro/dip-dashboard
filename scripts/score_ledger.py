@@ -26,8 +26,8 @@ from dipdash.config import load_settings  # noqa: E402
 from dipdash.fsio import atomic_write_text  # noqa: E402
 from dipdash.ledger import MIN_FLAGGED, MIN_MONTHS, pick_raw, read_ledger, score, summarize_scores  # noqa: E402
 
-CAVEAT = ("A simulation of a world with no effect found that nominal 90% intervals covered the true value about 85 to 91% "
-          "of the time at these sizes, so the intervals shown run somewhat narrow.")
+CAVEAT = ("In a synthetic no-effect test run during review (not saved in this repository), nominal 90% intervals at these sizes "
+          "covered somewhat less than 90%, so treat the intervals as somewhat too narrow.")
 
 
 def pct(x: float) -> str:

@@ -275,11 +275,11 @@ NOT_SHOWN = "The range is not shown on the dashboard without Iiro's decision."
 def ship_text(v1: dict, v2: dict) -> str:
     """The verdict wording, used by the report and the console so they always agree."""
     if v1["pass"]:
-        head = "RANGE MAY SHIP (attempt 1, raw model, passes both pre-stated tests)"
+        head = "Descriptive re-check (amended dip rule): passes the pre-stated criterion (attempt 1, raw model, both tests)"
     elif v2["pass"]:
-        head = "RANGE MAY SHIP ONLY WITH THE ATTEMPT-2 SCALE FACTOR (raw model failed, recalibrated model passes both tests)"
+        head = "Descriptive re-check (amended dip rule): passes the pre-stated criterion only with the attempt-2 scale factor (raw model failed, recalibrated model passes both tests)"
     else:
-        head = "RANGE DOES NOT SHIP (both attempts fail the pre-stated criterion)"
+        head = "Descriptive re-check (amended dip rule): fails the pre-stated criterion (both attempts fail)"
     return f"{head}. {NOT_SHOWN}"
 
 
@@ -452,6 +452,7 @@ def main(argv: list[str] | None = None) -> int:
     write_report(out, res, meta, v1, v2, ship)
     registry.mark_complete(reg)
     print(ship)
+    print(DEFINITION_CHANGE.format(start_date=meta["start_date"]))
     print(v1)
     print(v2)
     print(f"k={ks2}")

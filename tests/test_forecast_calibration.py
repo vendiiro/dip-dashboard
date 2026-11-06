@@ -136,11 +136,13 @@ def test_cutoff_ignores_stocks_the_forecast_drops(tmp_path, monkeypatch):
     assert "SHORT" not in spec["data"]["tickers"]
 
 
-def test_report_states_the_definition_change_and_no_ship_without_a_decision(tmp_path, monkeypatch):
+def test_report_states_the_definition_change_and_no_ship_without_a_decision(tmp_path, monkeypatch, capsys):
     from test_backtest_run import synthetic
     prices, ix, uni, q, s = synthetic(n_stocks=3)
     bars = {t: (c, pd.Series(1000.0, index=c.index)) for t, c in prices.items()}
     out = run_main(tmp_path, monkeypatch, bars, uni, s)
+    console = " ".join(capsys.readouterr().out.split())
+    assert "Descriptive re-check (amended dip rule)" in console and "Definition change:" in console
     txt = (out / "report_forecast.md").read_text(encoding="utf-8")
     mod = load_script()
     assert " ".join(mod.DEFINITION_CHANGE.format(start_date=s.backtest.start_date).split()) in " ".join(txt.split())
@@ -152,6 +154,7 @@ def test_report_states_the_definition_change_and_no_ship_without_a_decision(tmp_
 def test_ship_text_carries_the_qualifier_in_every_branch():
     mod = load_script()
     ok, bad = {"pass": True}, {"pass": False}
-    for v1, v2, head in ((ok, bad, "RANGE MAY SHIP (attempt 1"), (bad, ok, "RANGE MAY SHIP ONLY WITH THE ATTEMPT-2"), (bad, bad, "RANGE DOES NOT SHIP")):
+    for v1, v2, head in ((ok, bad, "Descriptive re-check (amended dip rule): passes the pre-stated criterion (attempt 1"), (bad, ok, "Descriptive re-check (amended dip rule): passes the pre-stated criterion only with the attempt-2"), (bad, bad, "Descriptive re-check (amended dip rule): fails the pre-stated criterion")):
         txt = mod.ship_text(v1, v2)
         assert txt.startswith(head) and txt.endswith("without Iiro's decision."), txt
+        assert "RANGE MAY SHIP" not in txt and "DOES NOT SHIP" not in txt

@@ -220,7 +220,7 @@ def test_quality_dip_section_is_separate():
     df = _scored_panel()
     df.loc[df.index[df["flagged"]][:100], "setup"] = "Dip, low quality"
     out = summarize_scores(df, load_settings())
-    assert _get(out, "any dip")["n_flagged"] == 300 and _get(out, "Quality dip only")["n_flagged"] == 200
+    assert _get(out, "any dip")["n_flagged"] == 300 and _get(out, "Dip, more checks passed")["n_flagged"] == 200
 
 
 def test_rule_versions_are_never_pooled():
@@ -385,8 +385,9 @@ def test_score_script_text_has_no_banned_phrase_and_states_the_limits():
     spec.loader.exec_module(cw)
     assert cw.scan_text(Path(mod.__file__).read_text(encoding="utf-8")) == []
     text = "\n".join(mod.explain(0.001, 0.9, 21)) + mod.CAVEAT
-    for needle in ("round trip", "Gross", "Net", "Survivorship bias", "unscored", "85 to 91%"):
+    for needle in ("round trip", "Gross", "Net", "Survivorship bias", "unscored", "not saved in this repository"):
         assert needle in text
+    assert "85" not in mod.CAVEAT and "91" not in mod.CAVEAT
 
 
 def test_score_script_runs_on_a_synthetic_ledger(tmp_path, capsys):
