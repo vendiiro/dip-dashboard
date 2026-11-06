@@ -57,7 +57,7 @@ function hist(all) {
   const lo = Math.floor(rawLo / unit + 1e-9) * unit, hi = Math.ceil(rawHi / unit - 1e-9) * unit, bins = [];
   for (let b = lo; b < hi - 1e-9; b += step) bins.push({a: b, b: b + step, items: all.filter(r => r[key] != null && r[key] >= b - 1e-12 && r[key] < b + step - 1e-12)});
   if (bins.length) bins.at(-1).items = all.filter(r => r[key] != null && r[key] >= bins.at(-1).a - 1e-12 && r[key] <= bins.at(-1).b + 1e-12);
-  const W = chartW(560, 64), H = 210, pl = 26, pr = 8, pt = 18, pb = 28, mxc = Math.max(1, ...bins.map(b => b.items.length));
+  const W = chartW(560, 64), H = 210, pl = 26, pr = 16, pt = 18, pb = 28, mxc = Math.max(1, ...bins.map(b => b.items.length));
   const X = v => pl + (v - lo) / (hi - lo) * (W - pl - pr), Y = k => pt + (1 - k / mxc) * (H - pt - pb);
   const svg = sv('svg', {viewBox: `0 0 ${W} ${H}`, width: W, role: 'img', 'aria-label': 'Histogram of moves'});
   for (let k = 0; k <= mxc; k += Math.max(1, Math.ceil(mxc / 4))) { sv('line', {x1: pl, x2: W - pr, y1: Y(k), y2: Y(k), class: 'tick'}, svg); sv('text', {x: pl - 6, y: Y(k) + 4, 'text-anchor': 'end'}, svg).textContent = k; }
