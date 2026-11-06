@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 import time
 from datetime import date, datetime
 from pathlib import Path
@@ -19,8 +20,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-MAIN = Path(r"C:\Users\Käyttäjä\Documents\dip-dashboard-test\dip-dashboard")
 HERE = Path(__file__).resolve().parent
+REPO = HERE.parents[1]                       # the repository this script lives in
+# Default: read the screen from this repository. Pass --main DIR to read it from another checkout (read-only).
+MAIN = REPO if (REPO / "output" / "digest.md").exists() else REPO.parent / "dip-dashboard"   # a worktree has no output/: use the sibling main checkout
+sys.path.insert(0, str(REPO / "src"))
 OUT = HERE / "research-brief-2026-11-06.md"
 TODAY = date(2026, 11, 6)
 
@@ -113,20 +117,6 @@ def last_report(earn: dict, tkr: str) -> str:
     return past[-1] if past else "unknown"
 
 
-def checks(f: dict, cap_usd: float | None) -> tuple[int, int]:
-    """(passed, scored) over the six project checks; a check with no data is not scored."""
-    tests = [
-        (f.get("returnOnEquity"), lambda v: v >= 0.12),
-        (f.get("profitMargins"), lambda v: v >= 0.08),
-        (f.get("debtToEquity"), lambda v: v <= 150),
-        (f.get("freeCashflow"), lambda v: v > 0),
-        (f.get("revenueGrowth"), lambda v: v > 0),
-        (cap_usd, lambda v: v >= 20e9),
-    ]
-    scored = [(v, fn) for v, fn in tests if v is not None]
-    return sum(1 for v, fn in scored if fn(v)), len(scored)
-
-
 # ---------- live bars ----------
 def fetch_closes(tickers: list[str], batch: int = 20, pause: float = 2.0) -> pd.DataFrame:
     import yfinance as yf
@@ -214,13 +204,17 @@ def build(args) -> None:
     fx = fx_rates()
 
     # eligibility for list (b)
+    from dipdash.config import Stock, load_settings
+    from dipdash.quality import score_universe
+    stocks = [Stock(r.ticker, r.name, r.region, str(r.sector) if pd.notna(r.sector) else "") for r in uni.itertuples()]
+    qres = score_universe(fund, stocks, load_settings(main / "config" / "settings.toml").quality, fx, use_sector=True)   # the dashboard's scoring path
     rows = []
     for t in uni.ticker:
         f = fund.get(t)
         if not f or f.get("marketCap") is None:
             continue
         cap = f["marketCap"] * fx.get(f.get("currency", "USD"), np.nan)
-        passed, scored = checks(f, f["marketCap"] * fx.get(f.get("currency", "USD"), np.nan))
+        passed, scored = qres[t].passed, qres[t].scored
         rows.append({"ticker": t, "cap": cap, "passed": passed, "scored": scored})
     el = pd.DataFrame(rows)
     cand = el[(el.cap >= MIN_CAP_USD) & (el.passed >= MIN_CHECKS)]
@@ -306,7 +300,7 @@ def build(args) -> None:
     A("## 2b. Large companies with lower measured risk, plus GOOGL and NVDA\n")
     A(f"Selection rule (set by the author before the 5-year figures were computed; this cannot be verified from the files): from `config/universe.csv`, keep companies with market cap of at least "
       f"{MIN_CAP_USD / 1e9:.0f}B USD (cached fundamentals, converted at the {TODAY} rate) and at least {MIN_CHECKS} scored quality checks passed "
-      f"(of the six project checks; checks without data are not scored); require about 4 or more years of bars. "
+      f"(the project checks with the dashboard's sector rules; checks without data are not scored); require about 4 or more years of bars. "
       f"That leaves **{len(ranked)}** names. Rank by lowest 5-year volatility and take the first {N_LOWEST}; add GOOGL and NVDA. "
       f"Median 5-year volatility of the {len(ranked)} eligible names: {pct(med5)}.\n")
     A("| Ticker | Name | Group | Rank by 5y vol | Vol 1y | Vol 5y | Max drawdown 5y | Current drawdown | Beta | Checks passed | Next report |\n|---|---|---|---|---|---|---|---|---|---|---|")
