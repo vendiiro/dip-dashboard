@@ -54,6 +54,27 @@ def test_sample_is_reproducible_capped_and_within_the_eligible_set():
     assert len(pick_sample(["A", "B"], 5, seed=1)) == 2 and pick_sample([], 5, seed=1) == []
 
 
+NORDIC = {".HE", ".ST", ".CO", ".OL"}
+MIXED = [f"T{i}" for i in range(20)] + ["NOKIA.HE", "ERIC-B.ST", "NOVO-B.CO", "EQNR.OL"]
+
+
+def test_sample_has_a_nordic_name_for_many_seeds():
+    from dipdash.exchanges import suffix_of
+    for seed in range(100):
+        assert any(suffix_of(t) in NORDIC for t in pick_sample(MIXED, 5, seed=seed)), seed
+
+
+def test_sample_is_reproducible_with_nordic_names():
+    assert pick_sample(MIXED, 5, seed=20261030) == pick_sample(MIXED, 5, seed=20261030)
+    assert len(set(pick_sample(MIXED, 5, seed=7))) == 5
+
+
+def test_sample_with_no_nordic_eligible_still_works():
+    us = [f"T{i}" for i in range(20)]
+    s = pick_sample(us, 5, seed=3)
+    assert len(s) == 5 and set(s) <= set(us) and s == pick_sample(us, 5, seed=3)
+
+
 def test_run_crosscheck_handles_ok_diff_and_unavailable():
     c = geometric(30, 0.01)
     bad = c * 1.05

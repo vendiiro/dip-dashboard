@@ -223,16 +223,46 @@ def fetch_indices(specs, fetch_close: Callable[[str], pd.Series | None] | None =
     return out
 
 
-def fetch_index_history(symbols: dict[str, str], start: str) -> dict[str, pd.Series]:
-    """{group: close series} for the backtest's market baselines, e.g. {"US": "^GSPC"}."""
+INDEX_ATTEMPTS = 3           # tries per index symbol for the backtest baselines
+INDEX_BACKOFF_SECONDS = 2.0  # wait before retry k is INDEX_BACKOFF_SECONDS * 2**k (2 s, then 4 s)
+
+
+def _yahoo_history_close(symbol: str, start: str) -> pd.Series:
     import yfinance as yf
 
+    return yf.Ticker(symbol).history(start=start)["Close"]
+
+
+def fetch_index_history(symbols: dict[str, str], start: str, *,
+                        fetch: Callable[[str, str], pd.Series] | None = None,
+                        sleep: Callable[[float], None] = time.sleep) -> dict[str, pd.Series]:
+    """{group: close series} for the backtest's market baselines, e.g. {"US": "^GSPC"}.
+
+    `fetch(symbol, start)` returns a close series (default: yfinance). Each symbol gets INDEX_ATTEMPTS tries with
+    2 s and 4 s waits in between; if all fail, RuntimeError names the symbol. Dates are returned naive and normalised
+    to midnight, whichever source supplied them, so the series can be compared by date."""
+    fetch = fetch or _yahoo_history_close
     out = {}
     for g, sym in symbols.items():
-        c = yf.Ticker(sym).history(start=start)["Close"].dropna()
+        c = _fetch_with_retry(sym, start, fetch, sleep)
+        c = c.dropna()
         c.index = pd.DatetimeIndex(c.index).tz_localize(None).normalize()      # Yahoo returns exchange-local timestamps; compare by date
         out[g] = c
     return out
+
+
+def _fetch_with_retry(sym: str, start: str, fetch: Callable[[str, str], pd.Series],
+                      sleep: Callable[[float], None]) -> pd.Series:
+    last: Exception | None = None
+    for attempt in range(INDEX_ATTEMPTS):
+        if attempt:
+            sleep(INDEX_BACKOFF_SECONDS * 2 ** (attempt - 1))
+        try:
+            return fetch(sym, start)
+        except Exception as e:                          # network, rate limit, library error: worth another try
+            last = e
+    raise RuntimeError(f"index history for {sym} failed after {INDEX_ATTEMPTS} attempts: "
+                       f"{type(last).__name__}: {last}") from last
 
 
 def _yahoo_index_close(symbol: str) -> pd.Series | None:

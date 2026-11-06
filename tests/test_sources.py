@@ -169,6 +169,34 @@ def test_fundamentals_default_needs_yfinance_only_when_fetching(tmp_path):
 
 
 # ---- indices, FX, earnings, news -------------------------------------------------------------------------------
+def test_index_history_retries_then_succeeds():
+    calls, sleeps = [], []
+
+    def flaky(sym, start):
+        calls.append((sym, start))
+        if len(calls) <= 2:
+            raise ConnectionError("boom")
+        return geometric(5, 0.01)
+
+    out = data.fetch_index_history({"US": "^GSPC"}, "2025-01-01", fetch=flaky, sleep=sleeps.append)
+    assert len(calls) == 3 and sleeps == [2, 4] and len(out["US"]) == 5
+
+
+def test_index_history_dates_are_naive_and_normalised_for_aware_input():
+    idx = pd.date_range("2026-10-01", periods=5, freq="B", tz="America/New_York") + pd.Timedelta(hours=16)
+    s = pd.Series(range(1, 6), index=idx, dtype=float)
+    out = data.fetch_index_history({"US": "^GSPC"}, "2026-09-01", fetch=lambda sym, st: s, sleep=lambda _: None)
+    assert out["US"].index.tz is None and (out["US"].index == out["US"].index.normalize()).all()
+
+
+def test_index_history_names_the_failed_symbol():
+    def broken(sym, st):
+        raise TimeoutError("slow")
+
+    with pytest.raises(RuntimeError, match=r"\^GSPC"):
+        data.fetch_index_history({"US": "^GSPC"}, "2025-01-01", fetch=broken, sleep=lambda _: None)
+
+
 def test_index_absent_is_omitted_and_history_filled_for_the_rest():
     y = fake(index={"^GSPC": series(500)}, tz="America/New_York")
     specs = [IndexSpec("^GSPC", "S&P 500", "US"), IndexSpec("^OMXS30", "OMXS30", "Nordic")]

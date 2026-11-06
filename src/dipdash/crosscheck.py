@@ -8,6 +8,7 @@ from typing import Callable
 
 import pandas as pd
 
+from .exchanges import suffix_of
 from .validate import Issue
 
 TOLERANCE = 0.01   # relative difference in the close above which a day is reported
@@ -48,9 +49,22 @@ def compare_closes(ticker: str, source: str, ref: pd.Series, other: pd.Series, t
                       float(rel.max()), n_over, str(ref.index[-1].date()), str(other.index[-1].date()))
 
 
+NORDIC_SUFFIXES = {".HE", ".ST", ".CO", ".OL"}
+
+
 def pick_sample(eligible: list[str], n: int, seed: int) -> list[str]:
-    """n random tickers, reproducible for a given seed (the daily run seeds with the date)."""
-    return random.Random(seed).sample(sorted(eligible), min(n, len(eligible)))
+    """n random tickers, reproducible for a given seed (the daily run seeds with the date).
+
+    If any Nordic ticker is eligible, at least one is in the sample: the last pick is swapped for a random Nordic
+    ticker when the random draw has none. The swap uses the same seeded generator, so the result is still reproducible."""
+    rng = random.Random(seed)
+    pool = sorted(eligible)
+    k = min(n, len(pool))
+    picked = rng.sample(pool, k)
+    nordic = [t for t in pool if suffix_of(t) in NORDIC_SUFFIXES]
+    if picked and nordic and not any(suffix_of(t) in NORDIC_SUFFIXES for t in picked):
+        picked[-1] = rng.choice(nordic)
+    return picked
 
 
 def run_crosscheck(tickers: list[str], *, fetch_ref: Callable[[str, str, str], pd.Series | None],
