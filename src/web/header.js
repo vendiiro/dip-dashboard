@@ -32,12 +32,14 @@ guard('the data-quality badge', function dataQuality() {
   const checks = iss.filter(i => i.check === 'crosscheck_ok' || i.check === 'crosscheck_diff');
   const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
   // A ticker the source simply did not return is shown as "without price data" (a warning), not as a red error: the run itself is fine.
-  const hardErrs = errs.filter(i => i.check !== 'no_data');
-  const state = hardErrs.length ? 'crit' : (errs.length || warns.length) ? 'warn' : 'ok';
+  // Red only for a real error. One stock's data problem (no data, a failed fetch, an old last bar) is a note: that stock is left out or flagged, the run is fine.
+  const STOCK_LEVEL = ['no_data', 'fetch_failed', 'stale'];
+  const hardErrs = errs.filter(i => !STOCK_LEVEL.includes(i.check));
+  const state = hardErrs.length ? 'crit' : (errs.length || warns.length) ? 'note' : 'ok';
   $('dqbtn').className = 'dq s-' + state;
-  $('dqic').textContent = state === 'ok' ? '✓' : state === 'warn' ? '!' : '✕';
+  $('dqic').textContent = state === 'ok' ? '✓' : state === 'note' ? '•' : '✕';
   const partial = warns.filter(i => i.check === 'partial_bar').length;
-  const otherNotes = hardErrs.length + warns.length - partial;
+  const otherNotes = errs.filter(i => i.check !== 'no_data').length + warns.length - partial;
   const parts = [rows.length + ' screened'];
   if (skipped.length) parts.push(skipped.length + ' without price data');
   if (partial) parts.push(partial + ' intraday');

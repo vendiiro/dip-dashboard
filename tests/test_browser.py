@@ -574,6 +574,16 @@ def test_market_adjusted_row_shows_no_rough_note_and_shows_se(browser, demo_html
     page.close()
 
 
+@pytest.mark.parametrize("check, cls, icon", [("fetch_failed", "s-note", "•"), ("stale", "s-note", "•"), ("bad_run", "s-crit", "✕")])
+def test_status_pill_is_red_only_for_a_real_error(browser, demo_html, tmp_path, check, cls, icon):
+    js = "DATA.issues = [{severity: 'error', check: '%s', ticker: DATA.rows[0].t, detail: 'x'}, {severity: 'warn', check: 'missing_values', ticker: DATA.rows[1].t, detail: 'y'}];" % check
+    page, errors = open_page(browser, variant_html(tmp_path, demo_html, js))
+    assert cls in page.get_attribute("#dqbtn", "class") and page.inner_text("#dqic") == icon
+    assert "2 other notes" in page.inner_text("#dqbtn")
+    assert errors == []
+    page.close()
+
+
 def test_phone_sort_chooser_is_visible_without_opening_filters(browser, demo_html):
     ph, _ = open_page(browser, demo_html, 390, 844)
     assert ph.locator("#controls").is_hidden() and ph.locator("#sortsel").is_visible()
