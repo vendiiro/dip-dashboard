@@ -24,7 +24,7 @@ function tiles(all) {
     }
     if (foot) t.append(el('div', 'foot', foot)); box.append(t);
   };
-  mk('tile-quality', 'Dips meeting the check thresholds', qd.length, `${qd.length} of the ${dipsN} dips below meet the check thresholds (quality score ≥ ${$('qmin').value}, net margin above 0) · drop window: ${$('win').value === 'any' ? 'default' : 'chosen window'}`, qd.map(r => r.t));
+  mk('tile-quality', 'Dips meeting the check thresholds', qd.length, `${qd.length} of the ${dipsN} dips meet the check thresholds (quality score ≥ ${$('qmin').value}, net margin above 0) · drop window: ${$('win').value === 'any' ? 'default' : 'chosen window'}`, qd.map(r => r.t));
   mk('tile-new', 'New since the previous close', newQ.length, newQ.length ? 'Started meeting the check thresholds with the latest close' : 'Same dips meeting the check thresholds as the previous close', newQ.map(r => r.t));
   mk('tile-knife', 'Falling-knife flags', kn.length, 'Dipping inside a long downtrend', kn.map(r => r.t));
   const t = el('div', 'tile'); t.dataset.testid = 'tile-market'; t.append(el('div', 'lab', 'Market context'));
