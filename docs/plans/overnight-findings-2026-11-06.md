@@ -9,7 +9,7 @@ The most important finding is not code: the main backtest interval is biased on 
 A ledger now exists, but it records nothing until the branch is merged and the nightly task runs from it.
 
 How to review:
-- `git log --oneline f14d55c..HEAD` (about 44 commits, including the final-review fix commits; `git diff --stat f14d55c..HEAD` is 70 files).
+- `git log --oneline f14d55c..HEAD` (45 commits, including the final-review fix commits; `git diff --stat f14d55c..HEAD` is 70 files).
 - Open the worktree folder, or `git checkout overnight-2026-11-06` in a clean place.
 - To merge (your call): first move the untracked `docs/plans/2026-11-06-overnight-7h.md` out of the main checkout (the branch adds the same path; it is the only collision, and `pytest.ini` and `docs/m2-data-verification.md` are not touched by the branch). Then `git merge --ff-only overnight-2026-11-06` on `dashboard-brief-compact-table`.
 - Backlog statuses are `review`, not `done`. See `docs/BACKLOG.md`, section "Overnight 2026-11-06".
@@ -104,7 +104,7 @@ Each line from the ledger (`.superpowers/sdd/2026-11-06-overnight-7h/progress.md
 | 8 | Task 4: `fundamentals_sha256` is in the hashed backtest meta (V3 depends on it). | A real backtest on another day gets a new hash with the same rule; you can move it to provenance if that is noisy. |
 | 9 | Task 5: Opus used for that review (it changes a pre-registered definition). | One more Opus call than your brief. |
 | 10 | Task 5: the forecast definition change stays, but every report and console line says it is a descriptive re-check and the range needs your decision. | You may prefer the old forecast definition. |
-| 11 | Task 6: the stats reviewer's simulation caveat is printed as measured on synthetic data. | Readers may treat 85 to 91% as exact (FU-17). |
+| 11 | Task 6: the stats reviewer's simulation caveat is printed as measured on synthetic data. | The 85 to 91% sentence was replaced in 70e2fb5; the ledger output now carries no percentage (FU-17). |
 | 12 | Only one full-suite-running implementer at a time (agents share the temp folder). | Slower, but avoids false failures. |
 | 13 | Task 6: ledger margin 60 minutes after close instead of 2 hours. | If Yahoo's closes lag over an hour, some bars could be wrong; moving the task later is your option. |
 | 14 | Task 13: red status at max(5, 5% of rows plus skipped) stock-level errors, or an empty region. | Judgement call, untested on a bad night. |

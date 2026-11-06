@@ -55,6 +55,8 @@ Name-specific notes:
 
 Selection rule (set by the author before the 5-year figures were computed; this cannot be verified from the files): from `config/universe.csv`, keep companies with market cap of at least 100B USD (cached fundamentals, converted at the 2026-11-06 rate) and at least 4 scored quality checks passed (of the six project checks; checks without data are not scored); require about 4 or more years of bars. That leaves **125** names. Rank by lowest 5-year volatility and take the first 15; add GOOGL and NVDA. Median 5-year volatility of the 125 eligible names: 28.7%.
 
+The quality counts in this brief were computed without the sector rules the dashboard uses (financial companies such as banks, utilities and real-estate companies are scored on fewer or relaxed checks there), so a count here can differ from the dashboard's for those sectors. The script now applies the sector rules; this saved copy was not regenerated.
+
 | Ticker | Name | Group | Rank by 5y vol | Vol 1y | Vol 5y | Max drawdown 5y | Current drawdown | Beta | Checks passed | Next report |
 |---|---|---|---|---|---|---|---|---|---|---|
 | KO | Coca-Cola | lowest 15 | 1 of 125 | 18.9% | 16.9% | −17.3% | −0.1% | 0.33 | 6 of 6 | 2027-02-09 |
