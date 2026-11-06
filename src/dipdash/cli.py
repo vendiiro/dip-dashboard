@@ -264,6 +264,13 @@ def main(argv: list[str] | None = None, sources: Sources | None = None) -> int:
                                           settings_path=CONFIG_DIR / "settings.toml", run_started=run_started,
                                           universe_size=len(universe), price_source=source)
                 print(f"Ledger: {n_new} new row(s) -> {data_dir / 'ledger' / 'flags.csv'}")
+                older = ledger.missing_columns(data_dir / "ledger" / "flags.csv")
+                if older:
+                    print(f"Ledger warning: the file has an older header; new rows leave out {', '.join(older)}")
+            except ledger.RunsLogError as exc:
+                msg = f"Ledger rows written but runs.csv failed: {exc}"
+                print(msg)
+                issues.append(Issue("*", "ledger_runs_log_failed", "warn", msg))
             except Exception as exc:
                 msg = f"Ledger not updated: {type(exc).__name__}: {exc}"
                 print(msg)

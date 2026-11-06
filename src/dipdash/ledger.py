@@ -37,7 +37,9 @@ DETAIL_FIELDS = ("price", "r1", "r5", "dd20", "vs200", "dd52", "why", "q_status"
 MIN_FLAGGED = 30                                            # an interval needs at least this many events after the cooldown ...
 MIN_MONTHS = 12                                             # ... spread over at least this many calendar months
 MAX_ENTRY_GAP_DAYS = 7                                      # the entry bar must be this close to the signal date
-SAFETY_HOURS = 2                                            # a row is recorded only if the run started this long after the close
+SAFETY_MINUTES = 60                                         # a row is recorded only if the run started this long after the close
+#   The nightly run (00:15 Helsinki) starts 75 minutes after the US close in winter and in summer, so 60 passes it; a price
+#   taken at 17:25 CET for a 17:30 close and validated at 17:46 CET is still rejected.
 _REQUIRED = {"asof", "ticker", "flagged", "recorded_at"}
 _BOOLS = {"True", "False"}
 
@@ -72,7 +74,7 @@ def _close_utc(ticker: str, asof: str) -> datetime | None:
 def prepare_rows(payload: dict, settings_hash: str, universe_hash: str, now: datetime, *, code: str = "",
                  run_started: datetime | None = None, price_source: dict | None = None) -> tuple[pd.DataFrame, dict[str, str]]:
     """Rows to record, and {ticker: reason} for every stock left out. Unflagged stocks are kept: they are the same-date baseline.
-    A stock is left out when its last bar may be partial, or when the run started less than SAFETY_HOURS after that
+    A stock is left out when its last bar may be partial, or when the run started less than SAFETY_MINUTES after that
     exchange's close on the bar's date (a price taken around the close can still be mid-session)."""
     stamp = now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     skipped = {d["t"]: d.get("reason", "left_out") for d in payload.get("data_quality", []) if "t" in d}
@@ -82,7 +84,7 @@ def prepare_rows(payload: dict, settings_hash: str, universe_hash: str, now: dat
             skipped[r["t"]] = "partial"
             continue
         close = _close_utc(r["t"], r["asof"]) if run_started is not None else None
-        if close is not None and (run_started - close).total_seconds() < SAFETY_HOURS * 3600:
+        if close is not None and (run_started - close).total_seconds() < SAFETY_MINUTES * 60:
             skipped[r["t"]] = "too_soon"
             continue
         q = r.get("q")
@@ -217,6 +219,19 @@ def _backup(path: Path) -> None:
     os.replace(tmp, path.with_name(path.stem + ".backup.csv"))
 
 
+class RunsLogError(OSError):
+    """The ledger rows were appended, but the line for runs.csv could not be written."""
+
+
+def missing_columns(path: Path | str) -> list[str]:
+    """Columns the current schema has that an existing ledger's older header lacks (rows appended there leave them out)."""
+    path = Path(path)
+    if not path.is_file() or path.stat().st_size == 0:
+        return []
+    header, _, _ = _parse(path)
+    return [c for c in LEDGER_COLS if c not in header]
+
+
 def _append_run(path: Path, rec: dict) -> None:
     new = not path.exists() or path.stat().st_size == 0
     buf = io.StringIO()
@@ -246,12 +261,15 @@ def record_run(payload: dict, s: Settings, universe_path: Path | str, ledger_pat
         read_ledger(ledger_path)                              # raises on a corrupt file, so a bad file never overwrites a good backup
         _backup(ledger_path)
     n = append_rows(ledger_path, rows)
-    _append_run(ledger_path.parent / "runs.csv", {
-        "recorded_at": now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "asof": max((r["asof"] for r in payload["rows"]), default=""), "universe_size": universe_size or "",
-        "screened": len(payload["rows"]), "rows_written": n,
-        "partial_count": sum(v == "partial" for v in skipped.values()), "too_soon_count": sum(v == "too_soon" for v in skipped.values()),
-        "skipped": json.dumps(skipped, sort_keys=True, separators=(",", ":"))})
+    try:
+        _append_run(ledger_path.parent / "runs.csv", {
+            "recorded_at": now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "asof": max((r["asof"] for r in payload["rows"]), default=""), "universe_size": universe_size or "",
+            "screened": len(payload["rows"]), "rows_written": n,
+            "partial_count": sum(v == "partial" for v in skipped.values()), "too_soon_count": sum(v == "too_soon" for v in skipped.values()),
+            "skipped": json.dumps(skipped, sort_keys=True, separators=(",", ":"))})
+    except Exception as exc:
+        raise RunsLogError(f"{n} row(s) were written; {type(exc).__name__}: {exc}") from exc
     return n
 
 

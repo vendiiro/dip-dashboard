@@ -403,3 +403,45 @@ def test_score_script_runs_on_a_synthetic_ledger(tmp_path, capsys):
     assert "needs years of nights before the result can mean much" in out and "not advice" in out and "too few for an interval" in out
     assert (tmp_path / "o.csv").exists()
     assert mod.main(["--ledger", str(tmp_path / "none.csv"), "--raw", str(raw)]) == 1
+
+
+@pytest.mark.parametrize("asof,season", [("2026-01-15", "winter"), ("2026-07-15", "summer")])
+def test_nightly_run_records_us_and_european_rows_in_both_seasons(asof, season):
+    from zoneinfo import ZoneInfo
+    hel = ZoneInfo("Europe/Helsinki")
+    nxt = (pd.Timestamp(asof) + pd.Timedelta(days=1)).date()
+    start = datetime(nxt.year, nxt.month, nxt.day, 0, 15, tzinfo=hel)          # the scheduled time
+    payload = {"rows": [row("AAA", asof=asof), row("SEB.ST", asof=asof, region="Europe")]}
+    for when in (start, start + timedelta(minutes=20)):                         # the run and its retry
+        df, skipped = prepare_rows(payload, "s", "u", when, run_started=when)
+        assert sorted(df["ticker"]) == ["AAA", "SEB.ST"] and skipped == {}, season
+
+
+def test_forty_five_minutes_after_the_us_close_is_not_recorded():
+    from zoneinfo import ZoneInfo
+    ny = ZoneInfo("America/New_York")
+    started = datetime(2026, 7, 15, 16, 45, tzinfo=ny)
+    df, skipped = prepare_rows({"rows": [row("AAA", asof="2026-07-15")]}, "s", "u", started, run_started=started)
+    assert df.empty and skipped == {"AAA": "too_soon"}
+    ok = datetime(2026, 7, 15, 17, 0, tzinfo=ny)                                # exactly 60 minutes passes
+    assert len(prepare_rows({"rows": [row("AAA", asof="2026-07-15")]}, "s", "u", ok, run_started=ok)[0]) == 1
+
+
+def test_missing_columns_names_what_an_older_header_lacks(tmp_path):
+    p = tmp_path / "flags.csv"
+    assert ledger.missing_columns(p) == []
+    p.write_text("asof,ticker,region,flagged,setup,q,knife,settings_hash,universe_hash,recorded_at\n", encoding="utf-8")
+    assert ledger.missing_columns(p) == ["code_hash", "schema_version", "detail"]
+    p.write_text(",".join(LEDGER_COLS) + "\n", encoding="utf-8")
+    assert ledger.missing_columns(p) == []
+
+
+def test_runs_log_failure_is_its_own_error_and_rows_stay_written(tmp_path):
+    uni = tmp_path / "universe.csv"
+    uni.write_text("ticker\nAAA\n", encoding="utf-8")
+    led = tmp_path / "ledger" / "flags.csv"
+    (tmp_path / "ledger").mkdir()
+    (tmp_path / "ledger" / "runs.csv").mkdir()                                  # cannot be opened as a file
+    with pytest.raises(ledger.RunsLogError):
+        record_run({"rows": [row("AAA")]}, load_settings(), uni, led, now=NOW)
+    assert list(read_ledger(led)["ticker"]) == ["AAA"]

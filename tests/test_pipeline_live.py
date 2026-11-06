@@ -285,3 +285,25 @@ def test_the_clock_is_read_before_the_prices_are_fetched(default_cfg, monkeypatc
     assert not flags.exists() or pd.read_csv(flags).empty
     runs = pd.read_csv(tmp / "data" / "ledger" / "runs.csv", dtype=str)
     assert runs["rows_written"].iloc[0] == "0" and int(runs["partial_count"].iloc[0]) + int(runs["too_soon_count"].iloc[0]) == len(ALL)
+
+
+def test_runs_log_failure_is_reported_as_rows_written(default_cfg, capsys):
+    tmp = default_cfg
+    (tmp / "data" / "ledger" / "runs.csv").mkdir(parents=True)
+    assert run_default(tmp, make_fake()) == 0
+    out = capsys.readouterr().out
+    assert "Ledger rows written but runs.csv failed" in out and "Ledger not updated" not in out
+    hit = [r for r in quality(tmp) if r["check"].startswith("ledger_")]
+    assert [r["check"] for r in hit] == ["ledger_runs_log_failed"] and hit[0]["severity"] == "warn"
+    assert (tmp / "data" / "ledger" / "flags.csv").stat().st_size > 0
+
+
+def test_older_header_file_gets_a_one_line_warning(default_cfg, capsys):
+    tmp = default_cfg
+    flags = tmp / "data" / "ledger" / "flags.csv"
+    flags.parent.mkdir(parents=True)
+    flags.write_text("asof,ticker,region,flagged,setup,q,knife,settings_hash,universe_hash,recorded_at\n", encoding="utf-8", newline="")
+    assert run_default(tmp, make_fake()) == 0
+    out = capsys.readouterr().out
+    assert out.count("Ledger warning: the file has an older header") == 1 and "detail" in out
+    assert flags.read_text(encoding="utf-8").splitlines()[1].count(",") == 9
