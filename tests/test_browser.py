@@ -917,7 +917,7 @@ def test_sticky_header_keeps_the_sideways_scroll_of_more_columns(browser, demo_h
     page.close()
 
 
-@pytest.mark.parametrize("w, h, sel, limit", [(1280, 800, "#body tr.row", 900), (390, 844, "#cards .sc", 1000)])
+@pytest.mark.parametrize("w, h, sel, limit", [(1280, 800, "#body tr.row", 900), (390, 844, "#cards .sc", 910)])
 def test_first_row_sits_near_the_top(browser, demo_html, w, h, sel, limit):
     """FE-1: on the demo page (with its Demo banner) the first row or card starts above the fold; the real page has less above it."""
     page, _ = open_page(browser, demo_html, w, h)
