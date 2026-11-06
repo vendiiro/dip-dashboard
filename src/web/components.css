@@ -131,7 +131,8 @@ tr.open .caret{transform:rotate(90deg)}
 .b-serious{background:var(--serious-bg);color:var(--serious)} .b-warn{background:var(--warn-bg);color:var(--warn)}
 .b-none{background:var(--sunken);color:var(--ink-3)}
 .b-plain{background:var(--sunken);color:var(--ink)}   /* partial pass: neutral, no cross, so it does not read as failed */
-td .badge{white-space:normal;text-align:left;max-width:200px;border-radius:12px}
+td .badge{white-space:normal;text-align:left;min-width:150px;max-width:200px;border-radius:12px}
+td .foot{white-space:normal;font-family:var(--f-body);max-width:110px;margin-left:auto;line-height:1.3}
 .qm{display:inline-flex;gap:2px;vertical-align:middle;margin-left:6px}
 .qm i{width:6px;height:12px;border-radius:1px;background:var(--line-strong)}
 .qm i.ok{background:var(--good)} .qm i.na{background:repeating-linear-gradient(45deg,var(--line-strong) 0 2px,transparent 2px 4px)}
