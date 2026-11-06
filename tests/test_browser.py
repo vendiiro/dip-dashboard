@@ -591,12 +591,16 @@ def test_status_pill_is_red_only_for_a_real_problem(browser, demo_html, tmp_path
     page.close()
 
 
-def test_phone_opened_card_shows_checks_and_numbers_before_the_chart(browser, demo_html):
-    ph, _ = open_page(browser, demo_html, 390, 844)
+@pytest.mark.parametrize("no_chart", [False, True])
+def test_phone_opened_card_shows_checks_and_numbers_before_the_chart(browser, demo_html, tmp_path, no_chart):
+    url = variant_html(tmp_path, demo_html, "DATA.rows.forEach(r => { r.hist = null; });") if no_chart else demo_html    # no chart data: the chart panel shows its message
+    ph, _ = open_page(browser, url, 390, 844)
     ph.locator("#cards .schead").first.click()
     ys = ph.evaluate("(() => { const d = document.querySelector('#cards .scdetail'); const top = s => [...d.querySelectorAll('h3')].find(h => h.textContent.startsWith(s)).getBoundingClientRect().top; "
-                     "return [d.querySelector('.whystrip') ? d.querySelector('.whystrip').getBoundingClientRect().top : -1, top('Quality checks'), top('Key numbers'), top('1 year'), top('Headlines')]; })()")
-    assert ys[1] < ys[2] < ys[3] < ys[4] and ys[0] < ys[1]
+                     "return [d.querySelector('.whystrip') ? d.querySelector('.whystrip').getBoundingClientRect().top : -1, top('Quality checks'), top('Key numbers'), top('1 year')]; })()")
+    assert ys[1] < ys[2] < ys[3] and ys[0] < ys[1]
+    if no_chart:
+        assert "1-year chart could not be drawn" in ph.inner_text("#cards .scdetail")
     ph.close()
 
 
@@ -896,8 +900,11 @@ def test_table_header_stays_at_the_top_while_the_page_scrolls(browser, demo_html
     page.close()
 
 
-def test_sticky_header_keeps_the_sideways_scroll_of_more_columns(browser, demo_html):
-    page, errors = open_page(browser, demo_html, 1100, 800)   # narrower than 1280: the wrapping badge keeps the wide table inside the card at 1280
+@pytest.mark.parametrize("w, long_name", [(1100, False), (1280, True)])
+def test_sticky_header_keeps_the_sideways_scroll_of_more_columns(browser, demo_html, tmp_path, w, long_name):
+    # At 1280 the demo table fits the card (the badge wraps), so a long stock name forces the overflow; at 1100 it overflows by itself.
+    url = variant_html(tmp_path, demo_html, "DATA.rows.forEach(r => { r.name = r.name + ' ' + 'Holdings International '.repeat(12); });") if long_name else demo_html
+    page, errors = open_page(browser, url, w, 800)
     page.click("#colbtn")
     assert page.evaluate("document.querySelector('.scroll').classList.contains('hs')")      # wider than the card: its own sideways scroller
     sw = page.evaluate("(() => { const s = document.querySelector('.scroll'); return [s.scrollWidth, s.clientWidth]; })()")

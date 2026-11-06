@@ -9,13 +9,13 @@ function detail(r) {
   const wrap = el('div');
   if (r.why && r.why.length) { const w = el('div', 'whystrip'); w.append(el('b', null, 'Flagged because')); r.why.forEach(x => w.append(el('span', null, x))); wrap.append(w); }
   const g = el('div', 'dgrid'); wrap.append(g);
-  const p1 = el('div', 'panel'); p1.append(el('h3', null, '1 year · price, 200-day average, 52-week high'), guard('the 1-year chart', () => priceChart(r), r.t) || drawFail('The 1-year chart'));
+  const p1 = el('div', 'panel p-chart'); p1.append(el('h3', null, '1 year · price, 200-day average, 52-week high'), guard('the 1-year chart', () => priceChart(r), r.t) || drawFail('The 1-year chart'));
   const lg = el('div', 'legend');
   [['var(--ink-2)', 'Price'], ['var(--accent)', '200-day average'], ['var(--ink-3)', '52-week high']].forEach(([c, l], i) => { const s = el('span'); const k = el('i'); k.style.borderTopColor = c; if (i) k.style.borderTopStyle = 'dashed'; s.append(k, l); lg.append(s); });
   const sh = el('span'); const k = el('i'); k.style.cssText = 'border:0;width:12px;height:10px;background:var(--down-soft);vertical-align:-1px'; sh.append(k, 'Drop window'); lg.append(sh);
   p1.append(lg); g.append(p1);
 
-  const p2 = el('div', 'panel'); p2.append(el('h3', null, r.q == null ? 'Quality checks · no score' : `Quality checks · ${r.q}/100`));
+  const p2 = el('div', 'panel p-checks'); p2.append(el('h3', null, r.q == null ? 'Quality checks · no score' : `Quality checks · ${r.q}/100`));
   { const ev = evidenceNote(r); if (ev) p2.append(el('div', 'nm', ev.charAt(0).toUpperCase() + ev.slice(1) + '.')); }
   const ul = el('ul', 'checks');
   r.qchecks.forEach(c => { const li = el('li'); li.append(el('span', c.ok === true ? 'ok' : c.ok === false ? 'bad' : 'na', c.ok === true ? '✓' : c.ok === false ? '✗' : '?'), el('span', null, c.label), el('span', 'val', c.ok === null ? (c.na ? 'n/a for ' + (r.sector || 'sector') : 'no data') : QFMT[c.key](c.value, r))); ul.append(li); });
@@ -25,7 +25,7 @@ function detail(r) {
     .forEach(([on, l, v]) => { const li = el('li'); li.append(el('span', on ? 'bad' : 'ok', on ? '●' : '○'), el('span', null, l), el('span', 'val', v)); ul2.append(li); });
   p2.append(ul2, el('div', 'nm', r.knife ? 'All three are true, so this is flagged as a falling knife.' : 'A falling knife needs all three. Filled dots are met.'));
 
-  const p3 = el('div', 'panel'); p3.append(el('h3', null, 'Key numbers'));
+  const p3 = el('div', 'panel p-nums'); p3.append(el('h3', null, 'Key numbers'));
   const kv = el('div', 'kv'); const mc = r.qchecks.find(c => c.key === 'marketCap');
   const KEY = ['5d vs index','Forward P/E', 'Trailing P/E', 'Market cap (USD)', 'Sector', 'Next earnings'];   // the rest sits behind "More context"
   [['5d vs index' + (r.idx ? ' (' + r.idx + ')' : r.x5 == null && r.idx_why ? ' (' + r.idx_why + ')' : ''), r.x5 == null ? '–' : pct(r.x5)], ['Forward P/E', r.fpe == null ? '–' : r.fpe.toFixed(1)], ['Trailing P/E', r.tpe == null ? '–' : r.tpe.toFixed(1)],
