@@ -845,7 +845,7 @@ def test_table_header_stays_at_the_top_while_the_page_scrolls(browser, demo_html
 
 
 def test_sticky_header_keeps_the_sideways_scroll_of_more_columns(browser, demo_html):
-    page, errors = open_page(browser, demo_html, 1280, 800)
+    page, errors = open_page(browser, demo_html, 1100, 800)   # narrower than 1280: the wrapping badge keeps the wide table inside the card at 1280
     page.click("#colbtn")
     assert page.evaluate("document.querySelector('.scroll').classList.contains('hs')")      # wider than the card: its own sideways scroller
     sw = page.evaluate("(() => { const s = document.querySelector('.scroll'); return [s.scrollWidth, s.clientWidth]; })()")

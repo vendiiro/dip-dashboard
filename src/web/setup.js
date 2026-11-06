@@ -16,9 +16,9 @@ function setupOf(r, m) {
   if (m.knife) return mk('Falling knife', 1, 'b-crit', '⚠');
   if (r.q == null) return mk('Dip, no fundamentals', 2, 'b-warn', '?');
   if (r.q_status === 'distorted') return mk('Dip, no fundamentals', 2, 'b-warn', '?');   // same order as screen.setup_label
-  if ((r.q_must_failed || []).length) return mk('Dip, low quality', 2, 'b-serious', '✗');
+  if ((r.q_must_failed || []).length) return mk('Dip, low quality', 2, 'b-plain', '');
   if (r.q >= +$('qmin').value) return mk('Quality dip', 4, 'b-good', '✓');
-  return mk('Dip, low quality', 2, 'b-serious', '✗');
+  return mk('Dip, low quality', 2, 'b-plain', '');
 }
 // Reader-facing text. At the nightly label the payload's own setup_text is used; under other controls the same wording is built here.
 function setupText(label, r) {
@@ -49,7 +49,7 @@ const wasQualityDip = r => r.prev ? setupOf(r, r.prev).rank === 4 : null;   // n
 const VIEW = new Map(), vw = r => VIEW.get(r);
 window.__dipView = t => { const r = rows.find(x => x.t === t); return r && VIEW.get(r) ? {...VIEW.get(r)} : null; };
 function badge(r) {
-  const v = vw(r), bd = el('span', 'badge ' + v.cls, v.icon + ' ' + v.text), ev = evidenceNote(r);
+  const v = vw(r), bd = el('span', 'badge ' + v.cls, (v.icon ? v.icon + ' ' : '') + v.text), ev = evidenceNote(r);
   bd.title = SETUP_TIP[r.q_status === 'distorted' && v.label === 'Dip, no fundamentals' ? 'Distorted' : v.label] + (ev && v.rank > 0 ? ' Evidence: ' + ev + '.' : '');
   return bd;
 }

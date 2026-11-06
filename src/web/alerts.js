@@ -21,7 +21,7 @@ function alertsPanel() {
     if (c.q != null) bits.push('quality score ' + c.q);
     if (a.detail || bits.length) li.append(el('span', 'd', [a.detail, bits.join(' · ')].filter(Boolean).join(' — ')));
     if (c.setup && c.setup_text) {                       // keyed on the enum, worded from setup_text
-      const cls = {'Quality dip': 'b-good', 'Falling knife': 'b-crit', 'Dip, low quality': 'b-serious', 'Dip, no fundamentals': 'b-warn', 'No dip': 'b-none'}[c.setup] || 'b-none';
+      const cls = {'Quality dip': 'b-good', 'Falling knife': 'b-crit', 'Dip, low quality': 'b-plain', 'Dip, no fundamentals': 'b-warn', 'No dip': 'b-none'}[c.setup] || 'b-none';
       const sb = el('span', 'd'); sb.append(el('span', 'badge ' + cls, c.setup_text)); li.append(sb);
     }
     ul.append(li);

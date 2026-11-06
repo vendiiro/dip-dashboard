@@ -175,6 +175,8 @@ tr.open .caret{transform:rotate(90deg)}
 .b-good{background:var(--good-bg);color:var(--good)} .b-crit{background:var(--crit-bg);color:var(--crit)}
 .b-serious{background:var(--serious-bg);color:var(--serious)} .b-warn{background:var(--warn-bg);color:var(--warn)}
 .b-none{background:var(--sunken);color:var(--ink-3)}
+.b-plain{background:var(--sunken);color:var(--ink)}   /* partial pass: neutral, no cross, so it does not read as failed */
+td .badge{white-space:normal;text-align:left;max-width:200px;border-radius:12px}
 .qm{display:inline-flex;gap:2px;vertical-align:middle;margin-left:6px}
 .qm i{width:6px;height:12px;border-radius:1px;background:var(--line-strong)}
 .qm i.ok{background:var(--good)} .qm i.na{background:repeating-linear-gradient(45deg,var(--line-strong) 0 2px,transparent 2px 4px)}
@@ -592,9 +594,9 @@ function setupOf(r, m) {
   if (m.knife) return mk('Falling knife', 1, 'b-crit', '⚠');
   if (r.q == null) return mk('Dip, no fundamentals', 2, 'b-warn', '?');
   if (r.q_status === 'distorted') return mk('Dip, no fundamentals', 2, 'b-warn', '?');   // same order as screen.setup_label
-  if ((r.q_must_failed || []).length) return mk('Dip, low quality', 2, 'b-serious', '✗');
+  if ((r.q_must_failed || []).length) return mk('Dip, low quality', 2, 'b-plain', '');
   if (r.q >= +$('qmin').value) return mk('Quality dip', 4, 'b-good', '✓');
-  return mk('Dip, low quality', 2, 'b-serious', '✗');
+  return mk('Dip, low quality', 2, 'b-plain', '');
 }
 // Reader-facing text. At the nightly label the payload's own setup_text is used; under other controls the same wording is built here.
 function setupText(label, r) {
@@ -625,7 +627,7 @@ const wasQualityDip = r => r.prev ? setupOf(r, r.prev).rank === 4 : null;   // n
 const VIEW = new Map(), vw = r => VIEW.get(r);
 window.__dipView = t => { const r = rows.find(x => x.t === t); return r && VIEW.get(r) ? {...VIEW.get(r)} : null; };
 function badge(r) {
-  const v = vw(r), bd = el('span', 'badge ' + v.cls, v.icon + ' ' + v.text), ev = evidenceNote(r);
+  const v = vw(r), bd = el('span', 'badge ' + v.cls, (v.icon ? v.icon + ' ' : '') + v.text), ev = evidenceNote(r);
   bd.title = SETUP_TIP[r.q_status === 'distorted' && v.label === 'Dip, no fundamentals' ? 'Distorted' : v.label] + (ev && v.rank > 0 ? ' Evidence: ' + ev + '.' : '');
   return bd;
 }
@@ -684,7 +686,7 @@ function alertsPanel() {
     if (c.q != null) bits.push('quality score ' + c.q);
     if (a.detail || bits.length) li.append(el('span', 'd', [a.detail, bits.join(' · ')].filter(Boolean).join(' — ')));
     if (c.setup && c.setup_text) {                       // keyed on the enum, worded from setup_text
-      const cls = {'Quality dip': 'b-good', 'Falling knife': 'b-crit', 'Dip, low quality': 'b-serious', 'Dip, no fundamentals': 'b-warn', 'No dip': 'b-none'}[c.setup] || 'b-none';
+      const cls = {'Quality dip': 'b-good', 'Falling knife': 'b-crit', 'Dip, low quality': 'b-plain', 'Dip, no fundamentals': 'b-warn', 'No dip': 'b-none'}[c.setup] || 'b-none';
       const sb = el('span', 'd'); sb.append(el('span', 'badge ' + cls, c.setup_text)); li.append(sb);
     }
     ul.append(li);
