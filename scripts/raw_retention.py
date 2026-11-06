@@ -252,7 +252,11 @@ def _archive_one(src: Path, dst: Path) -> str:
         print(f"skipped (archive file already exists): {dst}")
         print(f"  hint: compare {src} ({_size(src)}) with {dst} ({_size(dst)}) by hand; nothing was changed.")
         return SKIPPED
-    dst.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        dst.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        print(f"failed (could not create folder {dst.parent}; original kept): {exc}")
+        return FAILED
     try:
         out = dst.open("xb")  # exclusive create: fails rather than overwrite
     except FileExistsError:

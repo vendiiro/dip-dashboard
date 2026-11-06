@@ -270,6 +270,31 @@ def test_hash_mismatch_removes_partial_and_keeps_source(tmp_path, monkeypatch):
     assert result.failed == 1 and result.moved == 0
 
 
+def test_failing_mkdir_leaves_source_and_later_moves_still_run(tmp_path, monkeypatch, capsys):
+    raw = tmp_path / "data" / "raw"
+    bad_src = _make(raw, "yfinance", "2026-07-01.csv.gz", b"blocked")
+    good_src = _make(raw, "yfinance_fundamentals", "2026-07-02.json", b"fine")
+    arch = tmp_path / "data" / "raw_archive"
+    bad_dst = arch / "yfinance" / bad_src.name
+    good_dst = arch / "yfinance_fundamentals" / good_src.name
+
+    real_mkdir = rr.Path.mkdir
+
+    def blocked_mkdir(self, *args, **kwargs):
+        if self == arch / "yfinance":
+            raise OSError("simulated: folder cannot be created")
+        return real_mkdir(self, *args, **kwargs)
+
+    monkeypatch.setattr(rr.Path, "mkdir", blocked_mkdir)
+    result = rr.apply_moves([(bad_src, bad_dst), (good_src, good_dst)])
+
+    assert bad_src.read_bytes() == b"blocked"  # source intact
+    assert not bad_dst.exists()
+    assert result.failed == 1 and result.moved == 1
+    assert good_dst.read_bytes() == b"fine" and not good_src.exists()
+    assert "could not create" in capsys.readouterr().out.lower()
+
+
 def test_unlink_failure_is_reported_and_run_continues(tmp_path, monkeypatch, capsys):
     raw = tmp_path / "data" / "raw"
     first = _make(raw, "yfinance", "2026-07-01.csv.gz", b"one")
