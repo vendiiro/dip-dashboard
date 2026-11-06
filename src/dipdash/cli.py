@@ -260,21 +260,31 @@ def main(argv: list[str] | None = None, sources: Sources | None = None) -> int:
         else:
             try:                                        # the forward record must never stop the run or the page
                 from . import ledger
-                n_new = ledger.record_run(payload, settings, CONFIG_DIR / "universe.csv", data_dir / "ledger" / "flags.csv",
-                                          settings_path=CONFIG_DIR / "settings.toml", run_started=run_started,
-                                          universe_size=len(universe), price_source=source)
-                print(f"Ledger: {n_new} new row(s) -> {data_dir / 'ledger' / 'flags.csv'}")
-                older = ledger.missing_columns(data_dir / "ledger" / "flags.csv")
-                if older:
-                    print(f"Ledger warning: the file has an older header; new rows leave out {', '.join(older)}")
-            except ledger.RunsLogError as exc:
-                msg = f"Ledger rows written but runs.csv failed: {exc}"
-                print(msg)
-                issues.append(Issue("*", "ledger_runs_log_failed", "warn", msg))
-            except Exception as exc:
+            except Exception as exc:                    # an import problem must not stop the run either
+                ledger = None
                 msg = f"Ledger not updated: {type(exc).__name__}: {exc}"
                 print(msg)
                 issues.append(Issue("*", "ledger_not_updated", "warn", msg))
+            if ledger is not None:
+                try:
+                    n_new = ledger.record_run(payload, settings, CONFIG_DIR / "universe.csv", data_dir / "ledger" / "flags.csv",
+                                              settings_path=CONFIG_DIR / "settings.toml", run_started=run_started,
+                                              universe_size=len(universe), price_source=source)
+                    print(f"Ledger: {n_new} new row(s) -> {data_dir / 'ledger' / 'flags.csv'}")
+                except ledger.RunsLogError as exc:
+                    msg = f"Ledger rows written but runs.csv failed: {exc}"
+                    print(msg)
+                    issues.append(Issue("*", "ledger_runs_log_failed", "warn", msg))
+                except Exception as exc:
+                    msg = f"Ledger not updated: {type(exc).__name__}: {exc}"
+                    print(msg)
+                    issues.append(Issue("*", "ledger_not_updated", "warn", msg))
+                try:                                    # a header check failing must not look like a failed write
+                    older = ledger.missing_columns(data_dir / "ledger" / "flags.csv")
+                    if older:
+                        print(f"Ledger warning: the file has an older header; new rows leave out {', '.join(older)}")
+                except Exception as exc:
+                    print(f"Ledger header check skipped: {type(exc).__name__}: {exc}")
     log = write_quality_log(issues, out_path.parent / ("data_quality.demo.csv" if a.demo else "data_quality.csv"))   # a demo run must not replace a real log
     n = {k: sum(i.severity == k for i in issues) for k in ("error", "warn", "info")}
     print(f"Data quality: {n['error']} error(s), {n['warn']} warning(s) -> {log}")

@@ -210,7 +210,7 @@ def freeze_spec(parent: dict, cutoff: str, n_universe: int, family_id: str, boot
         "statistic": "Spearman rank correlation between feature and target, pooled over events",
         "split": {"oos_fraction": oos_fraction, "cutoff_last_in_sample_date": cutoff, "purge": "in-sample events whose exit is after the cutoff are dropped"},
         "in_sample_use": "ONLY to fix the sign of each feature (sign of in-sample rho) and the tercile cut points; nothing else is frozen or tuned",
-        "out_of_sample": "the one test: last 40% of trading dates",
+        "out_of_sample": f"the one test: last {oos_fraction:.0%} of trading dates",
         "family": {"size": len(FAMILY), "members": FAMILY, "test": "OOS pooled (All regions) Spearman rho",
                    "p_value": "two-sided, from the month-clustered bootstrap (twice the smaller tail share beyond zero, +1 smoothing)",
                    "correction": "Holm step-down across the 6", "alpha_family": ALPHA},

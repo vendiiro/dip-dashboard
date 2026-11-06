@@ -307,3 +307,29 @@ def test_older_header_file_gets_a_one_line_warning(default_cfg, capsys):
     out = capsys.readouterr().out
     assert out.count("Ledger warning: the file has an older header") == 1 and "detail" in out
     assert flags.read_text(encoding="utf-8").splitlines()[1].count(",") == 9
+
+
+def test_ledger_import_failure_keeps_exit_code_page_and_quality_issue(default_cfg, capsys, monkeypatch):
+    import sys
+    import dipdash
+    tmp = default_cfg
+    monkeypatch.delattr(dipdash, "ledger", raising=False)
+    monkeypatch.setitem(sys.modules, "dipdash.ledger", None)             # makes `from . import ledger` raise ImportError
+    assert run_default(tmp, make_fake()) == 0
+    assert (tmp / "output" / "dashboard.html").stat().st_size > 0
+    assert "Ledger not updated" in capsys.readouterr().out
+    assert any(r["check"] == "ledger_not_updated" for r in quality(tmp))
+
+
+def test_missing_columns_failure_after_rows_written_is_not_reported_as_not_updated(default_cfg, capsys, monkeypatch):
+    from dipdash import ledger
+    tmp = default_cfg
+
+    def boom(*a, **k):
+        raise ValueError("unreadable header")
+    monkeypatch.setattr(ledger, "missing_columns", boom)
+    assert run_default(tmp, make_fake()) == 0
+    out = capsys.readouterr().out
+    assert "Ledger not updated" not in out and "Ledger:" in out
+    assert not any(r["check"] == "ledger_not_updated" for r in quality(tmp))
+    assert (tmp / "data" / "ledger" / "flags.csv").stat().st_size > 0

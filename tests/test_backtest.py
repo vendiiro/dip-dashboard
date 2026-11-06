@@ -586,7 +586,7 @@ def test_primary_cell_false_positive_rate_near_nominal():
     lo, hi = band_for(reps)
     assert st["usable"] >= 0.95 * reps, line
     assert st["lower_above_zero"] <= 0.12 and st["upper_below_zero"] <= 0.12, line     # gross breakage in either tail
-    assert 0.0 <= st["mean_est"] <= 0.010, line                                           # known bias, documented, not a target
+    assert abs(st["mean_est"]) < 0.010, line                                              # small, known bias (documented), not a target; a bias fix must not fail this
     assert lo <= st["rate"] <= hi, line
 
 
