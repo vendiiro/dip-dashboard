@@ -393,3 +393,14 @@ def test_the_page_carries_the_shared_axis_as_compact_json():
     p = build_payload(UNI, *inputs(), S, today=TODAY)
     html = render_html(p)
     assert '"chart_dates":["' in html and '"price_scale":100' in html and ", " not in html[html.index('"rows"'):html.index('"rows"') + 40]
+
+
+def test_row_carries_beta_se_and_mkt_adj():
+    prices, funds = inputs()
+    r = next(x for x in build_payload(UNI, prices, funds, S, today=TODAY)["rows"] if x["t"] == "DIP")
+    assert r["beta_se"] is None and r["mkt_adj"] is False                 # no index supplied: nothing is market-adjusted
+    idx = [{"symbol": "^GSPC", "name": "S&P 500", "region": "US", "suffixes": [], "price": 1.0, "r1": 0.0, "r5": 0.0,
+            "asof": "2026-10-30", "closes": {}}]
+    ok = build_payload(UNI, prices, funds, S, today=TODAY, indices=idx, index_history={"^GSPC": prices["DIP"][0]})["rows"]
+    assert all(isinstance(x["mkt_adj"], bool) and "beta_se" in x for x in ok)
+    json.dumps(ok)

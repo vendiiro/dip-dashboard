@@ -62,6 +62,8 @@ One entry of `rows`. Keys are exactly these.
 | `beta` | float | yes | ratio | market beta used (clipped to the allowed range) |
 | `beta_raw` | float | yes | ratio | fitted beta before clipping |
 | `beta_side` | str | yes | `floor` or `cap` | which limit clipped the beta; null if not clipped |
+| `beta_se` | float | yes | ratio | standard error of the fitted beta; null if no residual |
+| `mkt_adj` | bool | no | | true only if the beta was not capped or floored and `beta_se` is at most 0.25; false when there is no residual |
 | `res_why` | str | yes | | why the residual fields are null; null when they are present |
 | `s200_falling` | bool | no | | the 200-day average is lower than 20 bars ago |
 | `knife` | bool | no | | falling-knife flag (below a falling 200-day average and far below the 52-week high) |

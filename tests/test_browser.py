@@ -990,3 +990,20 @@ def test_small_wording_changes(browser, demo_html):
     ph, _ = open_page(browser, demo_html, 390, 844)
     assert ph.inner_text("#tablehint") == "Tap a stock for details. Mini chart: last 90 days, each on its own scale."
     ph.close()
+
+
+def test_not_market_adjusted_label_shows_in_table_and_detail(browser, demo_html, tmp_path):
+    js = ("{ const r = DATA.rows.find(x => x.dip); r.res5 = -0.031; r.res5z = -1.2; r.beta = 3; r.beta_raw = 3.6; r.beta_side = 'cap';"
+          " r.beta_se = 0.4; r.mkt_adj = false; r.res_why = null; window.__forced = r.t; }")
+    page, errors = open_page(browser, variant_html(tmp_path, demo_html, js))
+    t = page.evaluate("window.__forced")
+    page.click("#colbtn")
+    row = page.locator(f"#body tr.row[data-t='{t}']")
+    assert "not market-adjusted" in row.inner_text()
+    row.click()
+    page.click("td.detail button.more")
+    detail = page.inner_text("td.detail")
+    assert "not market-adjusted" in detail and "±0.40" in detail
+    assert "not market-adjusted" in page.text_content("#def-res")
+    assert errors == []
+    page.close()

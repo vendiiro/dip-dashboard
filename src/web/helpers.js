@@ -5,6 +5,7 @@ const NS = 'http://www.w3.org/2000/svg';
 const sv = (tag, attrs = {}, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
 function pct(v, d = 1, sign = true) { if (v == null || !isFinite(v)) return '–'; const s = (Math.abs(v) * 100).toFixed(d) + '%'; return v < 0 ? MINUS + s : (sign && v > 0 ? '+' + s : s); }
 function big(v) { if (v == null || !isFinite(v)) return '–'; const a = Math.abs(v), s = a >= 1e12 ? (a / 1e12).toFixed(2) + 'T' : a >= 1e9 ? (a / 1e9).toFixed(1) + 'B' : (a / 1e6).toFixed(0) + 'M'; return (v < 0 ? MINUS : '') + s; }
+const NOT_ADJ = r => r.mkt_adj === false ? ' · not market-adjusted' : '';
 const sgnCls = v => v == null || !isFinite(v) || Math.abs(v) < 5e-4 ? '' : v < 0 ? 'down' : 'up';
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function fmtDay(iso) { if (!iso) return '–'; const d = new Date(iso + 'T00:00:00Z'); return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getUTCDay()] + ' ' + d.getUTCDate() + ' ' + MON[d.getUTCMonth()]; }

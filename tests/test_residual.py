@@ -226,3 +226,15 @@ def test_failure_returns_none_and_false():
     out = residual_move(_stock_from(ix), ix)
     assert out["beta_se"] is None and out["market_adjusted"] is False
     assert out["reason"] is not None
+
+
+def test_beta_se_in_residual_move_equals_statsmodels_bse():
+    sm = pytest.importorskip("statsmodels.api")
+    ix = _index()
+    st = _stock_from(ix, 1.3, noise=0.01)
+    out = residual_move(st, ix)
+    r = pd.concat({"s": st, "i": ix}, axis=1).pct_change().dropna()
+    est = r.iloc[:-5].tail(252)
+    fit = sm.OLS(est["s"].to_numpy(), sm.add_constant(est["i"].to_numpy())).fit()
+    assert out["n_obs"] == 252
+    assert abs(out["beta_se"] - float(fit.bse[1])) < 5e-4

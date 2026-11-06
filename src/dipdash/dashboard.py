@@ -100,7 +100,7 @@ def build_payload(universe: list[Stock], prices: Prices, funds: dict, settings: 
         m["x5"] = clean(m["r5"] - r5ix) if r5ix is not None and m["r5"] is not None else None
         m["idx_why"] = None if m["x5"] is not None else _no_index_reason(s, ix, m)
         res = {"res1": None, "res5": None, "res5z": None, "beta": None, "beta_raw": None, "beta_side": None,
-               "reason": "no index history" if ix else "no index for this stock"}
+               "beta_se": None, "market_adjusted": False, "reason": "no index history" if ix else "no index for this stock"}
         if ix and ix["symbol"] in index_history:
             try:
                 res = residual_move(prices[s.ticker][0], index_history[ix["symbol"]])
@@ -108,6 +108,7 @@ def build_payload(universe: list[Stock], prices: Prices, funds: dict, settings: 
                 res["reason"] = f"residual could not be computed ({type(exc).__name__})"
         m.update({"res1": clean(res["res1"], 4), "res5": clean(res["res5"], 4), "res5z": clean(res["res5z"], 2),
                   "beta": clean(res["beta"], 2), "beta_raw": clean(res.get("beta_raw"), 2), "beta_side": res.get("beta_side"),
+                  "beta_se": clean(res.get("beta_se"), 3), "mkt_adj": bool(res.get("market_adjusted")),
                   "res_why": res["reason"]})
         m["earn"] = earnings.get(s.ticker)
         m["partial"] = s.ticker in partial
