@@ -85,3 +85,21 @@ Raw output, with fetch times in UTC: `output/ticker_diagnosis.txt` (git-ignored)
 - The brief lists RO.SW as failing, but it is not in the universe and its data is fine. The failing ticker in the universe is ROG.SW.
 - The verify run took about 2 minutes 23 seconds (first verified_at 22:22:33 UTC, last 22:24:56 UTC). The `info` calls dominated the run time. The earlier "several hours" note was wrong.
 - The nightly data-quality `partial_bar` result is 0. The brief describes a 16:37 run on 2026-11-05 with 345 `partial_bar` warnings, and that did not recur after the full close.
+
+## Task 11: null calibration of the primary cell (RES-12a)
+
+Test: `tests/test_backtest.py::test_primary_cell_false_positive_rate_near_nominal` (runs only with `DIP_SLOW=1`). 200 seeded synthetic null universes (seeds 5000-5199; 14 stocks, 1100 bars, `r = beta * f + e`, common factor, no dip effect) through the real V1 path (`build_days`, `add_events`, `add_peer_returns`, `add_periods`, `summarize`), cell V1_price_only / 21 days / All / OOS, 500 bootstrap draws, 90% interval. `placebo_draws` was set to 20, the lowest the path needs, because only the `ex_own` interval is used.
+
+| Item | Value |
+|---|---|
+| Replicates (usable) | 200 (200) |
+| Share of 90% `ex_own` intervals excluding zero | 11.5% (nominal 10%) |
+| Accepted band (95% binomial around 10%, n=200) | 5.8% to 14.2%: inside, test passes |
+| Run time | about 62 s for the 200 replicates (about 0.3 s each; the CPU was shared with other agents) |
+| OOS events per replicate (mean) / months with events | 49.8 / 12.5 |
+| Mean interval width / mean half-width | 0.0478 / 0.0239 |
+| Mean estimate / SD of estimate across replicates | +0.0048 / 0.0138 |
+
+Plain meaning: in this synthetic setting the interval is close to its nominal size. Two details worth knowing. (1) The mean estimate under the null is +0.48 percentage points, about 5 standard errors of the replicate mean away from zero (SE about 0.001), so the own-baseline excess has a small upward bias here; it is small next to the interval, but the 11.5% rate is probably partly this bias, and the pass is not evidence of no bias. (2) The mean half-width (0.0239) is a little larger than 1.645 times the SD of the estimate (0.0227), so the intervals are, if anything, slightly conservative in width. With only about 12 month-clusters of OOS events per replicate the interval is built from few clusters.
+
+Limits: the universe is synthetic, so this shows the method's behaviour under this model only (independent daily returns, one factor, 14 stocks, 1100 bars), not on real data. It says nothing about fat tails, volatility clustering or the real event counts. Not tuned; nothing in the method was changed.

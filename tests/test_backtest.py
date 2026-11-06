@@ -1,3 +1,4 @@
+import os
 from dataclasses import replace
 
 import numpy as np
@@ -510,3 +511,58 @@ def test_dip_state_includes_the_20d_rule():
     assert not old.iloc[-1]
     assert dip_state(c, S).equals(sig["dip"])
     assert not dip_state(c.iloc[:300], S).any()                                # flat: no flag
+
+
+# ============================================================ RES-12a: null calibration (slow, opt in with DIP_SLOW=1)
+def null_universe(seed, n_stocks=14, n=1100):
+    """Null universe with a common factor and NO dip effect: r_i = beta_i * f + e_i, index = factor plus a little noise.
+    Returns (prices, index_close, universe, quality, settings) ready for build_days. Synthetic only."""
+    rng = np.random.default_rng(seed)
+    idx = dates(n, "2026-10-29")
+    f = rng.normal(0.0003, 0.010, n)
+    prices, uni = {}, []
+    for k in range(n_stocks):
+        beta = rng.uniform(0.6, 1.4)
+        r = beta * f + rng.normal(0.0, 0.012, n)
+        prices[f"S{k}"] = pd.Series(100 * np.exp(np.cumsum(r)), index=idx)
+        uni.append(Stock(f"S{k}", f"S{k}", "US" if k % 2 == 0 else "Europe"))
+    ix = {g: pd.Series(100 * np.exp(np.cumsum(f + rng.normal(0.0, 0.003, n))), index=idx) for g in (US, EU)}
+    # placebo_draws as low as the path allows: only the ex_own interval is used here, and the placebos are computed but ignored
+    s = replace(S, backtest=replace(S.backtest, start_date=str(idx[300].date()), horizons=(21,), bootstrap_draws=500, placebo_draws=20,
+                                    seed=seed))
+    return prices, ix, uni, {t: 70 if i % 2 else 40 for i, t in enumerate(prices)}, s
+
+
+def null_replicate(seed):
+    prices, ix, uni, q, s = null_universe(seed)
+    days = build_days(prices, uni, ix, s, q)
+    days = add_peer_returns(add_events(days, s), s.backtest.horizons)
+    days, _ = add_periods(days, s)
+    r = summarize(days, Cell("V1_price_only", 21, "All", "OOS"), s)
+    return {"seed": seed, "n": r.get("n", 0), "months": r.get("n_months", 0), "est": r.get("ex_own", np.nan),
+            "lo": r.get("ex_own_lo", np.nan), "hi": r.get("ex_own_hi", np.nan)}
+
+
+@pytest.mark.skipif(os.environ.get("DIP_SLOW") != "1", reason="slow: set DIP_SLOW=1")
+def test_primary_cell_false_positive_rate_near_nominal():
+    """Under a null with a common factor, the 90% ex_own interval of the primary cell should exclude zero about 10% of the time.
+    Band = 95% binomial band around 10% for the replicate count (200: 5.8-14.2%; 100: 4.1-15.9%)."""
+    import time
+    reps = int(os.environ.get("DIP_SLOW_REPS", "200"))
+    band = {200: (0.058, 0.142), 100: (0.041, 0.159)}[reps]
+    t0, rows = time.time(), []
+    for seed in range(5000, 5000 + reps):
+        rows.append(null_replicate(seed))
+    df = pd.DataFrame(rows)
+    ok = df.dropna(subset=["lo", "hi"])
+    rate = float(((ok["lo"] > 0) | (ok["hi"] < 0)).mean())
+    half = float(((ok["hi"] - ok["lo"]) / 2).mean())
+    out = (f"RES12a replicates={reps} usable={len(ok)} rate={rate:.4f} band={band} runtime_s={time.time() - t0:.0f} "
+           f"mean_events={ok['n'].mean():.1f} mean_months={ok['months'].mean():.1f} mean_width={2 * half:.5f} "
+           f"mean_est={ok['est'].mean():.5f} sd_est={ok['est'].std():.5f} mean_half_width={half:.5f}")
+    print(out)
+    with open(os.environ.get("DIP_SLOW_OUT", os.devnull), "w") as fh:
+        fh.write(out + "\n")
+        df.to_csv(fh, index=False)
+    assert len(ok) >= 0.95 * reps, out
+    assert band[0] <= rate <= band[1], out
