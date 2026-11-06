@@ -153,6 +153,7 @@ function fitScroll() {
   scrollBox.classList.remove('hs');
   scrollBox.style.setProperty('--boxw', scrollBox.clientWidth + 'px');
   if (!mq.matches && scrollBox.querySelector('table').getBoundingClientRect().width > scrollBox.parentElement.clientWidth + 1) scrollBox.classList.add('hs');
+  $('scrollcue').hidden = !scrollBox.classList.contains('hs');
   pinHead();
 }
 let pinQueued = false;

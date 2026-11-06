@@ -548,6 +548,16 @@ def test_default_sort_note_shows_until_a_column_is_chosen(browser, demo_html):
     page.close()
 
 
+def test_scroll_cue_shows_only_while_the_table_scrolls_sideways(browser, demo_html):
+    page, _ = open_page(browser, demo_html, 1100, 800)
+    assert page.locator("#scrollcue").is_hidden()
+    page.click("#colbtn")
+    assert page.evaluate("document.querySelector('.scroll').classList.contains('hs')") and page.locator("#scrollcue").is_visible()
+    page.click("#colbtn")
+    assert page.locator("#scrollcue").is_hidden()
+    page.close()
+
+
 def test_phone_sort_chooser_is_visible_without_opening_filters(browser, demo_html):
     ph, _ = open_page(browser, demo_html, 390, 844)
     assert ph.locator("#controls").is_hidden() and ph.locator("#sortsel").is_visible()

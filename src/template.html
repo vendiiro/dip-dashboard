@@ -137,6 +137,7 @@ table.wide{min-width:1120px}
 .brief p{margin:0;font-size:14px;line-height:1.5;color:var(--ink)}
 .brief .sub{font-size:12.5px;font-weight:400;color:var(--ink-3);font-family:var(--f-body)}
 .brief .num{font-family:var(--f-data);font-variant-numeric:tabular-nums;white-space:nowrap}
+.scrollcue{align-self:center;font-size:12.5px;font-weight:500;color:var(--accent);white-space:nowrap}
 .colbtn{align-self:center;border:1px solid var(--line-strong);background:var(--surface);border-radius:6px;padding:4px 12px;min-height:40px;cursor:pointer;font-size:13px;color:var(--accent)}
 .colbtn:hover{background:var(--sunken)}
 .activebar{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;padding:0 14px 10px}
@@ -338,7 +339,7 @@ footer dd.hit,footer dt.hit{background:var(--line);border-radius:4px}
   </div>
 
   <div class="tablecard">
-    <div class="tablehead"><div class="ttl"><h2 id="tabletitle">Candidates</h2><span class="muted sortnote" id="sortnote">Sorted by size of drop. You can also sort by quality score or 5d vs index.</span></div><label class="sortctl" for="sortsel">Sort by <select id="sortsel"></select></label><div class="tools"><span class="muted" id="tablehint">Click a row for details. Click a column to sort. Mini chart: last 90 days, each row scaled to its own low and high.</span><button type="button" class="colbtn" id="colbtn" aria-pressed="false">More columns</button></div></div>
+    <div class="tablehead"><div class="ttl"><h2 id="tabletitle">Candidates</h2><span class="muted sortnote" id="sortnote">Sorted by size of drop. You can also sort by quality score or 5d vs index.</span></div><label class="sortctl" for="sortsel">Sort by <select id="sortsel"></select></label><div class="tools"><span class="muted" id="tablehint">Click a row for details. Click a column to sort. Mini chart: last 90 days, each row scaled to its own low and high.</span><span class="scrollcue" id="scrollcue" hidden aria-hidden="true">Scroll sideways for more columns ›</span><button type="button" class="colbtn" id="colbtn" aria-pressed="false">More columns</button></div></div>
     <div class="activebar" id="activebar" hidden></div>
     <div class="cards" id="cards"></div>
     <div class="scroll"><table>
@@ -933,6 +934,7 @@ function fitScroll() {
   scrollBox.classList.remove('hs');
   scrollBox.style.setProperty('--boxw', scrollBox.clientWidth + 'px');
   if (!mq.matches && scrollBox.querySelector('table').getBoundingClientRect().width > scrollBox.parentElement.clientWidth + 1) scrollBox.classList.add('hs');
+  $('scrollcue').hidden = !scrollBox.classList.contains('hs');
   pinHead();
 }
 let pinQueued = false;
