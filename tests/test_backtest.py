@@ -533,8 +533,8 @@ def null_universe(seed, n_stocks=14, n=1100):
     return prices, ix, uni, {t: 70 if i % 2 else 40 for i, t in enumerate(prices)}, s
 
 
-def null_replicate(seed):
-    prices, ix, uni, q, s = null_universe(seed)
+def null_replicate(seed, n_stocks=14, n=1100):
+    prices, ix, uni, q, s = null_universe(seed, n_stocks, n)
     days = build_days(prices, uni, ix, s, q)
     days = add_peer_returns(add_events(days, s), s.backtest.horizons)
     days, _ = add_periods(days, s)
@@ -543,26 +543,59 @@ def null_replicate(seed):
             "lo": r.get("ex_own_lo", np.nan), "hi": r.get("ex_own_hi", np.nan)}
 
 
+def band_for(reps):
+    """95% binomial (normal-approximation) band around the nominal 10%: 200 -> 5.8-14.2%, 100 -> 4.1-15.9%."""
+    h = 1.96 * (0.1 * 0.9 / reps) ** 0.5
+    return 0.1 - h, 0.1 + h
+
+
+def null_study(reps, n_stocks, n_bars, seed0=5000):
+    import time
+    t0 = time.time()
+    df = pd.DataFrame([null_replicate(sd, n_stocks, n_bars) for sd in range(seed0, seed0 + reps)])
+    ok = df.dropna(subset=["lo", "hi"])
+    low, high = float((ok["lo"] > 0).mean()), float((ok["hi"] < 0).mean())
+    half = float(((ok["hi"] - ok["lo"]) / 2).mean())
+    stats = {"reps": reps, "usable": len(ok), "rate": low + high, "lower_above_zero": low, "upper_below_zero": high,
+             "mean_est": float(ok["est"].mean()), "sd_est": float(ok["est"].std()), "mean_half_width": half,
+             "half_width_over_1.645sd": half / (1.645 * float(ok["est"].std())), "mean_events": float(ok["n"].mean()),
+             "mean_months": float(ok["months"].mean()), "runtime_s": round(time.time() - t0)}
+    line = f"RES12a stocks={n_stocks} bars={n_bars} " + " ".join(f"{k}={v:.4f}" if isinstance(v, float) else f"{k}={v}" for k, v in stats.items())
+    print(line)
+    with open(os.environ.get("DIP_SLOW_OUT", os.devnull), "a") as fh:
+        fh.write(line + chr(10))
+    return stats, line
+
+
+def _reps(name="DIP_SLOW_REPS", default=200):
+    n = int(os.environ.get(name, default))
+    if n < 1:
+        raise ValueError(f"{name} must be a positive integer")
+    return n
+
+
 @pytest.mark.skipif(os.environ.get("DIP_SLOW") != "1", reason="slow: set DIP_SLOW=1")
 def test_primary_cell_false_positive_rate_near_nominal():
     """Under a null with a common factor, the 90% ex_own interval of the primary cell should exclude zero about 10% of the time.
-    Band = 95% binomial band around 10% for the replicate count (200: 5.8-14.2%; 100: 4.1-15.9%)."""
-    import time
-    reps = int(os.environ.get("DIP_SLOW_REPS", "200"))
-    band = {200: (0.058, 0.142), 100: (0.041, 0.159)}[reps]
-    t0, rows = time.time(), []
-    for seed in range(5000, 5000 + reps):
-        rows.append(null_replicate(seed))
-    df = pd.DataFrame(rows)
-    ok = df.dropna(subset=["lo", "hi"])
-    rate = float(((ok["lo"] > 0) | (ok["hi"] < 0)).mean())
-    half = float(((ok["hi"] - ok["lo"]) / 2).mean())
-    out = (f"RES12a replicates={reps} usable={len(ok)} rate={rate:.4f} band={band} runtime_s={time.time() - t0:.0f} "
-           f"mean_events={ok['n'].mean():.1f} mean_months={ok['months'].mean():.1f} mean_width={2 * half:.5f} "
-           f"mean_est={ok['est'].mean():.5f} sd_est={ok['est'].std():.5f} mean_half_width={half:.5f}")
-    print(out)
-    with open(os.environ.get("DIP_SLOW_OUT", os.devnull), "w") as fh:
-        fh.write(out + "\n")
-        df.to_csv(fh, index=False)
-    assert len(ok) >= 0.95 * reps, out
-    assert band[0] <= rate <= band[1], out
+    Two-sided band = 95% binomial band around 10% for the replicate count. The two-sided rate alone cannot detect bias, so the
+    per-tail rates and the mean estimate are also checked for gross breakage. The mean estimate is positive here (about +0.5 pp):
+    this documents a known small-sample bias of the own baseline (it includes the triggering drop, and this setup has only 320
+    out-of-sample bars), not a target."""
+    reps = _reps()
+    st, line = null_study(reps, 14, 1100)
+    lo, hi = band_for(reps)
+    assert st["usable"] >= 0.95 * reps, line
+    assert st["lower_above_zero"] <= 0.12 and st["upper_below_zero"] <= 0.12, line     # gross breakage in either tail
+    assert 0.0 <= st["mean_est"] <= 0.010, line                                           # known bias, documented, not a target
+    assert lo <= st["rate"] <= hi, line
+
+
+@pytest.mark.skipif(os.environ.get("DIP_SLOW") != "1", reason="slow: set DIP_SLOW=1")
+def test_primary_cell_false_positive_rate_at_real_scale():
+    """Same null at the real run's scale (59 stocks, 4500 bars, about 1,680 out-of-sample bars). Only an upper bound on the
+    exclusion rate is asserted: a LOW rate here means the interval is too wide, which costs power but does not give false alarms.
+    The rate, mean bias and half-width / (1.645 x SD of the estimates) are printed for the findings."""
+    reps = _reps("DIP_SLOW_REPS_REAL", 100)
+    st, line = null_study(reps, 59, 4500)
+    assert st["usable"] >= 0.95 * reps, line
+    assert st["rate"] <= band_for(reps)[1], line

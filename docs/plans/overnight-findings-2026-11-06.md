@@ -100,6 +100,17 @@ Test: `tests/test_backtest.py::test_primary_cell_false_positive_rate_near_nomina
 | Mean interval width / mean half-width | 0.0478 / 0.0239 |
 | Mean estimate / SD of estimate across replicates | +0.0048 / 0.0138 |
 
-Plain meaning: in this synthetic setting the interval is close to its nominal size. Two details worth knowing. (1) The mean estimate under the null is +0.48 percentage points, about 5 standard errors of the replicate mean away from zero (SE about 0.001), so the own-baseline excess has a small upward bias here; it is small next to the interval, but the 11.5% rate is probably partly this bias, and the pass is not evidence of no bias. (2) The mean half-width (0.0239) is a little larger than 1.645 times the SD of the estimate (0.0227), so the intervals are, if anything, slightly conservative in width. With only about 12 month-clusters of OOS events per replicate the interval is built from few clusters.
+Second case at the real run's scale (`test_primary_cell_false_positive_rate_at_real_scale`: 59 stocks, 4500 bars, 100 replicates, seeds 5000-5099, band upper bound 15.9%; run time 209 s):
+
+| Item | Value |
+|---|---|
+| Share of intervals excluding zero | 3.0% (lower above zero 3.0%, upper below zero 0.0%) |
+| Mean estimate / SD across replicates | +0.02 pp / 0.43 pp |
+| Mean half-width / (1.645 x SD of estimates) | 1.40 |
+| OOS events / months with events (mean) | 1,139 / 76.4 |
+
+Small case, per tail: lower bound above zero 9.5%, upper bound below zero 2.0%; half-width / (1.645 x SD) = 1.05.
+
+Plain meaning: the test passes, but for the wrong reason. The lower bound was above zero in 9.5% of replicates and the upper bound below zero in 2.0% (nominal 5% each). The estimate is biased upward (mean +0.48 pp, about 5 SE). Without that bias the intervals exclude zero in only about 6.5%, so they are also too wide. A two-sided rate cannot detect bias: shifting every estimate down by 1 pp still passes. Cause (synthetic experiments in the Task 11 review): the own baseline is the stock's mean over the same out-of-sample window, which includes the drop that triggered each event. It is not Jensen, the factor, beta or the cooldown. The bias shrinks roughly as 1/(out-of-sample length). This setup has 320 out-of-sample bars, against about 1,680 in the real run. At the real length (59 or 171 stocks, 4500 bars) the null bias is about +0.08 to +0.15 pp at 21 days and about +0.2 pp at 63 days. There, coverage depends on the volatility model: intervals exclude zero in 1.7-3.5% of replicates with constant volatility (too wide) and 7-10% with volatility regimes. For the published primary cell (+0.27%, -1.0% to +1.5%) this means a bias-adjusted estimate of about +0.1 to +0.2% and the same conclusion (no out-of-sample edge shown); the wider-than-needed interval lowers power, so a modest real edge could hide inside it. In the same null runs, ex_index averaged +0.21% and excluded zero 43% of the time, so the published index-excess interval is not evidence of an edge. Nothing in the method was changed; the question for Iiro is whether to fix the baseline (for example by using the stock's mean excluding the event windows) in a new, pre-registered spec. The real-scale case here (constant volatility, 3.0%, ratio 1.40) agrees with that: a low rate means too-wide intervals, which costs power.
 
 Limits: the universe is synthetic, so this shows the method's behaviour under this model only (independent daily returns, one factor, 14 stocks, 1100 bars), not on real data. It says nothing about fat tails, volatility clustering or the real event counts. Not tuned; nothing in the method was changed.
