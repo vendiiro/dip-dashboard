@@ -384,7 +384,7 @@ footer dd.hit,footer dt.hit{background:var(--line);border-radius:4px}
       <dt>Vol ×</dt><dd>Today’s volume divided by the average of the previous 20 days.</dd>
       <dt>Trigger alerts</dt><dd>Plain notices that a research condition turned true at the latest close, for example the close moving back above its 20-day average, RSI(14) moving back above 30, a new 60-day low, or an earnings date coming up. Each fires once, when the condition changes from false to true. They use daily closes only, the thresholds are untested defaults you can change in config/alerts.toml, and nothing here predicts returns or suggests an action.</dd>
       <dt>5d vs index</dt><dd id="def-idx">The stock’s 5-day move minus the move of its own country’s index where one is configured (matched by ticker suffix), otherwise its regional index, otherwise STOXX 600. Index types are mixed: the DAX is a total-return index (it includes dividends) and the Stockholm and Oslo indices are all-share, not large-cap. A big negative number means the drop is not just the market.</dd>
-      <dt>5d vs index, beta-adjusted (residual)</dt><dd id="def-res">The part of the stock’s 5-day move left over after removing the index move, scaled by the stock’s usual sensitivity to it (beta, defined next). A large negative number means the stock fell by more than the index move and the stock’s usual sensitivity to it would account for. The “in standard deviations” figure expresses it in units of the stock’s typical daily variation (standard deviation). It describes today’s move only; it has not been backtested and is not a signal. Not the same as “5d vs index”, which is the plain difference without the beta adjustment. Marked “not market-adjusted” when the beta was capped or floored, or was too uncertain (its standard error above 0.25): the value is still shown, but it is not a clean market-adjusted move.</dd>
+      <dt>5d beyond market (beta-adjusted)</dt><dd id="def-res">The part of the 5-day move not explained by how much the stock normally follows the market. It is the stock’s 5-day move left over after removing the index move, scaled by the stock’s usual sensitivity to it (beta, defined next). A large negative number means the stock fell by more than the index move and the stock’s usual sensitivity to it would account for. The “in standard deviations” figure expresses it in units of the stock’s typical daily variation (standard deviation). It describes today’s move only; it has not been backtested and is not a signal. Not the same as “5d vs index”, which is the plain difference without the beta adjustment. Marked “rough: beta capped or uncertain” when the beta was capped or floored, or was too uncertain (its standard error above 0.25): the value is still shown, but it is rough, so compare it with the plain “5d vs index”.</dd>
       <dt>Beta</dt><dd id="def-beta">How strongly a stock usually moves with its index: 1.0 means about the same size of move, 1.5 means about one and a half times as large, 0 means no link. It is estimated from the previous year of daily moves, excluding the last 5 days, so it is noisy: a different year of data can give a clearly different value. Values are kept between 0 and 3: a negative estimate is floored at 0, so that stock gets no index adjustment. The “±” figure is the standard error of the estimate: roughly, the true beta is within two of them of the estimate.</dd>
       <dt>Earnings tag</dt><dd>Shown when a company reported within the last 5 trading days or reports within the next 10. A drop right after a report is a different situation from a drop with no news. Dates come from a free source, can be missing or off by a day, and are not point-in-time, so they are never used in the backtest.</dd>
     </dl>
@@ -446,7 +446,7 @@ const NS = 'http://www.w3.org/2000/svg';
 const sv = (tag, attrs = {}, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
 function pct(v, d = 1, sign = true) { if (v == null || !isFinite(v)) return '–'; const s = (Math.abs(v) * 100).toFixed(d) + '%'; return v < 0 ? MINUS + s : (sign && v > 0 ? '+' + s : s); }
 function big(v) { if (v == null || !isFinite(v)) return '–'; const a = Math.abs(v), s = a >= 1e12 ? (a / 1e12).toFixed(2) + 'T' : a >= 1e9 ? (a / 1e9).toFixed(1) + 'B' : (a / 1e6).toFixed(0) + 'M'; return (v < 0 ? MINUS : '') + s; }
-const NOT_ADJ = r => r.mkt_adj === false ? ' · not market-adjusted' : '';
+const NOT_ADJ = r => r.mkt_adj === false ? ' · rough: beta capped or uncertain' : '';
 const sgnCls = v => v == null || !isFinite(v) || Math.abs(v) < 5e-4 ? '' : v < 0 ? 'down' : 'up';
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function fmtDay(iso) { if (!iso) return '–'; const d = new Date(iso + 'T00:00:00Z'); return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getUTCDay()] + ' ' + d.getUTCDate() + ' ' + MON[d.getUTCMonth()]; }
@@ -783,7 +783,7 @@ function resetAll() { Object.values(CLEAR).forEach(f => f()); S.sortKey = null; 
 // Each column draws its own cell. `more: true` columns are hidden until "More columns" is pressed, so the default
 // table fits a laptop screen without sideways scrolling and the sparkline stays visible.
 const pctCell = k => r => el('td', 'n ' + sgnCls(r[k]), pct(r[k]));
-const resCell = r => { const td = pctCell('res5')(r); if (r.res5 != null && r.mkt_adj === false) td.append(el('div', 'foot', 'not market-adjusted')); return td; };
+const resCell = r => { const td = pctCell('res5')(r); if (r.res5 != null && r.mkt_adj === false) td.append(el('div', 'foot', 'rough: beta capped or uncertain')); return td; };
 const COLS = [
   {k: 't', l: 'Stock', cls: 'l', dir: 1, cell: r => {
     const c0 = el('td', 'l'), tk = el('div', 'tk'), tb = el('button', 'tkbtn'); tb.type = 'button'; tb.setAttribute('aria-expanded', String(S.open === r.t));
@@ -795,7 +795,7 @@ const COLS = [
   {k: 'price', l: 'Price', dir: -1, cell: r => { const td = el('td', 'n', r.price == null ? '–' : r.price.toFixed(2)); if (r.ccy) td.append(el('span', 'nm', ' ' + r.ccy)); return td; }},
   {k: 'r1', l: '1d', dir: 1, cell: pctCell('r1')}, {k: 'r5', l: '5d', dir: 1, cell: pctCell('r5')},
   {k: 'x5', l: '5d vs index', dir: 1, cell: pctCell('x5'), tip: 'The stock’s 5-day move minus its own country’s (or region’s) index move'},
-  {k: 'res5', l: '5d vs index, beta-adjusted (residual)', h: '5d vs index (β-adj.)', wrap: true, dir: 1, more: true, cell: resCell, tip: 'The 5-day move left over after removing the index move, scaled by the stock’s usual sensitivity to it (beta). Beta is estimated from the previous year, excluding the last 5 days. “Not market-adjusted” means the beta was capped, floored or too uncertain.'},
+  {k: 'res5', l: '5d beyond market (beta-adjusted)', h: '5d beyond market (beta-adj.)', wrap: true, dir: 1, more: true, cell: resCell, tip: 'The part of the 5-day move not explained by how much the stock normally follows the market (beta). Beta is estimated from the previous year, excluding the last 5 days. “Rough” means the beta was capped, floored or too uncertain.'},
   {k: 'r21', l: '1m', dir: 1, more: true, cell: pctCell('r21')},
   {k: 'dd52', l: 'vs 52w high', dir: 1, cell: pctCell('dd52')}, {k: 'vs200', l: 'vs 200d avg', dir: 1, more: true, cell: pctCell('vs200')},
   {k: 'rsi', l: 'RSI', dir: 1, cell: r => el('td', 'n ' + (r.rsi != null && r.rsi < 30 ? 'down' : ''), r.rsi == null ? '–' : r.rsi.toFixed(0))},
@@ -1035,15 +1035,15 @@ function detail(r) {
   const KEY = ['5d vs index','Forward P/E', 'Trailing P/E', 'Market cap (USD)', 'Sector', 'Next earnings'];   // the rest sits behind "More context"
   [['5d vs index' + (r.idx ? ' (' + r.idx + ')' : r.x5 == null && r.idx_why ? ' (' + r.idx_why + ')' : ''), r.x5 == null ? '–' : pct(r.x5)], ['Forward P/E', r.fpe == null ? '–' : r.fpe.toFixed(1)], ['Trailing P/E', r.tpe == null ? '–' : r.tpe.toFixed(1)],
    ['Market cap (USD)', mc && mc.value != null ? big(mc.value) : '–'], ['Sector', r.sector || '–'], ['From 20-day high', pct(r.dd20)], ['5d move in standard deviations', r.z5 == null ? '–' : r.z5.toFixed(1)],
-   ['5d vs index, beta-adjusted (residual)', r.res5 == null ? '–' : pct(r.res5) + NOT_ADJ(r)], ['5d vs index, beta-adjusted (residual), in standard deviations', r.res5z == null ? '–' : r.res5z.toFixed(1)],
+   ['5d beyond market (beta-adjusted)', r.res5 == null ? '–' : pct(r.res5) + NOT_ADJ(r)], ['5d beyond market (beta-adjusted), in standard deviations', r.res5z == null ? '–' : r.res5z.toFixed(1)],
    ['Beta' + (r.beta_side === 'cap' ? ' (capped at 3)' : r.beta_side === 'floor' ? ' (floored at 0)' : ''), r.beta == null ? '–' : r.beta.toFixed(2) + (r.beta_side && r.beta_raw != null ? ' (est. ' + r.beta_raw.toFixed(2) + ')' : '') + (r.beta_se != null ? ' ±' + r.beta_se.toFixed(2) : '')],
    ['Last earnings', earnText(r, 'last')], ['Next earnings', earnText(r, 'next')]]
-    .forEach(([a, b]) => { const keep = KEY.some(k => a.startsWith(k)) && !a.includes('(residual)'); const row = el('div', keep ? 'kvx' : 'kvx extra'); row.append(el('span', null, a), el('span', null, b)); if (!keep) row.hidden = true; kv.append(row); });
+    .forEach(([a, b]) => { const keep = KEY.some(k => a.startsWith(k)) && !a.includes('beta-adjusted'); const row = el('div', keep ? 'kvx' : 'kvx extra'); row.append(el('span', null, a), el('span', null, b)); if (!keep) row.hidden = true; kv.append(row); });
   p3.append(kv);
   { const more = el('button', 'more', 'More context'); more.type = 'button'; more.setAttribute('aria-expanded', 'false');
     more.onclick = e => { e.stopPropagation(); const ex = more.getAttribute('aria-expanded') !== 'true'; more.setAttribute('aria-expanded', String(ex)); kv.querySelectorAll('.extra').forEach(x => { x.hidden = !ex; }); more.textContent = ex ? 'Less context' : 'More context'; };
     p3.append(more); }
-  if (r.res5 != null && r.mkt_adj === false) p3.append(el('div', 'foot', 'Not market-adjusted: the beta was capped, floored or too uncertain, so the residual is not a clean market-adjusted move.'));
+  if (r.res5 != null && r.mkt_adj === false) p3.append(el('div', 'foot', 'Beta was capped, floored or uncertain, so this number is rough; compare it with the plain 5d vs index.'));
   if (r.res5 == null && r.res_why) p3.append(el('div', 'foot', 'No residual: ' + r.res_why + '.'));
   if (r.earn && r.earn.note && (r.earn.stale || r.earn.error || !r.earn.last || !r.earn.next || /scheduled date passed/.test(r.earn.note))) p3.append(el('div', 'foot', 'Earnings dates: ' + r.earn.note));
   g.append(p3, p2);

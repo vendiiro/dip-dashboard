@@ -2,7 +2,7 @@
 // Each column draws its own cell. `more: true` columns are hidden until "More columns" is pressed, so the default
 // table fits a laptop screen without sideways scrolling and the sparkline stays visible.
 const pctCell = k => r => el('td', 'n ' + sgnCls(r[k]), pct(r[k]));
-const resCell = r => { const td = pctCell('res5')(r); if (r.res5 != null && r.mkt_adj === false) td.append(el('div', 'foot', 'not market-adjusted')); return td; };
+const resCell = r => { const td = pctCell('res5')(r); if (r.res5 != null && r.mkt_adj === false) td.append(el('div', 'foot', 'rough: beta capped or uncertain')); return td; };
 const COLS = [
   {k: 't', l: 'Stock', cls: 'l', dir: 1, cell: r => {
     const c0 = el('td', 'l'), tk = el('div', 'tk'), tb = el('button', 'tkbtn'); tb.type = 'button'; tb.setAttribute('aria-expanded', String(S.open === r.t));
@@ -14,7 +14,7 @@ const COLS = [
   {k: 'price', l: 'Price', dir: -1, cell: r => { const td = el('td', 'n', r.price == null ? '–' : r.price.toFixed(2)); if (r.ccy) td.append(el('span', 'nm', ' ' + r.ccy)); return td; }},
   {k: 'r1', l: '1d', dir: 1, cell: pctCell('r1')}, {k: 'r5', l: '5d', dir: 1, cell: pctCell('r5')},
   {k: 'x5', l: '5d vs index', dir: 1, cell: pctCell('x5'), tip: 'The stock’s 5-day move minus its own country’s (or region’s) index move'},
-  {k: 'res5', l: '5d vs index, beta-adjusted (residual)', h: '5d vs index (β-adj.)', wrap: true, dir: 1, more: true, cell: resCell, tip: 'The 5-day move left over after removing the index move, scaled by the stock’s usual sensitivity to it (beta). Beta is estimated from the previous year, excluding the last 5 days. “Not market-adjusted” means the beta was capped, floored or too uncertain.'},
+  {k: 'res5', l: '5d beyond market (beta-adjusted)', h: '5d beyond market (beta-adj.)', wrap: true, dir: 1, more: true, cell: resCell, tip: 'The part of the 5-day move not explained by how much the stock normally follows the market (beta). Beta is estimated from the previous year, excluding the last 5 days. “Rough” means the beta was capped, floored or too uncertain.'},
   {k: 'r21', l: '1m', dir: 1, more: true, cell: pctCell('r21')},
   {k: 'dd52', l: 'vs 52w high', dir: 1, cell: pctCell('dd52')}, {k: 'vs200', l: 'vs 200d avg', dir: 1, more: true, cell: pctCell('vs200')},
   {k: 'rsi', l: 'RSI', dir: 1, cell: r => el('td', 'n ' + (r.rsi != null && r.rsi < 30 ? 'down' : ''), r.rsi == null ? '–' : r.rsi.toFixed(0))},

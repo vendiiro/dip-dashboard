@@ -558,6 +558,22 @@ def test_scroll_cue_shows_only_while_the_table_scrolls_sideways(browser, demo_ht
     page.close()
 
 
+def test_market_adjusted_row_shows_no_rough_note_and_shows_se(browser, demo_html, tmp_path):
+    js = ("{ const r = DATA.rows.find(x => x.dip); r.res5 = -0.031; r.res5z = -1.2; r.beta = 1.2; r.beta_raw = 1.2; r.beta_side = null;"
+          " r.beta_se = 0.1; r.mkt_adj = true; r.res_why = null; window.__forced = r.t; }")
+    page, errors = open_page(browser, variant_html(tmp_path, demo_html, js))
+    t = page.evaluate("window.__forced")
+    page.click("#colbtn")
+    row = page.locator(f"#body tr.row[data-t='{t}']")
+    assert "rough" not in row.inner_text()
+    row.click()
+    page.click("td.detail button.more")
+    detail = page.inner_text("td.detail")
+    assert "rough" not in detail and "±0.10" in detail
+    assert errors == []
+    page.close()
+
+
 def test_phone_sort_chooser_is_visible_without_opening_filters(browser, demo_html):
     ph, _ = open_page(browser, demo_html, 390, 844)
     assert ph.locator("#controls").is_hidden() and ph.locator("#sortsel").is_visible()
@@ -680,13 +696,13 @@ def test_residual_label_is_plain_and_beta_is_defined_once(browser, demo_html):
     page, _ = open_page(browser, demo_html)
     page.click("#colbtn")
     heads = [h.lower() for h in page.locator("#head th").all_inner_texts()]     # the header is upper-cased by CSS
-    assert any("5d vs index (β-adj.)" in h for h in heads) and not any("resid." in h for h in heads)      # short header, full name in the tooltip
-    assert "5d vs index, beta-adjusted (residual)" in page.locator("#head th[data-k=res5]").get_attribute("title")
-    assert any(h.strip().startswith("5d vs index") and "residual" not in h for h in heads)
+    assert any("5d beyond market (beta-adj.)" in h for h in heads) and not any("resid." in h for h in heads)      # short header, full name in the tooltip
+    assert "5d beyond market (beta-adjusted)" in page.locator("#head th[data-k=res5]").get_attribute("title")
+    assert any(h.strip() == "5d vs index" for h in heads)
     page.click("[data-testid=defs-toggle]")
     names = page.locator("footer dt").all_inner_texts()
-    assert "5d vs index, beta-adjusted (residual)" in names and "5d vs index" in names
-    assert names.index("5d vs index") == names.index("5d vs index, beta-adjusted (residual)") - 1   # plain first, adjusted second
+    assert "5d beyond market (beta-adjusted)" in names and "5d vs index" in names
+    assert names.index("5d vs index") == names.index("5d beyond market (beta-adjusted)") - 1   # plain first, adjusted second
     assert names.count("Beta") == 1 and "5d resid." not in names
     res, beta = page.inner_text("#def-res"), page.inner_text("#def-beta")
     assert "left over after removing the index move" in res and "standard deviation" in res and "does not explain" not in res
@@ -694,7 +710,7 @@ def test_residual_label_is_plain_and_beta_is_defined_once(browser, demo_html):
     page.locator("#body tr.row").first.click()
     page.click("td.detail button.more")
     detail = page.inner_text("td.detail")
-    assert "5d vs index, beta-adjusted (residual)" in detail and "in standard deviations" in detail and "std devs" not in detail
+    assert "5d beyond market (beta-adjusted)" in detail and "in standard deviations" in detail and "std devs" not in detail
     assert "5d move vs" not in detail and "Resid. in std devs" not in detail and "5d resid." not in detail
     assert "±0.2" not in page.inner_text("body")
     page.close()
@@ -705,7 +721,7 @@ def test_5d_vs_index_naming_in_tooltips_and_tile_foot(browser, demo_html):
     page.click("#colbtn")
     tips = page.evaluate("[...document.querySelectorAll('#head th')].map(t => t.title || '')")
     assert not any("does not explain" in t for t in tips)
-    assert any(t.startswith("The 5-day move left over after removing the index move") and "(beta). Beta is estimated" in t for t in tips)
+    assert any(t.startswith("The part of the 5-day move not explained by how much the stock normally follows the market") and "(beta). Beta is estimated" in t for t in tips)
     market = page.locator("[data-testid=tile-market]").inner_text()
     assert "5d move vs" not in market
     page.close()
@@ -959,7 +975,7 @@ def test_header_cells_stay_narrow_and_tap_targets_are_40px(browser, demo_html, w
     page.click("#colbtn")
     widths = page.evaluate("[...document.querySelectorAll('#head th')].map(t => [t.textContent, Math.round(t.getBoundingClientRect().width)])")
     assert [n for n, x in widths if x > 130 and n not in ("Stock", "Setup")] == []       # Stock and Setup hold names and badges; every other header stays narrow
-    assert dict(widths)["5d vs index (β-adj.)"] <= 110
+    assert dict(widths)["5d beyond market (beta-adj.)"] <= 110
     small = page.evaluate("[...document.querySelectorAll('#head th.sortable')].filter(t => t.getBoundingClientRect().width < 40).map(t => t.textContent)")
     assert small == []
     assert page.evaluate("[...document.querySelectorAll('#body .tkbtn')].every(b => b.getBoundingClientRect().width >= 40 && b.getBoundingClientRect().height >= 40)")
@@ -1020,11 +1036,12 @@ def test_not_market_adjusted_label_shows_in_table_and_detail(browser, demo_html,
     t = page.evaluate("window.__forced")
     page.click("#colbtn")
     row = page.locator(f"#body tr.row[data-t='{t}']")
-    assert "not market-adjusted" in row.inner_text()
+    assert "rough: beta capped or uncertain" in row.inner_text()
     row.click()
     page.click("td.detail button.more")
     detail = page.inner_text("td.detail")
-    assert "not market-adjusted" in detail and "±0.40" in detail
-    assert "not market-adjusted" in page.text_content("#def-res")
+    assert "Beta was capped, floored or uncertain, so this number is rough; compare it with the plain 5d vs index." in detail and "±0.40" in detail
+    assert "roughly 5d vs index" not in detail
+    assert "rough: beta capped or uncertain" in page.text_content("#def-res")
     assert errors == []
     page.close()

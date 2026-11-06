@@ -73,7 +73,7 @@ The "Used by" column says which file would break: `browser` = `tests/test_browse
 | `id:defs` | browser | The `<details>` that holds the definitions; closed by default at every width. Links to `#def-...` open it, scroll the term heading (`<dt>`) into view, highlight `<dt>` and `<dd>` with `.hit`, and move focus to the `<dd>` |
 | `id:def-q` | browser | Quality score definition; target of the "Definitions" link in the brief |
 | `id:def-setup` | browser | Setup label definition (opened by `#def-setup` links and URLs) |
-| `id:def-res` | browser | Definition of "5d vs index, beta-adjusted (residual)"; its `<dt>` follows the plain "5d vs index" entry |
+| `id:def-res` | browser | Definition of "5d beyond market (beta-adjusted)"; its `<dt>` follows the plain "5d vs index" entry |
 | `id:def-beta` | browser | The one plain-words definition of beta |
 | `id:def-idx` | browser | Definition of the plain "5d vs index" difference (listed before the residual entry) |
 
@@ -118,7 +118,7 @@ The "Used by" column says which file would break: `browser` = `tests/test_browse
 | `class:tkbtn` | browser | The ticker button in a row (tap target of at least 40 px) |
 | `class:sc` | browser, visual | One phone card |
 | `class:scroll` | browser | Wrapper of the table. While the table fits the card it is not a scroller and the header is plain CSS `position: sticky; top: 0` on the page scroll |
-| `class:hw` | browser | Header cell whose name wraps (max 110 px): the residual column shows "5d vs index (β-adj.)", the full name is in its tooltip, the definitions footer and the detail row |
+| `class:hw` | browser | Header cell whose name wraps (max 110 px): the residual column shows "5d beyond market (beta-adj.)", the full name is in its tooltip, the definitions footer and the detail row |
 | `class:hs` | browser | Added to `.scroll` when the table is wider than the card (More columns, narrow windows): it scrolls sideways and the header is pinned by JS (`--pin`) instead |
 | `class:schead` | visual | The tappable head of a phone card |
 | `class:tile` | browser, shots | A summary tile |

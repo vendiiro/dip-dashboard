@@ -30,15 +30,15 @@ function detail(r) {
   const KEY = ['5d vs index','Forward P/E', 'Trailing P/E', 'Market cap (USD)', 'Sector', 'Next earnings'];   // the rest sits behind "More context"
   [['5d vs index' + (r.idx ? ' (' + r.idx + ')' : r.x5 == null && r.idx_why ? ' (' + r.idx_why + ')' : ''), r.x5 == null ? '–' : pct(r.x5)], ['Forward P/E', r.fpe == null ? '–' : r.fpe.toFixed(1)], ['Trailing P/E', r.tpe == null ? '–' : r.tpe.toFixed(1)],
    ['Market cap (USD)', mc && mc.value != null ? big(mc.value) : '–'], ['Sector', r.sector || '–'], ['From 20-day high', pct(r.dd20)], ['5d move in standard deviations', r.z5 == null ? '–' : r.z5.toFixed(1)],
-   ['5d vs index, beta-adjusted (residual)', r.res5 == null ? '–' : pct(r.res5) + NOT_ADJ(r)], ['5d vs index, beta-adjusted (residual), in standard deviations', r.res5z == null ? '–' : r.res5z.toFixed(1)],
+   ['5d beyond market (beta-adjusted)', r.res5 == null ? '–' : pct(r.res5) + NOT_ADJ(r)], ['5d beyond market (beta-adjusted), in standard deviations', r.res5z == null ? '–' : r.res5z.toFixed(1)],
    ['Beta' + (r.beta_side === 'cap' ? ' (capped at 3)' : r.beta_side === 'floor' ? ' (floored at 0)' : ''), r.beta == null ? '–' : r.beta.toFixed(2) + (r.beta_side && r.beta_raw != null ? ' (est. ' + r.beta_raw.toFixed(2) + ')' : '') + (r.beta_se != null ? ' ±' + r.beta_se.toFixed(2) : '')],
    ['Last earnings', earnText(r, 'last')], ['Next earnings', earnText(r, 'next')]]
-    .forEach(([a, b]) => { const keep = KEY.some(k => a.startsWith(k)) && !a.includes('(residual)'); const row = el('div', keep ? 'kvx' : 'kvx extra'); row.append(el('span', null, a), el('span', null, b)); if (!keep) row.hidden = true; kv.append(row); });
+    .forEach(([a, b]) => { const keep = KEY.some(k => a.startsWith(k)) && !a.includes('beta-adjusted'); const row = el('div', keep ? 'kvx' : 'kvx extra'); row.append(el('span', null, a), el('span', null, b)); if (!keep) row.hidden = true; kv.append(row); });
   p3.append(kv);
   { const more = el('button', 'more', 'More context'); more.type = 'button'; more.setAttribute('aria-expanded', 'false');
     more.onclick = e => { e.stopPropagation(); const ex = more.getAttribute('aria-expanded') !== 'true'; more.setAttribute('aria-expanded', String(ex)); kv.querySelectorAll('.extra').forEach(x => { x.hidden = !ex; }); more.textContent = ex ? 'Less context' : 'More context'; };
     p3.append(more); }
-  if (r.res5 != null && r.mkt_adj === false) p3.append(el('div', 'foot', 'Not market-adjusted: the beta was capped, floored or too uncertain, so the residual is not a clean market-adjusted move.'));
+  if (r.res5 != null && r.mkt_adj === false) p3.append(el('div', 'foot', 'Beta was capped, floored or uncertain, so this number is rough; compare it with the plain 5d vs index.'));
   if (r.res5 == null && r.res_why) p3.append(el('div', 'foot', 'No residual: ' + r.res_why + '.'));
   if (r.earn && r.earn.note && (r.earn.stale || r.earn.error || !r.earn.last || !r.earn.next || /scheduled date passed/.test(r.earn.note))) p3.append(el('div', 'foot', 'Earnings dates: ' + r.earn.note));
   g.append(p3, p2);
