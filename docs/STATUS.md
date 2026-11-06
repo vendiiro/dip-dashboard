@@ -1,6 +1,6 @@
 # Project status: Dip Screen (long-only, US + Europe)
 
-**As of 2026-11-05.** Repo: https://github.com/vendiiro/dip-dashboard, branch `dashboard-brief-compact-table`.
+**As of 2026-11-06.** Repo: https://github.com/vendiiro/dip-dashboard, branch `dashboard-brief-compact-table`. Overnight work (not merged, status `review`) is on branch `overnight-2026-11-06` in the worktree `dip-dashboard-overnight`; see `docs/plans/overnight-findings-2026-11-06.md` (morning report at the top).
 Owner: Iiro. This is an educational research tool. It lists screen results (candidates to research). It never gives advice.
 Read this first, then `docs/AGENTS.md` (who owns which file), `docs/BACKLOG.md` (task list) and `CLAUDE.md` (rules).
 
@@ -8,9 +8,10 @@ Read this first, then `docs/AGENTS.md` (who owns which file), `docs/BACKLOG.md` 
 A static HTML dashboard and a markdown digest, rebuilt every night after the US close from daily bars of 348 US and
 European blue chips. It flags sharp drops, shows how many of six quality checks each company passed, and marks
 falling knives. A pre-registered backtest found **no out-of-sample edge** for the dip rules, so everything on the page
-is a description, not a tested filter. The code, tests and page are in good shape on demo data and synthetic tests. A live
-pull of the original 60 stocks worked on 2026-11-02 (59 had data). **The current code with all 348 names has not been run
-live. The first run on Iiro's PC (2026-11-05: 84 s, 288 of 289 stocks, exit 0) used `main` at the first commit, not this branch.**
+is a description, not a tested filter. The code, tests and page are in good shape on demo data and synthetic tests. The code on this
+branch has run live with all 348 names: on 2026-11-05 at 16:37 (345 screened, a mid-session pull) and again at 00:15 on
+2026-11-06 (exit 0, asof 2026-11-05, 345 screened, 0 partial bars). Not screened: BK (no Yahoo bars), AVB (stale since
+August), ROG.SW (Yahoo 404; RO.SW works, rename awaits Iiro's yes). The earlier 2026-11-05 PC run used `main` (289 tickers).
 
 ## What exists now
 | Area | State |
@@ -23,7 +24,8 @@ live. The first run on Iiro's PC (2026-11-05: 84 s, 288 of 289 stocks, exit 0) u
 | Digest and alerts | `digest.md` with a fixed caveat and the coverage table; trigger alerts (neutral names such as "RSI back above 30"). |
 | Research | Event-study backtest, pre-registered feature test, volatility forecast check. One registry for specs, trials and out-of-sample windows. Spec hashes pinned in tests. Result: no tested version beat chance on unseen data. |
 | Scheduling | `scripts/run_daily.bat` (retry after exit code 2, `run.log` rotation) and `scripts/install_task.ps1`. Untested on Windows. |
-| Tests and CI | Last full run (2026-11-05): 1019 passed, 3 skipped (full `python -m pytest -q` run by the orchestrator agent at the end of this edit, while ui-builder and test-engineer were still editing; no concurrent failure seen) 12 pixel-diff baselines in `tests/visual/baseline` (made on Linux). GitHub Actions workflow written; no run is recorded in the repo. |
+| Overnight additions (branch `overnight-2026-11-06`, in review) | Forward ledger (`ledger.py`, `scripts/score_ledger.py`: appends every screened stock each night, scores at 5/21/63 days; records only after merge). Provenance (code hash, package versions, per-section settings hashes) in every research spec, not hashed. One shared out-of-sample split and dip state. Shared `score_universe`. Beta standard error and a "not market-adjusted" label (table, detail, payload `beta_se`, `mkt_adj`). Raw-data retention script `scripts/raw_retention.py` (dry run by default). Null-universe calibration tests (slow). Dashboard look fixes (ten items). Research brief in `docs/research/`. |
+| Tests and CI | Last full run on the overnight branch (2026-11-06): 1168 passed, 3 skipped, 0 failed. Earlier full run on this branch (2026-11-05): 1019 passed, 3 skipped (full `python -m pytest -q` run by the orchestrator agent at the end of this edit, while ui-builder and test-engineer were still editing; no concurrent failure seen) 12 pixel-diff baselines in `tests/visual/baseline` (made on Linux). GitHub Actions workflow written; no run is recorded in the repo. |
 | Agents | 13 agents in `.claude/agents/`, one owner per file (`docs/agents/ownership.csv`, enforced by a test), 3 of them read-only reviewers (stats, wording, UI). One decision per file in `docs/decisions/`. |
 
 ## Decisions made (all by Iiro)
@@ -33,9 +35,9 @@ CLAUDE.md. 2026-11-05: the backtest does not get the sector input (disclosed in 
 wording above. Details: `docs/decisions.md` and `docs/plans/decisions.md`.
 
 ## Not verified (needs Iiro's PC or the network)
-- A live Yahoo or OpenBB run of the current code with 348 tickers, and its run time. The 2026-11-05 PC run used `main` (289 tickers) and the 2026-11-02 run covered 60.
-- ROG.SW has no Yahoo data (also in `docs/m2-data-verification.md`); its symbol needs a check on the PC. KNEBV.HE showed a +29.6% move that reverted the next day; the new `price_spike_reverted` warning should flag it on the next live run.
-- `run_daily.bat` and the scheduled task on Windows.
+- The overnight branch code on a live night (the ledger, the retention script on real files with `--apply`, the new page with real data). The 00:15 run on 2026-11-06 used the code before the overnight branch.
+- ROG.SW has no Yahoo data; RO.SW has 251 clean bars (rename awaits a yes). BK has no bars; AVB is stale. KNEBV.HE showed a +29.6% move that reverted the next day; the `price_spike_reverted` warning flagged it as `spike_revert`.
+- `run_daily.bat` and the scheduled task on Windows (the 00:15 run did exit 0 in `run.log`, so the task works on the PC; the retry path was not exercised).
 - GitHub Actions (first run may fail the visual job until baselines are regenerated on the runner).
 - 59 US tickers added earlier are unchecked. Run `python scripts/verify_universe.py --limit 10`, then the full run.
 - `python -m dipdash.registry backfill --root output/backtests`.
@@ -50,7 +52,8 @@ wording above. Details: `docs/decisions.md` and `docs/plans/decisions.md`.
 ## Known gaps and cleanup
 - Waves 1 and 2 are done in `docs/BACKLOG.md` (updated 2026-11-05), and so are FE-1/FE-2, FE-14, DATA-3/6 and DATA-4/5/8 from waves 3 and 4. FE-11/FE-12 done (the `src/web/` split; the integrator half of FE-11 was dropped as not needed). FE-12 cleanups: duplicate dark tokens removed, 2 redundant CSS rules merged, helpers moved; the class-name clashes `.more` and `.empty` are fixed (alerts now use `.alerts-more` and `.alerts-empty`). Open: RES-11 claims/digest/alerts parts, FU-1, FU-5, FU-6.
 - The earlier "21,900 DOM nodes" figure was not reproduced; measured on the demo page it is 1053 (desktop) and 647 (phone).
-- D3 (raw-data retention) and D4 (universe check) were answered A on 2026-11-04. DATA-9 and RES-10 are unblocked but not started.
+- D3 (raw-data retention) and D4 (universe check) were answered A on 2026-11-04. DATA-9 is written (review); RES-10 is unblocked but not started.
+- New known gaps (overnight): the primary-cell interval is biased on null data and the published `ex_index` interval is not evidence (see the findings file); the ledger uses a 60-minute margin after close, so a Yahoo lag over an hour could record a wrong bar; Linux-only visual baselines need regeneration after the page changes; the status pill threshold (5 stocks or 5%) is untested on a bad night; `BETA_SE_UNCERTAIN = 0.25` is untested on real returns; open final-review items are FU-17 and FU-18 in the backlog; merge needs the untracked plan copy in the main checkout moved first (FU-20).
 - Stale samples: `snapshots/2026-11-04/latest/digest.md` and `docs/sample-output/daily_review_example_2026-11-02.md`
   still use the old wording; the mid-session digest sample carries a dated note.
 - Backtest quality score ignores sector-specific checks (disclosed in its report).
@@ -61,16 +64,16 @@ stale bars, rate limits). The batching, retry and guard code (DATA-3/6, DATA-4/5
 
 **B. Research honesty (remaining, in order).**
 1. `docs/claims.md`, a written claims contract, and a generated "What testing found" box (RES-11).
-2. A forward ledger: every night record what was flagged, score it at 5/21/63 days. This is the only true holdout
-   without survivorship bias, and it needs years to have power (RES-5).
-3. Beta standard error and "not market-adjusted" labels; define "beta" once (RES-9).
+2. The forward ledger is written (RES-5, in review). It records only after the merge. It is the only true holdout
+   without survivorship bias, and it needs years to have power.
+3. Beta standard error and "not market-adjusted" labels are written (RES-9, in review).
 4. Survivorship stress bound with a delisted-names file (RES-10).
 
 **C. Data, ops and research plumbing (remaining).**
-- Raw-data retention script, dry run first (DATA-9).
+- Raw-data retention script is written (DATA-9, in review); run it dry on the PC first.
 - Earnings dates for European names (DATA-13).
 - Windows CI smoke test (OPS-13).
-- Shared scoring and spec provenance: RES-3, RES-6, RES-8 (see the backlog).
+- Shared scoring and spec provenance (RES-3, RES-6, RES-8) are written, in review.
 
 **D. Page (remaining).**
 - Keyboard access to charts, print stylesheet, filters in the URL, light/dark/auto toggle (FE-5/6/8). FE-8 needs the

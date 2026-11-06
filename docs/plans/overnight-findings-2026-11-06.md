@@ -1,3 +1,121 @@
+# Morning report 2026-11-06
+
+## (a) Summary and how to review
+
+Overnight work covered 14 tasks (plus one test-fix task). Everything is committed on branch `overnight-2026-11-06`, in the worktree
+`C:\Users\Käyttäjä\Documents\dip-dashboard-test\dip-dashboard-overnight`. Nothing was merged or pushed. Your main checkout was not changed.
+The full suite on the final tree passes: 1168 passed, 3 skipped, 0 failed (baseline before the night: 10 failed, 1014 passed, 1 skipped).
+The most important finding is not code: the main backtest interval is biased on null data, and the published index-excess interval is not evidence of an edge (section f).
+A ledger now exists, but it records nothing until the branch is merged and the nightly task runs from it.
+
+How to review:
+- `git log --oneline f14d55c..HEAD` (41 commits; `git diff --stat f14d55c..HEAD` is 70 files).
+- Open the worktree folder, or `git checkout overnight-2026-11-06` in a clean place.
+- To merge (your call): first move the untracked `docs/plans/2026-11-06-overnight-7h.md` out of the main checkout (the branch adds the same path; it is the only collision, and `pytest.ini` and `docs/m2-data-verification.md` are not touched by the branch). Then `git merge --ff-only overnight-2026-11-06` on `dashboard-brief-compact-table`.
+- Backlog statuses are `review`, not `done`. See `docs/BACKLOG.md`, section "Overnight 2026-11-06".
+
+## (b) What changed
+
+| Task | Change |
+|---|---|
+| 1, 1b | Line-ending test fixes, agent-file YAML quoting, Windows file-URI fix in browser tests (test code only). |
+| 2 | Real-data check of the 00:15 run (docs only): 345 of 348 screened, ticker diagnosis for BK, AVB, ROG.SW. No ticker changed. |
+| 3 | One shared `score_universe` for dashboard and backtest. Sector quality rules moved into `settings.toml`, so a change shows in the spec hash (RES-3). |
+| 4 | Provenance (code hash, package versions, per-section settings hashes, Python version, fundamentals hash) in every research spec, not hashed (RES-6). |
+| 5 | One out-of-sample split and one dip state for backtest, features and forecast (RES-8). Forecast criterion amended and the report says the definition changed. |
+| 6 | Forward ledger (RES-5): nightly record of every screened stock, run log, versions folder, backup, `scripts/score_ledger.py`. 60-minute close margin. |
+| 7, 8 | Beta standard error and "not market-adjusted" flag in `residual.py`, the payload (`beta_se`, `mkt_adj`) and the page (RES-9). |
+| 9 | `scripts/raw_retention.py` (DATA-9): dry run by default, copy-verify-remove, refuses `--apply` without registry protection. |
+| 10 | Cross-check sample always has a Nordic name when one is eligible; index history fetch retries (DATA-12, DATA-14). |
+| 11 | Slow tests that run the primary cell on 200 and 100 null universes (RES-12a). They found the bias in (f). Method unchanged. |
+| 13 | Ten dashboard fixes: phone sort, neutral partial-pass badge, scroll cue, clearer beta header and rough-beta note, tile caption, not-a-forecast sentence, calmer status pill, phone card order, 12 px minimum text, histogram padding. |
+| 14 | Research brief with a sourced market update, dip candidates and large companies with measured risk (section g). |
+
+## (c) What was verified
+
+| Check | Result |
+|---|---|
+| Full suite, final tree (`pytest -q --basetemp=.pytest_tmp_t12`) | `1168 passed, 3 skipped in 448.40s (0:07:28)` |
+| `python tasks.py check` | template, wording scan, path guard ok; `1082 passed, 3 skipped` (unit tests, browser file excluded). The first try failed with 236 PermissionErrors on the default temp folder (`AppData\Local\Temp\pytest-of-Käyttäjä`); rerun with `PYTEST_ADDOPTS=--basetemp=...` passed. A machine setting, not code. |
+| `scripts/check_wording.py` | `wording scan: ok` |
+| Golden hashes `e1687cf9f8045f73`, `89ee3793566eb8a5`, `79288caaa97d33b1`, `f9d86028c6e0d64e` | unchanged (`tests/test_registry.py` passes in the full run) |
+| Compared with baseline | 10 failed before; 0 failed now. The 7 browser failures were a test-helper path bug, fixed in Task 1b. |
+| Slow tests (`DIP_SLOW=1`), run by the Task 11 agent, not rerun here | Small case: 11.5% of 90% intervals excluded zero (200 runs, accepted band 5.8% to 14.2%). Real-scale case: 3.0% (100 runs). Per tail, small case: 9.5% above zero, 2.0% below (nominal 5% each). |
+| Screenshots looked at by the agents | Task 8: forced rows, desktop and phone, light and dark. Task 13: before and after, desktop 1280 and phone 390, light and dark, default and opened row, More columns. No overflow and no console errors in those states. I did not look at screenshots myself in this step. |
+| Beta SE | 95% coverage test on 1000 synthetic runs: 0.943; matches statsmodels to 1e-9. |
+| Live data | The 00:15 run on 2026-11-06: exit 0, 345 of 348 screened, 0 partial bars (code before this branch). |
+
+## (d) What remains unverified
+
+- The Windows batch file and the scheduled task with this branch's code. The 00:15 run did exit 0, but it ran the code before this branch.
+- No live night has been recorded by the ledger. It cannot, until the merge and until the nightly task runs from the merged checkout.
+- Visual baselines (`tests/visual`) are Linux-only and the module is skipped on Windows. All page states changed, so they need regenerating on Linux. Page regressions were only checked by looking at screenshots.
+- A browser test timed out once during Task 13 because the machine went to sleep (the run took 2 hours). It passed alone. No timeout in my final run.
+- `raw_retention.py --apply` was never run on real data. Dry run on the real file names proposed 0 moves (oldest file is 2026-11-04).
+- The new page was not opened with real nightly data. Only forced test rows and demo data.
+- GitHub Actions: no run is recorded. A print of the CI run was not checked.
+- The status-pill threshold and `BETA_SE_UNCERTAIN = 0.25` are untested on a bad night and on real returns.
+- Skip reasons of the 3 skipped tests were not listed in this run (the Linux-only visual module is one; the slow tests skip without `DIP_SLOW=1`).
+
+## (e) Decisions for Iiro (yes or no)
+
+1. Keep BK in the universe and re-check in a few days? (Yahoo has no bars: "possibly delisted".)
+2. Keep AVB as it is? (Last good bar 2026-08-14; already skipped by the 4-day rule.)
+3. Replace ROG.SW with RO.SW in `config/universe.csv`? (RO.SW has 251 clean bars to 2026-11-05.)
+4. Write a new pre-registered spec that fixes the baseline bias (for example the stock's mean outside the event windows)? No real-history run was made.
+5. Keep `BETA_SE_UNCERTAIN = 0.25`?
+6. Move the nightly task later than 00:15? The ledger rejects a bar recorded less than 60 minutes after the exchange close, and 00:15 is 75 minutes after the US close, so the margin is 15 minutes. If Yahoo's closes lag by more than an hour, a bar could be wrong.
+7. Rename "quality-dip dashboard" and "quality score" in `CLAUDE.md` lines 1 and 45 (FU-6)?
+8. Keep the forecast re-check as a descriptive check only, with the changed dip definition? (Ruling in (h); the old definition is also available.)
+9. Merge `overnight-2026-11-06` into `dashboard-brief-compact-table`?
+
+## (f) Important new findings
+
+- **The main backtest interval is biased on null data.** On synthetic stocks with no dip effect, the primary cell's estimate averaged +0.48 pp. The 90% interval left zero in 11.5% of runs, which looks fine, but only by chance: the lower end was above zero in 9.5% of runs and the upper end below zero in 2.0% (nominal 5% each). A two-sided rate cannot see a shift.
+- **Cause.** The own baseline is the stock's mean over the same out-of-sample window, and that window contains the drop that started each event. The bias shrinks roughly with 1 over the window length. The test setup has 320 out-of-sample bars; the real run has about 1,680.
+- **At real length** the null bias is about +0.08 to +0.15 pp at 21 days and about +0.2 pp at 63 days. Coverage depends on the volatility model: intervals exclude zero in 1.7% to 3.5% of runs with constant volatility (too wide, so low power) and 7% to 10% with volatility regimes.
+- **For the published primary cell** (+0.27%, interval -1.0% to +1.5%) a bias-adjusted estimate is about +0.1% to +0.2%. The conclusion stays: no out-of-sample edge shown. A modest real edge could still hide in a too-wide interval.
+- **The published `ex_index` interval is not evidence.** In the same null runs `ex_index` averaged +0.21% and excluded zero 43% of the time.
+- These are synthetic results (independent returns, one common factor). They show the method's behaviour under that model, not on real data.
+- **Open from the final review:** the forecast `ship_text` still opens with "RANGE MAY SHIP", and the forecast console output lacks the definition-change sentence; `score_ledger.py` prints an "85 to 91%" coverage sentence from a simulation that was not re-run. Both are FU-17. A fix dispatch was planned after this report; check `git log` before relying on this line.
+- **Universe:** 33 of 348 tickers are flagged by `verify_universe.py` (19 under 20B USD today, 11 name mismatches that are expected, 3 data problems). TELIA.ST (19.99B) and TEL.OL (19.90B) sit on the 20B line.
+- **Ledger margin:** the first design (2 hours after close) would have dropped all US rows at 00:15. It is 60 minutes now.
+- **Spec hashes:** the next real backtest gets a new hash even with an unchanged rule (whole-file settings hash removed, fundamentals hash added). The next features run gets one more new hash (rule settings now held by value).
+
+## (g) Research brief
+
+`docs/research/research-brief-2026-11-06.md`, built by `docs/research/build_brief_2026-11-06.py`.
+What it is: a reading list. Part 1 has three sourced market lines (no European line: no readable page was found). Part 2a lists the first 10 of 74 screen candidates with checks passed, falling-knife flag and next report date. Part 2b lists large companies (market cap of at least 100B USD, at least 4 scored checks passed) with the lowest 5-year volatility, plus GOOGL and NVDA, with volatility, max drawdown, distance from 5-year high and beta.
+What it is not: advice, a forecast or a tested filter. "Lower measured risk" only means smaller past swings and falls. The brief itself tells the reader to check free-source P/E values (MU and PANW look odd). The wording-guard reviewer was not run on it.
+
+## (h) Rulings I made
+
+Each line from the ledger (`.superpowers/sdd/2026-11-06-overnight-7h/progress.md`) containing "Ruling:", with the cost if wrong.
+
+| # | Ruling | Cost if wrong |
+|---|---|---|
+| 1 | Task 6: ledger code is ready, but recording starts on merge (Iiro controls the checkout, no merge allowed). | One or more nights unrecorded. |
+| 2 | Task 14: show measured risk, never label "safer" (CLAUDE.md wording rule binds). | You may want a more direct label. |
+| 3 | Models: Haiku for mechanical work, Sonnet for implementation and task review, Opus only for stats-sensitive and final review. | Slightly more Opus use than you asked for. |
+| 4 | Fix the 7 test_browser path errors first as Task 1b (Tasks 8 and 13 need browser tests). | 15 minutes if not needed. |
+| 5 | The visual test module stays skipped on Windows; baselines are Linux-only and not regenerated. | Page regressions are only caught by screenshots that someone looks at. |
+| 6 | Task 3: the next real backtest gets a new spec hash with an unchanged rule (whole-file settings hash). | One new registry row. |
+| 7 | Task 4: the plan claim "every setting is in the spec by value" was false for features; `event_rule_settings` added by value. | One extra new hash at the next real features run. |
+| 8 | Task 4: `fundamentals_sha256` is in the hashed backtest meta (V3 depends on it). | A real backtest on another day gets a new hash with the same rule; you can move it to provenance if that is noisy. |
+| 9 | Task 5: Opus used for that review (it changes a pre-registered definition). | One more Opus call than your brief. |
+| 10 | Task 5: the forecast definition change stays, but every report and console line says it is a descriptive re-check and the range needs your decision. | You may prefer the old forecast definition. |
+| 11 | Task 6: the stats reviewer's simulation caveat is printed as measured on synthetic data. | Readers may treat 85 to 91% as exact (FU-17). |
+| 12 | Only one full-suite-running implementer at a time (agents share the temp folder). | Slower, but avoids false failures. |
+| 13 | Task 6: ledger margin 60 minutes after close instead of 2 hours. | If Yahoo's closes lag over an hour, some bars could be wrong; moving the task later is your option. |
+| 14 | Task 13: red status at max(5, 5% of rows plus skipped) stock-level errors, or an empty region. | Judgement call, untested on a bad night. |
+| 15 | Task 11: the new finding stays a note; no method change (a baseline fix needs a new pre-registered spec, and no real-history research tonight). | The published `ex_index` interval stays in the report until you decide. |
+| 16 | Task 11: tail checks use gross-breakage bounds (12%), not the reviewer's 1.5% to 9%, because the known bias would fail them. | A weaker guard than ideal. |
+| 17 | Task 11: no second review of the test-and-docs fix, since the measured numbers matched the reviewer's own prediction. | A typo in the findings text would go unseen (the final review did flag "agrees" as overstated, FU-18). |
+| 18 | Task 13: no second UI review pass; every item came from the first review and was checked by before and after screenshots. | A fresh look came only in the final review. |
+| 19 | The controller did not remove the untracked plan copy in your main checkout and did not merge (outside the worktree; a merge is a stop-and-ask action). | You do it yourself, with the steps in (a). |
+
+---
+
 # Overnight findings, 2026-11-06
 
 ## Baseline (before any change, commit f258a31, new .venv with Playwright)
