@@ -1,5 +1,15 @@
 # Daily quality-dip screen (long-only research tool, US + Europe)
 
+![Dashboard, demo data](docs/demo/shots/desk-light.png)
+
+## What this project shows
+
+- A research workflow that reports its own negative result: the dip rule was event-tested out of sample and showed no edge the sample could separate from noise, and the volatility forecast failed calibration and is not wired in.
+- Backtest hygiene: pre-registered feature experiments with a log of every variant tried, and a data snapshot with an executed EDA notebook.
+- A nightly pipeline for US and European large caps that writes a dashboard, a digest and trigger alerts, plus about 390 tests and a no-network demo (`python -m dipdash --demo`).
+
+License: MIT, see `LICENSE`.
+
 Screens US and European large caps every night after the close for sharp price drops in otherwise high-quality companies, and writes a dashboard,
 a digest and trigger alerts. **Educational research only: it never gives investment advice.** Wording in all output: "screen results", "candidates",
 "flagged because ...", "a condition became true".
